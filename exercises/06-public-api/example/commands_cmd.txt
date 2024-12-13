@@ -1,0 +1,17 @@
+REM 1. Registrar usuario
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"usuario1\",\"password\":\"pass123\"}" http://127.0.0.1:5000/usuarios
+
+REM 2. Login para obtener token JWT
+curl -X POST -H "Content-Type: application/json" --user usuario1:pass123 http://127.0.0.1:5000/login
+
+REM 3. Consultar clima (Madrid por defecto)
+curl -X GET http://127.0.0.1:5000/clima
+
+REM 4. Consultar clima para una ciudad específica
+curl -X GET "http://127.0.0.1:5000/clima?ciudad=Barcelona"
+
+REM 5. Acceder al perfil (reemplazar TOKEN con el token obtenido)
+curl -X GET -H "Authorization: Bearer TOKEN" http://127.0.0.1:5000/perfil
+
+REM 6. Obtener usuarios
+curl -X GET --user usuario1:pass123 http://127.0.0.1:5000/usuarios

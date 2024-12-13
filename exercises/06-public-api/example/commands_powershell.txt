@@ -1,0 +1,46 @@
+# 1. Variables iniciales
+$baseUrl = "http://127.0.0.1:5000"
+$headers = @{
+    "Content-Type" = "application/json"
+}
+
+# 2. Registrar un usuario
+$body = @{
+    username = "usuario1"
+    password = "pass123"
+} | ConvertTo-Json
+
+$registerResponse = Invoke-RestMethod -Method Post -Uri "$baseUrl/usuarios" -Headers $headers -Body $body
+Write-Host "Registro:" $registerResponse.message
+
+# 3. Login para obtener token JWT
+$pair = "usuario1:pass123"
+$encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
+$authHeaders = @{
+    Authorization = "Basic $encodedCreds"
+}
+
+$loginResponse = Invoke-RestMethod -Method Post -Uri "$baseUrl/login" -Headers $authHeaders
+$token = $loginResponse.access_token
+Write-Host "Token JWT:" $token
+
+# 4. Consultar el clima
+# Sin ciudad (usa Madrid por defecto)
+$climaDefault = Invoke-RestMethod -Method Get -Uri "$baseUrl/clima"
+Write-Host "Clima en Madrid:" ($climaDefault | ConvertTo-Json)
+
+# Con ciudad específica
+$ciudad = "Barcelona"
+$climaCiudad = Invoke-RestMethod -Method Get -Uri "$baseUrl/clima?ciudad=$ciudad"
+Write-Host "Clima en $ciudad:" ($climaCiudad | ConvertTo-Json)
+
+# 5. Acceder al perfil con JWT
+$jwtHeaders = @{
+    Authorization = "Bearer $token"
+}
+$perfil = Invoke-RestMethod -Method Get -Uri "$baseUrl/perfil" -Headers $jwtHeaders
+Write-Host "Perfil:" ($perfil | ConvertTo-Json)
+
+# 6. Obtener lista de usuarios
+$usuarios = Invoke-RestMethod -Method Get -Uri "$baseUrl/usuarios" -Headers $authHeaders
+Write-Host "Usuarios:" ($usuarios | ConvertTo-Json)

@@ -1,0 +1,20 @@
+REM 1. Registrar usuario
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"usuario1\",\"password\":\"pass123\"}" http://127.0.0.1:5000/usuarios
+
+REM 2. Login para obtener token JWT
+curl -X POST -H "Content-Type: application/json" --user usuario1:pass123 http://127.0.0.1:5000/login
+
+REM 3. Crear usuario por admin (reemplazar TOKEN con el token obtenido)
+curl -X POST -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d "{\"username\":\"usuario2\",\"password\":\"pass456\"}" http://127.0.0.1:5000/usuarios/admin
+
+REM 4. Obtener lista de usuarios
+curl -X GET -H "Authorization: Bearer TOKEN" http://127.0.0.1:5000/usuarios
+
+REM 5. Actualizar usuario
+curl -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d "{\"password\":\"newpass123\"}" http://127.0.0.1:5000/usuarios/usuario2
+
+REM 6. Eliminar usuario
+curl -X DELETE -H "Authorization: Bearer TOKEN" http://127.0.0.1:5000/usuarios/usuario2
+
+REM 7. Ver perfil
+curl -X GET -H "Authorization: Bearer TOKEN" http://127.0.0.1:5000/perfil

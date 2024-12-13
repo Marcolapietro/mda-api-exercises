@@ -1,0 +1,38 @@
+# 1. Variables iniciales
+$baseUrl = "http://127.0.0.1:5000"
+$headers = @{
+    "Content-Type" = "application/json"
+}
+
+# 2. Registrar un usuario
+$body = @{
+    username = "usuario1"
+    password = "pass123"
+} | ConvertTo-Json
+
+$registerResponse = Invoke-RestMethod -Method Post -Uri "$baseUrl/usuarios" -Headers $headers -Body $body
+
+# 3. Login para obtener token JWT
+$pair = "usuario1:pass123"
+$encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
+$authHeaders = @{
+    Authorization = "Basic $encodedCreds"
+}
+
+$loginResponse = Invoke-RestMethod -Method Post -Uri "$baseUrl/login" -Headers $authHeaders
+$token = $loginResponse.access_token
+
+# 4. Usar el token JWT para acceder al perfil
+$jwtHeaders = @{
+    Authorization = "Bearer $token"
+}
+
+$perfilResponse = Invoke-RestMethod -Method Get -Uri "$baseUrl/perfil" -Headers $jwtHeaders
+
+# 5. Obtener lista de usuarios (usando auth básica)
+$usersResponse = Invoke-RestMethod -Method Get -Uri "$baseUrl/usuarios" -Headers $authHeaders
+
+# Mostrar resultados
+Write-Host "Token JWT:" $token
+Write-Host "Perfil:" $perfilResponse.perfil
+Write-Host "Usuarios:" ($usersResponse | ConvertTo-Json)

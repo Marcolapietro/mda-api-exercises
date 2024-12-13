@@ -1,0 +1,20 @@
+# 1. Registrar un nuevo usuario
+$registerBody = @{
+    username = "ejemplo"
+    password = "secreto"
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/usuarios" -ContentType "application/json" -Body $registerBody
+
+# Guardar la API Key del response
+$apiKey = $response.api_key
+
+# 2. Obtener usuarios (usando autenticación básica y API Key)
+$pair = "ejemplo:secreto"
+$encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
+$headers = @{
+    Authorization = "Basic $encodedCreds"
+    "x-api-key" = $apiKey
+}
+
+Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:5000/usuarios" -Headers $headers

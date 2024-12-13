@@ -1,0 +1,5 @@
+REM 1. Registrar un nuevo usuario
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"ejemplo\",\"password\":\"secreto\"}" http://127.0.0.1:5000/usuarios
+
+REM 2. Obtener usuarios (reemplaza API_KEY con la key recibida en el paso anterior)
+curl -X GET -H "x-api-key: API_KEY" --user ejemplo:secreto http://127.0.0.1:5000/usuarios

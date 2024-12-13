@@ -1,0 +1,60 @@
+# Comandos para probar la API de estudiantes en PowerShell
+
+# 1. Variables iniciales
+$baseUrl = "http://127.0.0.1:5000"
+$headers = @{
+    "Content-Type" = "application/json"
+}
+
+# 2. Registrar usuario inicial
+$body = @{
+    username = "ejemplo"
+    password = "secreto"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri "$baseUrl/register" -Headers $headers -Body $body
+
+# 3. Login para obtener token
+$cred = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("ejemplo:secreto"))
+$authHeaders = @{
+    Authorization = "Basic $cred"
+    "Content-Type" = "application/json"
+}
+
+$loginResponse = Invoke-RestMethod -Method Post -Uri "$baseUrl/login" -Headers $authHeaders
+$token = $loginResponse.access_token
+
+# 4. Headers con el token para siguientes peticiones
+$authHeaders = @{
+    Authorization = "Bearer $token"
+    "Content-Type" = "application/json"
+}
+
+# 5. Crear estudiantes de prueba (25 estudiantes)
+1..25 | ForEach-Object {
+    $body = @{
+        username = "estudiante$_"
+        password = "pass$_"
+    } | ConvertTo-Json
+    
+    Invoke-RestMethod -Method Post -Uri "$baseUrl/estudiantes" -Headers $authHeaders -Body $body
+}
+
+# 6. Probar paginación - Primera página (10 elementos)
+Invoke-RestMethod -Method Get -Uri "$baseUrl/estudiantes?page=1&per_page=10" -Headers $authHeaders
+
+# 7. Probar paginación - Segunda página (10 elementos)
+Invoke-RestMethod -Method Get -Uri "$baseUrl/estudiantes?page=2&per_page=10" -Headers $authHeaders
+
+# 8. Probar paginación - Primera página con 5 elementos
+Invoke-RestMethod -Method Get -Uri "$baseUrl/estudiantes?page=1&per_page=5" -Headers $authHeaders
+
+# 9. Probar página fuera de rango
+Invoke-RestMethod -Method Get -Uri "$baseUrl/estudiantes?page=100" -Headers $authHeaders
+
+# 10. Probar con número inválido de elementos por página
+Invoke-RestMethod -Method Get -Uri "$baseUrl/estudiantes?per_page=0" -Headers $authHeaders
+
+# Nota: Puedes copiar y pegar cada comando individualmente en PowerShell
+# O ejecutar todo el script guardándolo como .ps1 y ejecutándolo
+# Para ver las respuestas de forma más legible, puedes agregar | ConvertTo-Json al final de cada Invoke-RestMethod

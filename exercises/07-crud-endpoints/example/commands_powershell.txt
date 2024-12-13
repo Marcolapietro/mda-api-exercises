@@ -1,0 +1,53 @@
+# Variables iniciales
+$baseUrl = "http://127.0.0.1:5000"
+$headers = @{
+    "Content-Type" = "application/json"
+}
+
+# 1. Registrar usuario normal
+$body = @{
+    username = "usuario1"
+    password = "pass123"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri "$baseUrl/usuarios" -Headers $headers -Body $body
+
+# 2. Login para obtener token JWT
+$pair = "usuario1:pass123"
+$encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
+$authHeaders = @{
+    Authorization = "Basic $encodedCreds"
+}
+
+$loginResponse = Invoke-RestMethod -Method Post -Uri "$baseUrl/login" -Headers $authHeaders
+$token = $loginResponse.access_token
+
+# 3. Configurar headers con JWT
+$jwtHeaders = @{
+    "Content-Type" = "application/json"
+    Authorization = "Bearer $token"
+}
+
+# 4. Crear usuario por admin
+$adminUserBody = @{
+    username = "usuario2"
+    password = "pass456"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri "$baseUrl/usuarios/admin" -Headers $jwtHeaders -Body $adminUserBody
+
+# 5. Obtener lista de usuarios
+Invoke-RestMethod -Method Get -Uri "$baseUrl/usuarios" -Headers $jwtHeaders
+
+# 6. Actualizar usuario
+$updateBody = @{
+    password = "newpass123"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Put -Uri "$baseUrl/usuarios/usuario2" -Headers $jwtHeaders -Body $updateBody
+
+# 7. Eliminar usuario
+Invoke-RestMethod -Method Delete -Uri "$baseUrl/usuarios/usuario2" -Headers $jwtHeaders
+
+# 8. Ver perfil
+Invoke-RestMethod -Method Get -Uri "$baseUrl/perfil" -Headers $jwtHeaders

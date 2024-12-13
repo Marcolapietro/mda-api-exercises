@@ -1,0 +1,11 @@
+REM 1. Registrar usuario
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"usuario1\",\"password\":\"pass123\"}" http://127.0.0.1:5000/usuarios
+
+REM 2. Login para obtener token JWT
+curl -X POST -H "Content-Type: application/json" --user usuario1:pass123 http://127.0.0.1:5000/login
+
+REM 3. Acceder al perfil con el token JWT (reemplazar TOKEN con el token obtenido)
+curl -X GET -H "Authorization: Bearer TOKEN" http://127.0.0.1:5000/perfil
+
+REM 4. Obtener usuarios (usando auth básica)
+curl -X GET --user usuario1:pass123 http://127.0.0.1:5000/usuarios
