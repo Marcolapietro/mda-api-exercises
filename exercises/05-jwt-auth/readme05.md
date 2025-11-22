@@ -1,104 +1,103 @@
-# Ejercicio 5: Autenticación con JSON Web Tokens (JWT)
+# Exercise 5: Authentication with JSON Web Tokens (JWT)
 
-## Objetivo
+## Objective
 
-Implementar autenticación utilizando JSON Web Tokens (JWT) en una API REST desarrollada con Python y Flask.
+Implement authentication using JSON Web Tokens (JWT) in a REST API developed with Python and Flask.
 
-## Descripción
+## Description
 
-En este ejercicio, ampliarás la API para incluir autenticación mediante JWT. Implementarás endpoints para que los usuarios puedan iniciar sesión y obtener un token JWT, el cual deberán incluir en las solicitudes a rutas protegidas para acceder a recursos seguros.
+In this exercise, you will extend the API to include JWT-based authentication. You will implement endpoints that allow users to log in and obtain a JWT token, which they must include in requests to protected routes to access secure resources.
 
-## Requisitos
+## Requirements
 
-1. **Instalación de Dependencias Adicionales:**
+1. **Installing Additional Dependencies:**
 
-   - Instala las bibliotecas necesarias para manejar JWT:
+   - Install the necessary libraries to handle JWT:
      ```bash
      pip install Flask-JWT-Extended
      ```
 
-2. **Estructura de la API:**
+2. **API Structure:**
 
-   - Crea una ruta para registrar usuarios (`POST /estudiantes`).
-   - Crea una ruta para que los usuarios inicien sesión (`POST /login`) y obtengan un token JWT.
-   - Crea una ruta protegida (`GET /perfil`) que solo pueda ser accedida con un token JWT válido.
-   - Incluye una ruta para obtener la lista de estudiantes (`GET /estudiantes`), protegida con autenticación.
+   - Create a route to register users (`POST /students`).
+   - Create a route for users to log in (`POST /login`) and obtain a JWT token.
+   - Create a protected route (`GET /profile`) that can only be accessed with a valid JWT token.
+   - Include a route to get the list of students (`GET /students`), protected with authentication.
 
-3. **Implementación de JWT:**
+3. **JWT Implementation:**
 
-   - Configura `Flask-JWT-Extended` en tu aplicación.
-   - Genera un token JWT al autenticar correctamente al usuario en la ruta de inicio de sesión.
-   - Protege rutas sensibles utilizando decoradores que verifiquen la presencia y validez del token JWT.
+   - Configure `Flask-JWT-Extended` in your application.
+   - Generate a JWT token when successfully authenticating the user in the login route.
+   - Protect sensitive routes using decorators that verify the presence and validity of the JWT token.
 
-4. **Pruebas:**
+4. **Testing:**
 
-   - Utiliza herramientas como Postman o `curl` para probar el flujo de autenticación y el acceso a rutas protegidas con y sin un token válido.
+   - Use tools like Postman or `curl` to test the authentication flow and access to protected routes with and without a valid token.
 
-## Pasos Detallados
+## Detailed Steps
 
-1. **Configura la Aplicación:**
+1. **Configure the Application:**
 
-   - Define una clave secreta para firmar los tokens JWT:
+   - Define a secret key to sign JWT tokens:
      ```python
-     app.config['JWT_SECRET_KEY'] = 'tu_clave_secreta_jwt'
+     app.config['JWT_SECRET_KEY'] = 'your_jwt_secret_key'
      ```
 
-2. **Registro de Usuarios:**
+2. **User Registration:**
 
-   - Implementa la ruta `POST /estudiantes` para registrar usuarios, hasheando las contraseñas antes de almacenarlas.
+   - Implement the `POST /students` route to register users, hashing passwords before storing them.
 
-3. **Inicio de Sesión:**
+3. **Login:**
 
-   - Implementa la ruta `POST /login` para autenticar usuarios registrados.
-   - Genera un token JWT utilizando la función `create_access_token`:
+   - Implement the `POST /login` route to authenticate registered users.
+   - Generate a JWT token using the `create_access_token` function:
      ```python
      access_token = create_access_token(identity=username)
      ```
 
-4. **Protección de Rutas:**
+4. **Route Protection:**
 
-   - Usa el decorador `@jwt_required()` para proteger la ruta `GET /perfil`.
-   - Obtén la identidad del usuario desde el token JWT usando `get_jwt_identity`:
+   - Use the `@jwt_required()` decorator to protect the `GET /profile` route.
+   - Get the user's identity from the JWT token using `get_jwt_identity`:
      ```python
      current_user = get_jwt_identity()
      ```
 
-5. **Pruebas:**
+5. **Testing:**
 
-   - Registra un usuario mediante una solicitud `POST /estudiantes`.
-   - Inicia sesión mediante `POST /login` y obtén el token JWT.
-   - Revisa en [jwt.io](https://www.postman.com/downloads/) copiando y pegando el token generado.
-   - Usa el token JWT como encabezado de autorización en `GET /perfil` y verifica el acceso.
+   - Register a user via a `POST /students` request.
+   - Log in via `POST /login` and obtain the JWT token.
+   - Review the token at [jwt.io](https://jwt.io/) by copying and pasting the generated token.
+   - Use the JWT token as an authorization header in `GET /profile` and verify access.
 
-## Ejemplo de Solicitudes con `curl`
+## Example Requests with `curl`
 
-1. **Registro de Usuario:**
+1. **User Registration:**
 
    ```bash
    curl -X POST -H "Content-Type: application/json" \
-   -d '{"username": "usuario1", "password": "1234"}' \
-   http://127.0.0.1:5000/estudiantes
+   -d '{"username": "user1", "password": "1234"}' \
+   http://127.0.0.1:5000/students
    ```
 
-2. **Inicio de Sesión:**
+2. **Login:**
 
    ```bash
-   curl -X POST -u usuario1:1234 \
+   curl -X POST -u user1:1234 \
    http://127.0.0.1:5000/login
    ```
 
-3. **Acceso a Rutas Protegidas:**
+3. **Accessing Protected Routes:**
 
    ```bash
-   curl -X GET -H "Authorization: Bearer <tu_token_jwt>" \
-   http://127.0.0.1:5000/perfil
+   curl -X GET -H "Authorization: Bearer <your_jwt_token>" \
+   http://127.0.0.1:5000/profile
    ```
 
-## Puntos a Considerar
+## Points to Consider
 
-- Cambia la clave secreta utilizada en `JWT_SECRET_KEY` en producción.
-- Maneja correctamente los errores para solicitudes no autenticadas o con tokens inválidos.
-- Configura tiempos de expiración para los tokens JWT si es necesario.
+- Change the secret key used in `JWT_SECRET_KEY` in production.
+- Properly handle errors for unauthenticated requests or invalid tokens.
+- Configure expiration times for JWT tokens if necessary.
 
-¡Buena suerte! Si tienes dudas, consulta la documentación oficial de [Flask-JWT-Extended](https://flask-jwt-extended.readthedocs.io/en/stable/).
-
+Good luck! If you have questions, consult the official [Flask-JWT-Extended](https://flask-jwt-extended.readthedocs.io/en/stable/) documentation.

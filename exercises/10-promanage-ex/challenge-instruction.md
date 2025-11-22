@@ -1,111 +1,111 @@
-# Proyecto en Equipo: API para la Gestión de Proyectos y Tareas
+# Team Project: API for Project and Task Management
 
-## **Contexto: Business Case**
+## **Context: Business Case**
 
-Tu equipo ha sido contratado por una empresa ficticia, **ProManage**, que desea una solución para gestionar proyectos y equipos de trabajo. La empresa necesita una API que permita registrar proyectos, asignar miembros a los equipos, gestionar tareas, y controlar permisos según los roles de los usuarios.
+Your team has been hired by a fictional company, **ProManage**, that needs a solution to manage projects and work teams. The company requires an API that allows registering projects, assigning team members, managing tasks, and controlling permissions based on user roles.
 
-### **Objetivo del Proyecto**
+### **Project Objective**
 
-Desarrollar una API RESTful que permita a **ProManage**:
-1. Registrar usuarios y asignarles roles (`admin`, `manager`, `developer`).
-2. Crear proyectos y asignar un equipo a cada proyecto.
-3. Crear tareas asociadas a un proyecto, asignarlas a miembros del equipo y controlar su estado.
-4. Restringir el acceso a ciertas rutas según los roles de los usuarios:
-   - **Admin:** Puede gestionar todo.
-   - **Manager:** Puede gestionar proyectos y tareas de su equipo.
-   - **Developer:** Puede actualizar tareas asignadas a ellos.
+Develop a RESTful API that allows **ProManage** to:
+1. Register users and assign them roles (`admin`, `manager`, `developer`).
+2. Create projects and assign a team to each project.
+3. Create tasks associated with a project, assign them to team members, and control their status.
+4. Restrict access to certain routes based on user roles:
+   - **Admin:** Can manage everything.
+   - **Manager:** Can manage projects and tasks for their team.
+   - **Developer:** Can update tasks assigned to them.
 
 ---
 
-## **Requisitos del Ejercicio**
+## **Exercise Requirements**
 
-### **Roles y Permisos**
+### **Roles and Permissions**
 - **Admin:**
-  - Crear y eliminar usuarios.
-  - Asignar roles a los usuarios.
-  - Ver todos los proyectos y tareas.
+  - Create and delete users.
+  - Assign roles to users.
+  - View all projects and tasks.
 - **Manager:**
-  - Crear proyectos.
-  - Asignar usuarios a proyectos.
-  - Crear y asignar tareas a miembros del equipo.
+  - Create projects.
+  - Assign users to projects.
+  - Create and assign tasks to team members.
 - **Developer:**
-  - Ver tareas asignadas.
-  - Actualizar el estado de sus tareas (`To Do`, `In Progress`, `Done`).
+  - View assigned tasks.
+  - Update the status of their tasks (`To Do`, `In Progress`, `Done`).
 
-### **Estructura de Datos**
-- **Usuarios:**
+### **Data Structure**
+- **Users:**
   - `id`, `username`, `password`, `role`
-- **Proyectos:**
-  - `id`, `nombre`, `manager_id`, `equipo` (lista de `user_id`)
-- **Tareas:**
-  - `id`, `proyecto_id`, `asignado_a`, `descripcion`, `estado`
+- **Projects:**
+  - `id`, `name`, `manager_id`, `team` (list of `user_id`)
+- **Tasks:**
+  - `id`, `project_id`, `assigned_to`, `description`, `status`
 
 ---
 
-## **Instrucciones**
+## **Instructions**
 
-### **1. Formación de Equipos**
-Forma equipos de 3 a 5 integrantes. Cada integrante asumirá una responsabilidad, como:
-- Diseñar la estructura de datos.
-- Implementar endpoints.
-- Configurar roles y permisos.
-- Probar la API.
+### **1. Team Formation**
+Form teams of 3 to 5 members. Each member will assume a responsibility, such as:
+- Designing the data structure.
+- Implementing endpoints.
+- Configuring roles and permissions.
+- Testing the API.
 
-### **2. Requerimientos Técnicos**
-- Utiliza **Flask**, **JWT**, y **Flask-Principal** para autenticación y control de permisos.
-- Implementa paginación para listar proyectos y tareas.
-- Asegúrate de manejar errores y retornar respuestas claras en la API.
+### **2. Technical Requirements**
+- Use **Flask**, **JWT**, and **Flask-Principal** for authentication and permission control.
+- Implement pagination for listing projects and tasks.
+- Make sure to handle errors and return clear responses in the API.
 
-### **3. Endpoints Requeridos**
+### **3. Required Endpoints**
 
-#### **Usuarios**
-- **POST /register:** Registra un usuario con un rol asignado.
-- **POST /login:** Autentica a un usuario y retorna un token JWT.
-- **GET /usuarios:** (Admin) Lista todos los usuarios.
+#### **Users**
+- **POST /register:** Register a user with an assigned role.
+- **POST /login:** Authenticate a user and return a JWT token.
+- **GET /users:** (Admin) List all users.
 
-#### **Proyectos**
-- **POST /proyectos:** (Manager/Admin) Crea un nuevo proyecto.
-- **GET /proyectos:** (Todos los roles) Lista los proyectos visibles para el usuario.
-- **PUT /proyectos/<id>:** (Manager/Admin) Actualiza información del proyecto.
-- **DELETE /proyectos/<id>:** (Admin) Elimina un proyecto.
+#### **Projects**
+- **POST /projects:** (Manager/Admin) Create a new project.
+- **GET /projects:** (All roles) List projects visible to the user.
+- **PUT /projects/<id>:** (Manager/Admin) Update project information.
+- **DELETE /projects/<id>:** (Admin) Delete a project.
 
-#### **Tareas**
-- **POST /proyectos/<id>/tareas:** (Manager/Admin) Crea una tarea para un proyecto.
-- **GET /proyectos/<id>/tareas:** (Todos los roles) Lista las tareas del proyecto.
-- **PUT /tareas/<id>:** (Developer) Actualiza el estado de una tarea asignada al usuario.
-- **DELETE /tareas/<id>:** (Manager/Admin) Elimina una tarea.
-
----
-
-## **Criterios de Evaluación**
-
-1. **Funcionalidad:** Los endpoints funcionan según lo esperado.
-2. **Seguridad:** Se implementan roles y permisos correctamente.
-3. **Organización:** El código está estructurado y fácil de entender.
-4. **Colaboración:** Todos los integrantes del equipo participan en el desarrollo.
+#### **Tasks**
+- **POST /projects/<id>/tasks:** (Manager/Admin) Create a task for a project.
+- **GET /projects/<id>/tasks:** (All roles) List project tasks.
+- **PUT /tasks/<id>:** (Developer) Update the status of a task assigned to the user.
+- **DELETE /tasks/<id>:** (Manager/Admin) Delete a task.
 
 ---
 
-## **Pasos para el Equipo**
+## **Evaluation Criteria**
 
-1. **Planificación:**
-   - Define la estructura de la API y divide las responsabilidades.
-2. **Desarrollo:**
-   - Implementa los endpoints y prueba la funcionalidad de cada uno.
-3. **Pruebas:**
-   - Usa Postman para verificar los flujos de trabajo.
-   - Asegúrate de manejar correctamente las restricciones de roles.
-4. **Documentación:**
-   - Escribe un archivo README que explique cómo usar la API.
-   - Incluye ejemplos de solicitudes y respuestas.
+1. **Functionality:** Endpoints work as expected.
+2. **Security:** Roles and permissions are implemented correctly.
+3. **Organization:** Code is structured and easy to understand.
+4. **Collaboration:** All team members participate in development.
 
 ---
 
-## **Entregables**
-1. Código fuente de la API.
-2. Un archivo README detallado con instrucciones de uso.
-3. Un informe breve explicando cómo dividieron el trabajo y resolvieron problemas.
+## **Steps for the Team**
+
+1. **Planning:**
+   - Define the API structure and divide responsibilities.
+2. **Development:**
+   - Implement endpoints and test each one's functionality.
+3. **Testing:**
+   - Use Postman to verify workflows.
+   - Ensure role restrictions are handled correctly.
+4. **Documentation:**
+   - Write a README file explaining how to use the API.
+   - Include examples of requests and responses.
 
 ---
 
-¡Buena suerte desarrollando esta solución para **ProManage**! 🎉
+## **Deliverables**
+1. API source code.
+2. A detailed README file with usage instructions.
+3. A brief report explaining how you divided the work and resolved problems.
+
+---
+
+Good luck developing this solution for **ProManage**!

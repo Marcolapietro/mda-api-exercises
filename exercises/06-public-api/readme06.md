@@ -1,58 +1,58 @@
-# Ejercicio 6: Consumo de API Pública
+# Exercise 6: Public API Consumption
 
-## Objetivo
+## Objective
 
-Consumir APIs externas e integrar sus datos en tu propia API utilizando Python y Flask.
+Consume external APIs and integrate their data into your own API using Python and Flask.
 
-## Descripción
+## Description
 
-En este ejercicio, ampliarás la API desarrollada en los ejercicios anteriores para incluir una nueva ruta que consuma datos de la API de OpenWeatherMap para obtener información meteorológica. Los estudiantes deberán implementar esta funcionalidad llenando los espacios en blanco proporcionados.
+In this exercise, you will expand the API developed in previous exercises to include a new route that consumes data from the OpenWeatherMap API to obtain weather information. Students will need to implement this functionality by filling in the provided blanks.
 
-## Requisitos
+## Requirements
 
-### 1. Instalación de Dependencias Adicionales
-- Instala la biblioteca `requests` para realizar solicitudes HTTP.
+### 1. Installation of Additional Dependencies
+- Install the `requests` library to make HTTP requests.
 
-### 2. Registro en OpenWeatherMap
-- Ve a [OpenWeatherMap](https://openweathermap.org/)
-- Haz clic en "Sign Up" y crea una cuenta gratuita
-- Una vez registrado, ve a "API Keys" en tu perfil
-- Genera una nueva API key (puede tardar hasta 2 horas en activarse, aunque normalmente es instantáneo. Si tarda mucho avisa al profesor)
-- Guarda tu API key de forma segura
+### 2. Registration on OpenWeatherMap
+- Go to [OpenWeatherMap](https://openweathermap.org/)
+- Click on "Sign Up" and create a free account
+- Once registered, go to "API Keys" in your profile
+- Generate a new API key (it may take up to 2 hours to activate, although it's usually instant. If it takes too long, notify the instructor)
+- Save your API key securely
 
-### 3. Estructura de la API
-- Crea una ruta (`GET /clima`) que obtenga datos meteorológicos usando la API de OpenWeatherMap
-- Utiliza tu API key en las peticiones
+### 3. API Structure
+- Create a route (`GET /weather`) that obtains weather data using the OpenWeatherMap API
+- Use your API key in requests
 
-### 4. Implementación del Consumo de API
-- Utiliza la biblioteca `requests` para hacer una solicitud a OpenWeatherMap
-- Procesa la respuesta y retorna datos relevantes (temperatura, descripción, ciudad)
+### 4. Implementation of API Consumption
+- Use the `requests` library to make a request to OpenWeatherMap
+- Process the response and return relevant data (temperature, description, city)
 
-### 5. Pruebas
-- Utiliza herramientas como Postman o `curl` para probar la nueva ruta
-- Prueba diferentes ciudades usando el parámetro `?ciudad=NombreCiudad`
+### 5. Testing
+- Use tools like Postman or `curl` to test the new route
+- Test different cities using the `?city=CityName` parameter
 
-## Pasos Sugeridos
+## Suggested Steps
 
-### 1. Instrucciones
-En el espacio _____ dentro de la función `login`, utiliza la función adecuada de Flask-JWT-Extended para crear un token de acceso.
+### 1. Instructions
+In the _____ blank within the `login` function, use the appropriate Flask-JWT-Extended function to create an access token.
 
-En la ruta /perfil, utiliza la función adecuada para obtener la identidad del usuario desde el token.
+In the /profile route, use the appropriate function to obtain the user's identity from the token.
 
-### 2. Instala Dependencias Adicionales
+### 2. Install Additional Dependencies
 ```bash
 pip install requests
 ```
 
-### 3. Ejemplo de uso de la API
+### 3. Example API Usage
 ```bash
-# Obtener el clima de Madrid (default)
-curl http://localhost:5000/clima
+# Get weather for Madrid (default)
+curl http://localhost:5000/weather
 
-# Obtener el clima de otra ciudad
-curl http://localhost:5000/clima?ciudad=Barcelona
+# Get weather for another city
+curl http://localhost:5000/weather?city=Barcelona
 ```
 
-## Documentación Adicional
-- [Documentación de OpenWeatherMap API](https://openweathermap.org/api)
-- [Guía de inicio rápido de OpenWeatherMap](https://openweathermap.org/guide)
+## Additional Documentation
+- [OpenWeatherMap API Documentation](https://openweathermap.org/api)
+- [OpenWeatherMap Quick Start Guide](https://openweathermap.org/guide)

@@ -1,116 +1,116 @@
-# Ejercicio 8: Implementación de Paginación en Endpoints
+# Exercise 8: Implementing Pagination in Endpoints
 
-## Objetivo
+## Objective
 
-- **Implementar Paginación en Endpoints:** Aprender a manejar grandes conjuntos de datos dividiéndolos en páginas más pequeñas.
-- **Optimización de Respuestas:** Mejorar la eficiencia y usabilidad de la API al limitar la cantidad de datos retornados en cada solicitud.
-- **Manejo de Parámetros de Consulta:** Utilizar parámetros de consulta para controlar la paginación.
+- **Implement Pagination in Endpoints:** Learn to handle large datasets by dividing them into smaller pages.
+- **Response Optimization:** Improve API efficiency and usability by limiting the amount of data returned in each request.
+- **Query Parameter Handling:** Use query parameters to control pagination.
 
-## Descripción
+## Description
 
-En este ejercicio, implementarás la funcionalidad de paginación en la ruta `GET /estudiantes`. La paginación permitirá dividir la lista de estudiantes en páginas más pequeñas, controladas por parámetros de consulta como `page` y `per_page`.
+In this exercise, you will implement pagination functionality in the `GET /students` route. Pagination will allow you to divide the list of students into smaller pages, controlled by query parameters such as `page` and `per_page`.
 
-## Requisitos
+## Requirements
 
-1. **Instalación de Dependencias Adicionales:**
-   - Asegúrate de tener instalada la biblioteca `Flask` y las extensiones utilizadas en ejercicios anteriores.
-   - Utiliza la biblioteca `math` (incluida por defecto en Python) para calcular el número total de páginas.
+1. **Install Additional Dependencies:**
+   - Make sure you have the `Flask` library and extensions used in previous exercises installed.
+   - Use the `math` library (included by default in Python) to calculate the total number of pages.
 
-2. **Estructura de la API:**
-   - **Ruta Paginada (`GET /estudiantes`):** Retorna una lista paginada de estudiantes, permitiendo especificar el número de página y la cantidad de estudiantes por página mediante parámetros de consulta.
+2. **API Structure:**
+   - **Paginated Route (`GET /students`):** Returns a paginated list of students, allowing you to specify the page number and the number of students per page through query parameters.
 
-3. **Implementación de Paginación:**
-   - Utiliza parámetros de consulta como `page` y `per_page` para controlar la paginación.
-   - Calcula los índices de inicio y fin para retornar el subconjunto correcto de estudiantes.
-   - Retorna información adicional como el número total de páginas y el número actual de página.
+3. **Pagination Implementation:**
+   - Use query parameters such as `page` and `per_page` to control pagination.
+   - Calculate the start and end indices to return the correct subset of students.
+   - Return additional information such as the total number of pages and the current page number.
 
-4. **Pruebas:**
-   - Utiliza herramientas como Postman o `curl` para probar la paginación, solicitando diferentes páginas y tamaños de página.
-   - Asegúrate de que la paginación funcione correctamente y que se manejen los errores de manera adecuada (por ejemplo, páginas fuera de rango).
+4. **Testing:**
+   - Use tools like Postman or `curl` to test pagination, requesting different pages and page sizes.
+   - Ensure that pagination works correctly and that errors are handled appropriately (for example, pages out of range).
 
-## Pasos Detallados
+## Detailed Steps
 
-1. **Configura la Ruta `/estudiantes`**:
-   - Modifica la ruta que maneja `GET /estudiantes` para aceptar parámetros de consulta `page` y `per_page`.
-   - Calcula los índices para obtener el subconjunto de estudiantes de acuerdo con la página solicitada.
+1. **Configure the `/students` Route**:
+   - Modify the route that handles `GET /students` to accept query parameters `page` and `per_page`.
+   - Calculate the indices to get the subset of students according to the requested page.
 
-2. **Calcula el Total de Páginas:**
-   - Usa la fórmula `ceil(total / per_page)` para calcular el número total de páginas, asegurándote de manejar correctamente divisiones no enteras.
+2. **Calculate Total Pages:**
+   - Use the formula `ceil(total / per_page)` to calculate the total number of pages, making sure to correctly handle non-integer divisions.
 
-3. **Construye los Enlaces de Navegación:**
-   - Utiliza `request.base_url` y `urlencode` para generar los enlaces `prev` y `next`.
+3. **Build Navigation Links:**
+   - Use `request.base_url` and `urlencode` to generate `prev` and `next` links.
 
-4. **Retorna la Respuesta:**
-   - Incluye la lista de estudiantes de la página solicitada, la información de paginación y los enlaces de navegación.
+4. **Return the Response:**
+   - Include the list of students from the requested page, pagination information, and navigation links.
 
-## Ejemplo de Código
+## Code Example
 
 ```python
-@app.route('/estudiantes', methods=['GET'])
+@app.route('/students', methods=['GET'])
 @jwt_required()
-def obtener_estudiantes():
+def get_students():
     try:
-        # Obtener los parámetros de consulta 'page' y 'per_page' con valores predeterminados
-        page = request.args.get('page', 1, type=int)  # Página actual
-        per_page = request.args.get('per_page', 10, type=int)  # Estudiantes por página
+        # Get the query parameters 'page' and 'per_page' with default values
+        page = request.args.get('page', 1, type=int)  # Current page
+        per_page = request.args.get('per_page', 10, type=int)  # Students per page
 
-        # Validar el valor de 'per_page'
+        # Validate the 'per_page' value
         if per_page <= 0 or per_page > 100:
-            return jsonify({'message': 'per_page debe ser entre 1 y 100.'}), 400
+            return jsonify({'message': 'per_page must be between 1 and 100.'}), 400
 
-        # Calcular el número total de estudiantes y páginas
-        total_students = len(estudiantes)  # Total de estudiantes registrados
-        total_pages = math.ceil(total_students / per_page)  # Número total de páginas
+        # Calculate the total number of students and pages
+        total_students = len(students)  # Total registered students
+        total_pages = math.ceil(total_students / per_page)  # Total number of pages
 
-        # Validar el rango de la página solicitada
+        # Validate the requested page range
         if page < 1 or page > total_pages:
-            return jsonify({'message': 'Página no encontrada.'}), 404
+            return jsonify({'message': 'Page not found.'}), 404
 
-        # Determinar los índices de inicio y fin de la lista de estudiantes
-        start = (page - 1) * per_page  # Índice inicial
-        end = start + per_page  # Índice final
-        students_list = list(estudiantes.keys())[start:end]  # Subconjunto de estudiantes
+        # Determine the start and end indices of the student list
+        start = (page - 1) * per_page  # Start index
+        end = start + per_page  # End index
+        students_list = list(students.keys())[start:end]  # Subset of students
 
-        # Construir enlaces para navegar entre páginas
-        base_url = request.base_url  # URL base de la solicitud
-        query_params = request.args.to_dict()  # Parámetros de consulta actuales
+        # Build links to navigate between pages
+        base_url = request.base_url  # Base URL of the request
+        query_params = request.args.to_dict()  # Current query parameters
 
         def build_url(new_page):
-            # Construye una URL con el número de página actualizado
+            # Build a URL with the updated page number
             query_params['page'] = new_page
             return f"{base_url}?{urlencode(query_params)}"
 
-        # Crear enlaces de navegación (prev y next)
+        # Create navigation links (prev and next)
         links = {}
         if page > 1:
-            links['prev'] = build_url(page - 1)  # Enlace a la página anterior
+            links['prev'] = build_url(page - 1)  # Link to previous page
         if page < total_pages:
-            links['next'] = build_url(page + 1)  # Enlace a la página siguiente
+            links['next'] = build_url(page + 1)  # Link to next page
 
-        # Retornar la respuesta con datos paginados
+        # Return the response with paginated data
         return jsonify({
-            'students': students_list,  # Lista de estudiantes en la página actual
-            'total_pages': total_pages,  # Número total de páginas
-            'current_page': page,  # Página actual
-            'per_page': per_page,  # Número de estudiantes por página
-            'total_students': total_students,  # Total de estudiantes registrados
-            'links': links  # Enlaces de navegación
+            'students': students_list,  # List of students on the current page
+            'total_pages': total_pages,  # Total number of pages
+            'current_page': page,  # Current page
+            'per_page': per_page,  # Number of students per page
+            'total_students': total_students,  # Total registered students
+            'links': links  # Navigation links
         }), 200
 
     except Exception as e:
-        # Manejo de errores generales
-        return jsonify({'error': 'Ocurrió un error al procesar la solicitud.', 'details': str(e)}), 500
+        # General error handling
+        return jsonify({'error': 'An error occurred while processing the request.', 'details': str(e)}), 500
 ```
 
-## Pruebas con Postman o `curl`
+## Testing with Postman or `curl`
 
-1. **Solicitar Página Específica:**
+1. **Request Specific Page:**
 
    ```bash
-   curl -X GET "http://127.0.0.1:5000/estudiantes?page=2&per_page=5" -H "Authorization: Bearer <tu_token_jwt>"
+   curl -X GET "http://127.0.0.1:5000/students?page=2&per_page=5" -H "Authorization: Bearer <your_jwt_token>"
    ```
 
-2. **Resultado Esperado:**
+2. **Expected Result:**
 
    ```json
    {
@@ -120,31 +120,30 @@ def obtener_estudiantes():
      "per_page": 5,
      "total_students": 13,
      "links": {
-       "prev": "http://127.0.0.1:5000/estudiantes?page=1&per_page=5",
-       "next": "http://127.0.0.1:5000/estudiantes?page=3&per_page=5"
+       "prev": "http://127.0.0.1:5000/students?page=1&per_page=5",
+       "next": "http://127.0.0.1:5000/students?page=3&per_page=5"
      }
    }
    ```
 
-3. **Página Fuera de Rango:**
+3. **Page Out of Range:**
 
    ```bash
-   curl -X GET "http://127.0.0.1:5000/estudiantes?page=100&per_page=5" -H "Authorization: Bearer <tu_token_jwt>"
+   curl -X GET "http://127.0.0.1:5000/students?page=100&per_page=5" -H "Authorization: Bearer <your_jwt_token>"
    ```
 
-   Respuesta:
+   Response:
 
    ```json
    {
-     "message": "Página no encontrada."
+     "message": "Page not found."
    }
    ```
 
-## Puntos a Considerar
+## Points to Consider
 
-- Ajusta los valores predeterminados y máximos de `per_page` según las necesidades de tu API.
-- Asegúrate de manejar errores para solicitudes con parámetros malformados o fuera de rango.
-- Documenta claramente los parámetros aceptados en tu API para que los clientes puedan usarlos correctamente.
+- Adjust the default and maximum values of `per_page` according to your API needs.
+- Make sure to handle errors for requests with malformed or out-of-range parameters.
+- Clearly document the accepted parameters in your API so clients can use them correctly.
 
-¡Buena suerte con la implementación! Si tienes dudas, no dudes en consultar.
-
+Good luck with the implementation! If you have questions, don't hesitate to ask.

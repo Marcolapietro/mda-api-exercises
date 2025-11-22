@@ -10,30 +10,30 @@ from urllib.parse import urlencode
 
 app = Flask(__name__)
 
-# Configuración de JWT para manejar autenticación basada en tokens
-app.config['JWT_SECRET_KEY'] = 'clave_super_secreta_jwt'
+# JWT configuration for token-based authentication
+app.config['JWT_SECRET_KEY'] = 'super_secret_jwt_key'
 jwt = JWTManager(app)
 
-# Configuración de Flask-Principal para manejar roles y permisos
-app.config['SECRET_KEY'] = 'clave_secreta_flask' 
+# Flask-Principal configuration for role and permission management
+app.config['SECRET_KEY'] = 'flask_secret_key'
 principals = Principal(app)
 
-# Definición de roles y permisos
-admin_permission = Permission(RoleNeed('admin'))  # Permiso para administradores
-student_permission = Permission(RoleNeed('student'))  # Permiso para estudiantes
+# Role and permission definitions
+admin_permission = Permission(RoleNeed('admin'))  # Permission for administrators
+student_permission = Permission(RoleNeed('student'))  # Permission for students
 
-# Base de datos simulada para almacenar usuarios
-usuarios = {}
+# Simulated database for storing users
+users = {}
 
-# Generar usuarios de prueba
-def generate_users(usuarios, total):
-    """Genera usuarios de prueba con roles aleatorios"""
+# Generate test users
+def generate_users(users, total):
+    """Generates test users with random roles"""
     roles = ['admin', 'student']
     for _ in range(total):
         username = ''.join(random.choices(string.ascii_letters, k=8))
         password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
         role = random.choice(roles)
-        usuarios[username] = {
+        users[username] = {
             'password': generate_password_hash(password),
             'api_key': secrets.token_hex(16),
             'role': role
@@ -41,7 +41,7 @@ def generate_users(usuarios, total):
 
 @app.route('/register', methods=['POST'])
 def register_user():
-    """Registra un nuevo usuario con un rol predeterminado o personalizado"""
+    """Registers a new user with a default or custom role"""
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -49,10 +49,10 @@ def register_user():
 
     if not username or not password:
         return jsonify({'message': 'Username and password are required.'}), 400
-    if username in usuarios:
+    if username in users:
         return jsonify({'message': 'User already exists.'}), 400
 
-    usuarios[username] = {
+    users[username] = {
         'password': generate_password_hash(password),
         'api_key': secrets.token_hex(16),
         'role': role
@@ -61,7 +61,7 @@ def register_user():
 
 @app.route('/login', methods=['POST'])
 def login():
-    """Autentica a un usuario y genera un token JWT"""
+    """Authenticates a user and generates a JWT token"""
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -69,40 +69,40 @@ def login():
     if not username or not password:
         return jsonify({'message': 'Username and password are required.'}), 400
 
-    user = usuarios.get(username)
+    user = users.get(username)
     if user and check_password_hash(user['password'], password):
-        access_token = create_access_token(identity=username)  # Genera un token JWT para el usuario autenticado
+        access_token = create_access_token(identity=username)  # Generates a JWT token for the authenticated user
         identity_changed.send(app, identity=Identity(username))
         return jsonify({'access_token': access_token}), 200
 
     return jsonify({'message': 'Invalid username or password.'}), 401
 
-@app.route('/perfil', methods=['GET'])
+@app.route('/profile', methods=['GET'])
 @jwt_required()
-def perfil():
-    """Retorna el perfil del usuario autenticado"""
+def profile():
+    """Returns the authenticated user's profile"""
     current_user = get_jwt_identity()
-    return jsonify({'perfil': f'Información del perfil de {current_user}'}), 200
+    return jsonify({'profile': f'Profile information for {current_user}'}), 200
 
 @identity_loaded.connect_via(app)
 def on_identity_loaded(sender, identity):
-    """Carga los permisos y roles del usuario autenticado"""
-    identity.user = identity.id  # Pista: Asocia el usuario autenticado con la identidad
-    identity.provides.add(UserNeed(identity.id))  # Pista: Agrega permiso basado en el ID del usuario
+    """Loads permissions and roles for the authenticated user"""
+    identity.user = identity.id  # Hint: Associates the authenticated user with the identity
+    identity.provides.add(UserNeed(identity.id))  # Hint: Adds permission based on user ID
 
-    if identity.id in usuarios:
-        role = usuarios[identity.id].get('role')  # Pista: Recupera el rol del usuario autenticado
+    if identity.id in users:
+        role = users[identity.id].get('role')  # Hint: Retrieves the authenticated user's role
         if role:
-            identity.provides.add(____Need(role))  # Pista: Agrega el rol como un permiso
+            identity.provides.add(____Need(role))  # Hint: Adds the role as a permission
 
-@app.route('/usuarios', methods=['GET'])
+@app.route('/users', methods=['GET'])
 @jwt_required()
-def obtener_usuarios():
-    """Retorna una lista de usuarios con paginación"""
+def get_users():
+    """Returns a list of users with pagination"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
 
-    total_users = len(usuarios)
+    total_users = len(users)
     total_pages = math.ceil(total_users / per_page)
 
     if page > total_pages or page < 1:
@@ -110,7 +110,7 @@ def obtener_usuarios():
 
     start = (page - 1) * per_page
     end = start + per_page
-    users_list = list(usuarios.keys())[start:end]
+    users_list = list(users.keys())[start:end]
 
     return jsonify({
         'users': users_list,
@@ -118,13 +118,13 @@ def obtener_usuarios():
         'current_page': page
     }), 200
 
-@app.route('/usuarios/<username>', methods=['PUT'])
+@app.route('/users/<username>', methods=['PUT'])
 @jwt_required()
-def actualizar_usuario(username):
-    """Actualiza la información de un usuario existente"""
+def update_user(username):
+    """Updates an existing user's information"""
     current_user = get_jwt_identity()
 
-    if username not in usuarios:
+    if username not in users:
         return jsonify({'message': 'User not found.'}), 404
 
     if not admin_permission.can():
@@ -135,37 +135,37 @@ def actualizar_usuario(username):
     role = data.get('role')
 
     if password:
-        usuarios[username]['password'] = generate_password_hash(password)  # Pista: Actualiza la contraseña del usuario
+        users[username]['password'] = generate_password_hash(password)  # Hint: Updates the user's password
     if role:
-        usuarios[username]['____'] = role  # Pista: Actualiza el rol del usuario
+        users[username]['____'] = role  # Hint: Updates the user's role
 
     return jsonify({'message': 'User updated successfully.'}), 200
 
-@app.route('/usuarios/<username>', methods=['DELETE'])
+@app.route('/users/<username>', methods=['DELETE'])
 @jwt_required()
 @admin_permission.require(http_exception=403)
-def eliminar_usuario(username):
-    """Elimina a un usuario si el solicitante tiene permisos de administrador"""
-    if username not in usuarios:
+def delete_user(username):
+    """Deletes a user if the requester has administrator permissions"""
+    if username not in users:
         return jsonify({'message': 'User not found.'}), 404
 
-    ___ usuarios[username]  # Pista: Elimina al usuario de la base de datos. ¿Como se dice borrar en inglés? Una palabra, es de Python, no tiene que ver con el framework.
+    ___ users[username]  # Hint: Deletes the user from the database. One Python word.
     return jsonify({'message': 'User deleted successfully.'}), 200
 
 @app.route('/admin/dashboard', methods=['GET'])
 @jwt_required()
 @admin_permission.require(http_exception=403)
 def admin_dashboard():
-    """Retorna el dashboard exclusivo para administradores"""
-    return jsonify({'message': f'Bienvenido al dashboard de admin, {get_jwt_identity()}.'}), 200
+    """Returns the dashboard exclusive to administrators"""
+    return jsonify({'message': f'Welcome to the admin dashboard, {get_jwt_identity()}.'}), 200
 
 @app.route('/student/data', methods=['GET'])
 @jwt_required()
 @student_permission.require(http_exception=403)
 def student_data():
-    """Retorna datos específicos del estudiante autenticado"""
-    return jsonify({'message': f'Datos del estudiante {get_jwt_identity()}.'}), 200
+    """Returns specific data for the authenticated student"""
+    return jsonify({'message': f'Student data for {get_jwt_identity()}.'}), 200
 
 if __name__ == '__main__':
-    generate_users(usuarios, 100)  # Pista: Genera usuarios de prueba con roles aleatorios
+    generate_users(users, 100)  # Hint: Generates test users with random roles
     app.run(debug=True)

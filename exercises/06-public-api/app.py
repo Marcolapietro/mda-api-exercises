@@ -7,36 +7,36 @@ import requests
 app = Flask(__name__)
 auth = HTTPBasicAuth()
 
-# Configuración de JWT
-app.config['JWT_SECRET_KEY'] = 'tu_clave_secreta_jwt'  # Cambia esto por una clave secreta segura
+# JWT Configuration
+app.config['JWT_SECRET_KEY'] = 'your_secret_jwt_key'  # Change this to a secure secret key
 jwt = JWTManager(app)
 
-# Base de datos simulada para almacenar estudiantes
-estudiantes = {
-    # 'nombre_estudiante': {'password': 'hashed_password', 'api_key': 'api_key'}
+# Simulated database to store students
+students = {
+    # 'student_name': {'password': 'hashed_password', 'api_key': 'api_key'}
 }
 
 @auth.verify_password
 def verify_password(username, password):
-    if username in estudiantes and check_password_hash(estudiantes.get(username)['password'], password):
+    if username in students and check_password_hash(students.get(username)['password'], password):
         return username
     return None
 
-@app.route('/estudiantes', methods=['POST'])
+@app.route('/students', methods=['POST'])
 def register_student():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-    
+
     if not username or not password:
         return jsonify({'message': 'Username and password are required.'}), 400
-    if username in estudiantes:
+    if username in students:
         return jsonify({'message': 'User already exists.'}), 400
-    
-    # Hashear la contraseña antes de almacenarla
-    estudiantes[username] = {
+
+    # Hash the password before storing it
+    students[username] = {
         'password': generate_password_hash(password),
-        'api_key': 'api_key_placeholder'  # Implementa la generación de API Key si aplica. Pista: No.
+        'api_key': 'api_key_placeholder'  # Implement API Key generation if applicable. Hint: No.
     }
     return jsonify({'message': 'User registered successfully.'}), 201
 
@@ -47,34 +47,34 @@ def login():
     access_token = _____(identity=current_user)
     return jsonify({'access_token': access_token}), 200
 
-@app.route('/perfil', methods=['GET'])
+@app.route('/profile', methods=['GET'])
 @jwt_required()
-def perfil():
+def profile():
     current_user = _____() # get_something
-    return jsonify({'perfil': f'Información del perfil de {current_user}'}), 200
+    return jsonify({'profile': f'Profile information for {current_user}'}), 200
 
-@app.route('/clima', methods=['GET'])
+@app.route('/weather', methods=['GET'])
 @jwt_required()
-def clima():
-    ciudad = request.args.get('ciudad', 'Madrid')
-    api_key = 'TU API KEY DE OPENWEATHER MAP' #Regístrate en OpenWeatherMap para conseguir tu API Key
-    url = f'http://api.openweathermap.org/data/2.5/weather?q={ciudad}&appid={api_key}&units=metric&lang=es'
-    respuesta = requests.get(url)
-    if respuesta.status_code == 200:
-        datos = respuesta.json()
-        clima_info = {
-            'ciudad': datos['name'],
-            'temperatura': datos['main']['temp'],
-            'descripcion': datos['weather'][0]['description']
+def weather():
+    city = request.args.get('city', 'Madrid')
+    api_key = 'YOUR OPENWEATHER MAP API KEY' # Register on OpenWeatherMap to get your API Key
+    url = f'http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=en'
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        weather_info = {
+            'city': data['name'],
+            'temperature': data['main']['temp'],
+            'description': data['weather'][0]['description']
         }
-        return jsonify(clima_info), 200
+        return jsonify(weather_info), 200
     else:
-        return jsonify({'message': 'No se pudo obtener la información del clima.'}), 400
+        return jsonify({'message': 'Could not retrieve weather information.'}), 400
 
-@app.route('/estudiantes', methods=['GET'])
+@app.route('/students', methods=['GET'])
 @auth.login_required
 def get_students():
-    return jsonify({'students': list(estudiantes.keys())}), 200
+    return jsonify({'students': list(students.keys())}), 200
 
 @app.errorhandler(404)
 def not_found(error):

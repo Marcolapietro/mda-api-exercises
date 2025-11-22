@@ -7,35 +7,35 @@ import requests
 app = Flask(__name__)
 auth = HTTPBasicAuth()
 
-# Configuración de JWT
-app.config['JWT_SECRET_KEY'] = 'clave_super_secreta_jwt'
+# JWT Configuration
+app.config['JWT_SECRET_KEY'] = 'super_secret_jwt_key'
 jwt = JWTManager(app)
 
-# Base de datos simulada para almacenar usuarios
-usuarios = {
-    # 'nombre_usuario': {'password': 'hashed_password', 'api_key': 'api_key'}
+# Simulated database to store users
+users = {
+    # 'user_name': {'password': 'hashed_password', 'api_key': 'api_key'}
 }
 
 @auth.verify_password
 def verify_password(username, password):
-    if username in usuarios and check_password_hash(usuarios.get(username)['password'], password):
+    if username in users and check_password_hash(users.get(username)['password'], password):
         return username
     return None
 
-@app.route('/usuarios', methods=['POST'])
+@app.route('/users', methods=['POST'])
 def register_user():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-    
+
     if not username or not password:
         return jsonify({'message': 'Username and password are required.'}), 400
-    if username in usuarios:
+    if username in users:
         return jsonify({'message': 'User already exists.'}), 400
-    
-    usuarios[username] = {
+
+    users[username] = {
         'password': generate_password_hash(password),
-        'api_key': 'api_key_placeholder'  # Implementa la generación de API Key si aplica
+        'api_key': 'api_key_placeholder'  # Implement API Key generation if applicable
     }
     return jsonify({'message': 'User registered successfully.'}), 201
 
@@ -46,33 +46,33 @@ def login():
     access_token = create_access_token(identity=current_user)
     return jsonify({'access_token': access_token}), 200
 
-@app.route('/perfil', methods=['GET'])
+@app.route('/profile', methods=['GET'])
 @jwt_required()
-def perfil():
+def profile():
     current_user = get_jwt_identity()
-    return jsonify({'perfil': f'Información del perfil de {current_user}'}), 200
+    return jsonify({'profile': f'Profile information for {current_user}'}), 200
 
-@app.route('/clima', methods=['GET'])
-def clima():
-    ciudad = request.args.get('ciudad', 'Madrid')
+@app.route('/weather', methods=['GET'])
+def weather():
+    city = request.args.get('city', 'Madrid')
     api_key = ' '
-    url = f'http://api.openweathermap.org/data/2.5/weather?q={ciudad}&appid={api_key}&units=metric&lang=es'
-    respuesta = requests.get(url)
-    if respuesta.status_code == 200:
-        datos = respuesta.json()
-        clima_info = {
-            'ciudad': datos['name'],
-            'temperatura': datos['main']['temp'],
-            'descripcion': datos['weather'][0]['description']
+    url = f'http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=en'
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        weather_info = {
+            'city': data['name'],
+            'temperature': data['main']['temp'],
+            'description': data['weather'][0]['description']
         }
-        return jsonify(clima_info), 200
+        return jsonify(weather_info), 200
     else:
-        return jsonify({'message': 'No se pudo obtener la información del clima.'}), 400
+        return jsonify({'message': 'Could not retrieve weather information.'}), 400
 
-@app.route('/usuarios', methods=['GET'])
+@app.route('/users', methods=['GET'])
 @auth.login_required
 def get_users():
-    return jsonify({'users': list(usuarios.keys())}), 200
+    return jsonify({'users': list(users.keys())}), 200
 
 @app.errorhandler(404)
 def not_found(error):

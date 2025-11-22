@@ -1,123 +1,123 @@
-# Práctica: Diagramas de Secuencia UML
+# Practice: UML Sequence Diagrams
 
-## Introducción
-Este material te ayudará a comprender y practicar la creación de diagramas de secuencia UML. Los diagramas de secuencia son una herramienta fundamental para visualizar interacciones entre componentes de un sistema.
+## Introduction
+This material will help you understand and practice creating UML sequence diagrams. Sequence diagrams are a fundamental tool for visualizing interactions between system components.
 
-## Conceptos Básicos
+## Basic Concepts
 
-### Elementos Principales
-1. **Actores**: Representan usuarios o sistemas externos
-2. **Participantes**: Representan sistemas, servicios o componentes
-3. **Mensajes**: Flechas que indican comunicación entre participantes
-4. **Líneas de Vida**: Líneas verticales que representan el tiempo
+### Main Elements
+1. **Actors**: Represent users or external systems
+2. **Participants**: Represent systems, services, or components
+3. **Messages**: Arrows indicating communication between participants
+4. **Lifelines**: Vertical lines representing time
 
-### Tipos de Mensajes
-- **Síncronos**: Flecha sólida con punta llena (→)
-- **Respuesta**: Flecha punteada con punta abierta (-->)
-- **Asíncronos**: Flecha punteada con punta llena (-->)
+### Message Types
+- **Synchronous**: Solid arrow with filled head (→)
+- **Response**: Dotted arrow with open head (-->)
+- **Asynchronous**: Dotted arrow with filled head (-->)
 
-## Ejemplos Básicos
+## Basic Examples
 
-### Ejemplo 1: Login Simple
+### Example 1: Simple Login
 ```
-actor Usuario
-participant Sistema
+actor User
+participant System
 
-Usuario->>Sistema: login(usuario, contraseña)
-Sistema-->>Usuario: loginExitoso
-```
-
-Este ejemplo muestra:
-- Un actor (Usuario)
-- Un sistema
-- Una petición simple
-- Una respuesta
-
-### Ejemplo 2: Consulta con Base de Datos
-```
-actor Usuario
-participant Sistema
-participant BaseDatos
-
-Usuario->>Sistema: buscarProducto(id)
-Sistema->>BaseDatos: query(id)
-BaseDatos-->>Sistema: datosProducto
-Sistema-->>Usuario: mostrarProducto
+User->>System: login(username, password)
+System-->>User: loginSuccessful
 ```
 
-Este ejemplo muestra:
-- Múltiples participantes
-- Cadena de mensajes
-- Flujo de datos
+This example shows:
+- An actor (User)
+- A system
+- A simple request
+- A response
 
-## Características Avanzadas
-
-### Bucles
+### Example 2: Database Query
 ```
-loop Para cada item en carrito
-    Usuario->>Sistema: agregarAlCarrito(item)
-    Sistema-->>Usuario: itemAgregado
+actor User
+participant System
+participant Database
+
+User->>System: searchProduct(id)
+System->>Database: query(id)
+Database-->>System: productData
+System-->>User: displayProduct
+```
+
+This example shows:
+- Multiple participants
+- Message chain
+- Data flow
+
+## Advanced Features
+
+### Loops
+```
+loop For each item in cart
+    User->>System: addToCart(item)
+    System-->>User: itemAdded
 end
 ```
 
-### Condiciones
+### Conditions
 ```
-alt stock disponible
-    Sistema->>BaseDatos: actualizarStock()
-    BaseDatos-->>Sistema: stockActualizado
-else stock no disponible
-    Sistema-->>Usuario: errorStock
+alt stock available
+    System->>Database: updateStock()
+    Database-->>System: stockUpdated
+else stock not available
+    System-->>User: stockError
 end
 ```
 
-### Procesos Paralelos
+### Parallel Processes
 ```
-par Procesos paralelos
-    Sistema->>ServicioEmail: enviarNotificacion()
-    Sistema->>Sistema: actualizarEstadísticas()
+par Parallel processes
+    System->>EmailService: sendNotification()
+    System->>System: updateStatistics()
 end
 ```
 
-## Ejercicios Prácticos
+## Practical Exercises
 
-### Ejercicio 1: Componentes Básicos
-Crea un diagrama de secuencia que muestre:
-- Un usuario registrándose en el sistema
-- El sistema validando los datos
-- Una respuesta de éxito o error
+### Exercise 1: Basic Components
+Create a sequence diagram showing:
+- A user registering in the system
+- The system validating the data
+- A success or error response
 
-### Ejercicio 2: Interacción con Base de Datos
-Diseña un diagrama que represente:
-- Un usuario buscando un producto por ID
-- El sistema consultando una base de datos
-- El manejo de casos cuando el producto existe y cuando no existe
+### Exercise 2: Database Interaction
+Design a diagram representing:
+- A user searching for a product by ID
+- The system querying a database
+- Handling cases when the product exists and when it doesn't exist
 
-### Ejercicio 3: Proceso de Checkout
-Crea un diagrama para un proceso de checkout que incluya:
-- Verificación del carrito
-- Validación de stock
-- Creación de orden
+### Exercise 3: Checkout Process
+Create a diagram for a checkout process that includes:
+- Cart verification
+- Stock validation
+- Order creation
 
-### Ejercicio 4: Sistema de Notificaciones
-Diseña un diagrama que muestre:
-- Un proceso principal síncrono
-- Envío de notificaciones asíncronas
-- Múltiples servicios interactuando
+### Exercise 4: Notification System
+Design a diagram showing:
+- A main synchronous process
+- Asynchronous notification sending
+- Multiple services interacting
 
-## Criterios de Evaluación
-- Uso correcto de la sintaxis UML
-- Claridad en la representación de las interacciones
-- Manejo apropiado de flujos alternativos
-- Uso adecuado de características avanzadas cuando sea necesario
+## Evaluation Criteria
+- Correct use of UML syntax
+- Clarity in representing interactions
+- Appropriate handling of alternative flows
+- Proper use of advanced features when necessary
 
-## Recursos Adicionales
-- [Documentación oficial de UML](https://www.uml.org/)
-- [Guía de diagramas de secuencia](https://www.visual-paradigm.com/guide/uml-unified-modeling-language/what-is-sequence-diagram/)
-- Herramientas recomendadas para diagramas UML:
+## Additional Resources
+- [Official UML Documentation](https://www.uml.org/)
+- [Sequence Diagram Guide](https://www.visual-paradigm.com/guide/uml-unified-modeling-language/what-is-sequence-diagram/)
+- Recommended tools for UML diagrams:
   - [PlantUML](https://plantuml.com/)
   - [Draw.io](https://draw.io/)
   - [Lucidchart](https://www.lucidchart.com/)
 
-## Entrega
-- Los diagramas deben ser entregados en formato de imagen o mediante un archivo compatible con las herramientas mencionadas
-- Incluir una breve descripción de cada diagrama
+## Submission
+- Diagrams must be submitted in image format or in a file compatible with the mentioned tools
+- Include a brief description of each diagram

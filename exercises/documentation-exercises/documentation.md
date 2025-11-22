@@ -1,55 +1,55 @@
-# Documentación de APIs con Swagger/OpenAPI
-## Ejercicio Práctico: Sistema de Biblioteca
+# API Documentation with Swagger/OpenAPI
+## Practical Exercise: Library System
 
-### 📚 Introducción
+### 📚 Introduction
 
-Este ejercicio está diseñado para aprender los fundamentos de la documentación de APIs utilizando Swagger/OpenAPI 3.0. A través de un caso práctico de un sistema de biblioteca, aprenderemos a documentar endpoints, definir modelos de datos y establecer parámetros de seguridad.
+This exercise is designed to learn the fundamentals of API documentation using Swagger/OpenAPI 3.0. Through a practical library system case, we will learn to document endpoints, define data models, and establish security parameters.
 
-### 🎯 Objetivos de Aprendizaje
+### 🎯 Learning Objectives
 
-- Comprender la estructura básica de un documento OpenAPI 3.0
-- Aprender a documentar endpoints con diferentes métodos HTTP
-- Definir modelos de datos utilizando schemas
-- Implementar autenticación y seguridad
-- Practicar la documentación de respuestas y códigos de estado
-- Utilizar el editor Swagger para validar especificaciones
+- Understand the basic structure of an OpenAPI 3.0 document
+- Learn to document endpoints with different HTTP methods
+- Define data models using schemas
+- Implement authentication and security
+- Practice documenting responses and status codes
+- Use the Swagger editor to validate specifications
 
-### 🛠️ Herramientas Necesarias
+### 🛠️ Required Tools
 
-1. **Editor de texto** (recomendados):
+1. **Text editor** (recommended):
    - Visual Studio Code
    - Sublime Text
    - WebStorm
 
-2. **Herramientas online**:
+2. **Online tools**:
    - [Swagger Editor](https://editor.swagger.io)
    - [Swagger UI](https://swagger.io/tools/swagger-ui/)
 
-### 📝 Ejemplos de Referencia
+### 📝 Reference Examples
 
-#### 1. Estructura Básica OpenAPI
+#### 1. Basic OpenAPI Structure
 
 ```yaml
 openapi: 3.0.0
 info:
-  title: API de Ejemplo
+  title: Example API
   version: 1.0.0
-  description: Una API simple para entender la estructura básica
+  description: A simple API to understand the basic structure
 
 servers:
-  - url: http://api.ejemplo.com/v1
-    description: Servidor de producción
-  - url: http://staging.ejemplo.com/v1
-    description: Servidor de staging
+  - url: http://api.example.com/v1
+    description: Production server
+  - url: http://staging.example.com/v1
+    description: Staging server
 
 paths:
   /hello:
     get:
-      summary: Saludo básico
-      description: Retorna un mensaje de saludo
+      summary: Basic greeting
+      description: Returns a greeting message
       responses:
         '200':
-          description: Saludo exitoso
+          description: Successful greeting
           content:
             application/json:
               schema:
@@ -57,63 +57,63 @@ paths:
                 properties:
                   message:
                     type: string
-                    example: "¡Hola, mundo!"
+                    example: "Hello, world!"
 ```
 
-#### 2. Endpoint con Parámetros
+#### 2. Endpoint with Parameters
 
 ```yaml
 paths:
-  /usuarios/{id}:
+  /users/{id}:
     get:
-      summary: Obtener usuario por ID
+      summary: Get user by ID
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: integer
-          description: ID del usuario
+          description: User ID
           example: 123
         - in: query
           name: include
           schema:
             type: string
-          description: Campos adicionales a incluir
-          example: "perfil,preferencias"
+          description: Additional fields to include
+          example: "profile,preferences"
       responses:
         '200':
-          description: Usuario encontrado
+          description: User found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Usuario'
+                $ref: '#/components/schemas/User'
         '404':
-          description: Usuario no encontrado
+          description: User not found
 
 components:
   schemas:
-    Usuario:
+    User:
       type: object
       properties:
         id:
           type: integer
           example: 123
-        nombre:
+        name:
           type: string
-          example: "Juan Pérez"
+          example: "John Doe"
         email:
           type: string
-          example: "juan@ejemplo.com"
+          example: "john@example.com"
 ```
 
-#### 3. Operación POST con Request Body
+#### 3. POST Operation with Request Body
 
 ```yaml
 paths:
-  /productos:
+  /products:
     post:
-      summary: Crear nuevo producto
+      summary: Create new product
       requestBody:
         required: true
         content:
@@ -121,42 +121,42 @@ paths:
             schema:
               type: object
               properties:
-                nombre:
+                name:
                   type: string
-                  example: "Laptop Gaming"
-                precio:
+                  example: "Gaming Laptop"
+                price:
                   type: number
                   format: float
                   example: 999.99
-                categoria:
+                category:
                   type: string
-                  enum: ["electrónica", "ropa", "alimentos"]
-                  example: "electrónica"
+                  enum: ["electronics", "clothing", "food"]
+                  example: "electronics"
               required:
-                - nombre
-                - precio
-                - categoria
+                - name
+                - price
+                - category
       responses:
         '201':
-          description: Producto creado exitosamente
+          description: Product created successfully
         '400':
-          description: Datos inválidos
+          description: Invalid data
 ```
 
-### 📋 Ejercicio Principal: API de Biblioteca
+### 📋 Main Exercise: Library API
 
-#### Especificación Base
+#### Base Specification
 
 ```yaml
 openapi: 3.0.0
 info:
-  title: Biblioteca API
+  title: Library API
   version: 1.0.0
-  description: Sistema de gestión para biblioteca
+  description: Library management system
 
 servers:
   - url: http://localhost:3000
-    description: Servidor de desarrollo
+    description: Development server
 
 components:
   securitySchemes:
@@ -174,7 +174,7 @@ components:
           example: "book123"
         title:
           type: string
-          example: "Don Quijote de la Mancha"
+          example: "Don Quixote"
         author:
           type: string
           example: "Miguel de Cervantes"
@@ -186,120 +186,120 @@ components:
           example: 5
         category:
           type: string
-          example: "Literatura Clásica"
+          example: "Classic Literature"
       required:
         - title
         - author
         - isbn
 ```
 
-#### Endpoints a Documentar
+#### Endpoints to Document
 
-1. **Gestión de Libros**:
+1. **Book Management**:
    - GET /books
    - GET /books/{id}
    - POST /books
    - PUT /books/{id}
    - DELETE /books/{id}
 
-2. **Gestión de Préstamos**:
+2. **Loan Management**:
    - POST /loans
    - GET /loans
    - PUT /loans/{id}/return
    - GET /loans/user/{userId}
 
-### ✅ Tareas del Ejercicio
+### ✅ Exercise Tasks
 
-1. **Documentación Básica**
-   - Completar la información básica de la API
-   - Configurar los servidores
-   - Implementar esquema de seguridad
+1. **Basic Documentation**
+   - Complete the basic API information
+   - Configure servers
+   - Implement security scheme
 
-2. **Endpoints de Libros**
-   - Documentar todos los endpoints de libros
-   - Incluir parámetros necesarios
-   - Definir respuestas posibles
+2. **Book Endpoints**
+   - Document all book endpoints
+   - Include necessary parameters
+   - Define possible responses
 
-3. **Endpoints de Préstamos**
-   - Crear schema para préstamos
-   - Documentar operaciones CRUD
-   - Incluir validaciones
+3. **Loan Endpoints**
+   - Create schema for loans
+   - Document CRUD operations
+   - Include validations
 
-4. **Mejoras Adicionales**
-   - Implementar paginación
-   - Agregar filtros de búsqueda
-   - Documentar rate limiting
+4. **Additional Enhancements**
+   - Implement pagination
+   - Add search filters
+   - Document rate limiting
 
 
-### 📝 Entregables
+### 📝 Deliverables
 
-1. Archivo `openapi.yaml` completo
-2. Capturas del editor Swagger mostrando validación
-3. Documento de decisiones de diseño (opcional)
+1. Complete `openapi.yaml` file
+2. Screenshots from Swagger editor showing validation
+3. Design decisions document (optional)
 
-### 🚫 Errores Comunes a Evitar
+### 🚫 Common Errors to Avoid
 
-1. **Sintaxis**
-   - Indentación incorrecta
-   - Falta de comillas en strings especiales
-   - Referencias mal escritas
+1. **Syntax**
+   - Incorrect indentation
+   - Missing quotes in special strings
+   - Misspelled references
 
-2. **Diseño**
-   - Olvidar documentar errores
-   - No incluir ejemplos
-   - Schemas incompletos
+2. **Design**
+   - Forgetting to document errors
+   - Not including examples
+   - Incomplete schemas
 
-3. **Validación**
-   - No verificar en editor Swagger
-   - Ignorar warnings
-   - No probar ejemplos
+3. **Validation**
+   - Not verifying in Swagger editor
+   - Ignoring warnings
+   - Not testing examples
 
-### 💡 Consejos para el Desarrollo
+### 💡 Development Tips
 
-1. **Empezar Simple**
-   - Comenzar con un endpoint básico
-   - Validar frecuentemente
-   - Ir añadiendo complejidad
+1. **Start Simple**
+   - Begin with a basic endpoint
+   - Validate frequently
+   - Add complexity gradually
 
-2. **Documentación**
-   - Usar descripciones claras
-   - Incluir ejemplos realistas
-   - Mantener consistencia
+2. **Documentation**
+   - Use clear descriptions
+   - Include realistic examples
+   - Maintain consistency
 
-3. **Pruebas**
-   - Validar en editor Swagger
-   - Probar diferentes casos
-   - Verificar referencias
+3. **Testing**
+   - Validate in Swagger editor
+   - Test different cases
+   - Verify references
 
-### 🔍 Recursos Adicionales
+### 🔍 Additional Resources
 
-1. **Documentación Oficial**
+1. **Official Documentation**
    - [OpenAPI Specification](https://swagger.io/specification/)
    - [Swagger Tools](https://swagger.io/tools/)
 
-2. **Herramientas**
+2. **Tools**
    - [Swagger Editor](https://editor.swagger.io)
    - [OpenAPI Generator](https://openapi-generator.tech)
 
-3. **Tutoriales**
+3. **Tutorials**
    - [Swagger Tutorial](https://swagger.io/docs/specification/basic-structure/)
    - [OpenAPI Best Practices](https://swagger.io/blog/api-best-practices/)
 
-### 🤔 Preguntas Frecuentes
+### 🤔 Frequently Asked Questions
 
-1. **¿Cómo valido mi YAML?**
-   - Usar editor Swagger online
-   - Verificar indentación
-   - Comprobar referencias
+1. **How do I validate my YAML?**
+   - Use online Swagger editor
+   - Check indentation
+   - Verify references
 
-2. **¿Cómo organizo mis schemas?**
-   - Agrupar por funcionalidad
-   - Usar referencias
-   - Mantener consistencia
+2. **How do I organize my schemas?**
+   - Group by functionality
+   - Use references
+   - Maintain consistency
 
-3. **¿Cómo documento errores?**
-   - Incluir todos los códigos posibles
-   - Dar ejemplos de error
-   - Explicar causas comunes
+3. **How do I document errors?**
+   - Include all possible status codes
+   - Provide error examples
+   - Explain common causes
 
 

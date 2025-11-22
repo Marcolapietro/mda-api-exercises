@@ -5,55 +5,55 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 auth = HTTPBasicAuth()
 
-# Base de datos en memoria para este ejemplo
-usuarios = {
-    "admin": generate_password_hash("admin123") # nosotros aqui estamos creando ya un usuario de prueba
+# In-memory database for this example
+users = {
+    "admin": generate_password_hash("admin123")  # We are creating a test user here
 }
 
-# Verifica las credenciales proporcionadas
+# Verify the provided credentials
 @auth.verify_password
 def verify_password(username, password):
-    # Verifica si el usuario está en la base de datos y si la contraseña es correcta
-    if username in usuarios and check_password_hash(usuarios[username], password):
+    # Check if the user is in the database and if the password is correct
+    if username in users and check_password_hash(users[username], password):
         return username
     return None
 
-# Ruta para registrar nuevos usuarios
-@app.route('/usuarios', methods=['   '])
-def registrar_usuario():
-    datos = request.get_json()
-    username = datos.get("username")
-    password = datos.get("password")
+# Route to register new users
+@app.route('/users', methods=['   '])
+def register_user():
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
 
     if not username or not password:
-        return jsonify({"error": "Faltan datos obligatorios"}), 400
+        return jsonify({"error": "Required data is missing"}), 400
 
-    if username in usuarios:
-        return jsonify({"error": "El usuario ya existe"}), 400
+    if username in users:
+        return jsonify({"error": "User already exists"}), 400
 
-    # Pista: Usa generate_password_hash de la lbrería Werkzeug para almacenar la contraseña de forma segura
-    usuarios[username] = _____(password)
-    return jsonify({"mensaje": "Usuario registrado exitosamente"}), 201
+    # Hint: Use generate_password_hash from Werkzeug library to store the password securely
+    users[username] = _____(password)
+    return jsonify({"message": "User registered successfully"}), 201
 
-# Ruta protegida para obtener la lista de usuarios
-@app.route('/usuarios', methods=['   '])
+# Protected route to get the list of users
+@app.route('/users', methods=['   '])
 @auth.login_required
-def obtener_usuarios():
-    # Pista: Devuelve la lista de usuarios registrados
-    return jsonify({"usuarios": list(usuarios.keys())}), 200
+def get_users():
+    # Hint: Return the list of registered users
+    return jsonify({"users": list(users.keys())}), 200
 
-# Manejo de errores personalizados
+# Custom error handlers
 @app.errorhandler(404)
-def no_encontrado(e):
-    #  Personaliza el mensaje para rutas no encontradas
-    return jsonify({"error": "Ruta no encontrada", "detalle": str(e)}), 404 # aquí pasamos el detalle del error capturado
+def not_found(e):
+    # Customize the message for routes not found
+    return jsonify({"error": "Route not found", "detail": str(e)}), 404  # Here we pass the captured error detail
 
 @app.errorhandler(405)
-def metodo_no_permitido(e):
-    #Personaliza el mensaje para métodos HTTP no permitidos
-    return jsonify({"error": "Método no permitido"}), 405
+def method_not_allowed(e):
+    # Customize the message for HTTP methods not allowed
+    return jsonify({"error": "Method not allowed"}), 405
 
 if __name__ == '__main__':
-    # Ejecuta la aplicación en modo debug para facilitar pruebas
-    # en producción no se debe poner!!
+    # Run the application in debug mode to facilitate testing
+    # Do not use this in production!!
     app.run(debug=True)

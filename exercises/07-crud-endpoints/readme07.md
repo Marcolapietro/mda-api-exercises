@@ -1,39 +1,39 @@
-# Ejercicio 7: Creación de Endpoints CRUD
+# Exercise 7: Creating CRUD Endpoints
 
-## Objetivo
-Implementar endpoints CRUD (Crear, Leer, Actualizar, Eliminar) en una API REST utilizando Python y Flask.
+## Objective
+Implement CRUD (Create, Read, Update, Delete) endpoints in a REST API using Python and Flask.
 
-## Descripción
-En este ejercicio, ampliarás la API desarrollada en los ejercicios anteriores para incluir operaciones CRUD sobre los recursos de "estudiantes". Deberás crear rutas que permitan a los usuarios crear nuevos estudiantes, obtener la lista de estudiantes, actualizar información de un estudiante específico y eliminar estudiantes. Completa los espacios en blanco en el código proporcionado para implementar estas funcionalidades.
+## Description
+In this exercise, you will expand the API developed in previous exercises to include CRUD operations on "students" resources. You will need to create routes that allow users to create new students, get the list of students, update information for a specific student, and delete students. Complete the blank spaces in the provided code to implement these functionalities.
 
-## Requisitos
-1. **Instalación de Dependencias Adicionales:**
-   - Asegúrate de tener instalada la biblioteca `Flask` y las extensiones utilizadas en ejercicios anteriores.
+## Requirements
+1. **Installation of Additional Dependencies:**
+   - Make sure you have the `Flask` library and the extensions used in previous exercises installed.
 
-2. **Estructura de la API:**
-   - **Crear Estudiante (`POST /estudiantes`):** Permite registrar un nuevo estudiante.
-   - **Obtener Estudiantes (`GET /estudiantes`):** Retorna una lista de todos los estudiantes.
-   - **Actualizar Estudiante (`PUT /estudiantes/<username>`):** Actualiza la información de un estudiante específico.
-   - **Eliminar Estudiante (`DELETE /estudiantes/<username>`):** Elimina un estudiante específico.
+2. **API Structure:**
+   - **Create Student (`POST /students`):** Allows registering a new student.
+   - **Get Students (`GET /students`):** Returns a list of all students.
+   - **Update Student (`PUT /students/<username>`):** Updates the information of a specific student.
+   - **Delete Student (`DELETE /students/<username>`):** Deletes a specific student.
 
-3. **Implementación de CRUD:**
-   - Utiliza los métodos HTTP adecuados para cada operación.
-   - Asegura que las rutas estén protegidas utilizando la autenticación JWT implementada en ejercicios anteriores.
-   - Valida las entradas y maneja errores apropiadamente.
+3. **CRUD Implementation:**
+   - Use the appropriate HTTP methods for each operation.
+   - Ensure that routes are protected using JWT authentication implemented in previous exercises.
+   - Validate inputs and handle errors appropriately.
 
-4. **Pruebas:**
-   - Utiliza herramientas como Postman o `curl` para probar cada una de las operaciones CRUD.
-   - Asegúrate de que las operaciones funcionen correctamente y que se manejen los errores de manera adecuada.
+4. **Testing:**
+   - Use tools like Postman or `curl` to test each of the CRUD operations.
+   - Ensure that operations work correctly and that errors are handled appropriately.
 
-## Pasos Sugeridos
+## Suggested Steps
 
-1. **Actualiza el Archivo `app.py`:**
-   - Importa las bibliotecas necesarias.
-   - Crea las rutas para las operaciones CRUD sobre "estudiantes".
+1. **Update the `app.py` File:**
+   - Import the necessary libraries.
+   - Create routes for CRUD operations on "students".
 
-2. **Desarrolla las Operaciones CRUD en `app.py`:**
+2. **Develop CRUD Operations in `app.py`:**
 
-   Completa el siguiente código en `ejercicios/07-crud-endpoints/app.py`, llenando los espacios en blanco indicados por `_____`:
+   Complete the following code in `exercises/07-crud-endpoints/app.py`, filling in the blank spaces indicated by `_____`:
 
    ```python
    from flask import Flask, jsonify, request
@@ -41,114 +41,167 @@ En este ejercicio, ampliarás la API desarrollada en los ejercicios anteriores p
    from werkzeug.security import generate_password_hash, check_password_hash
    from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
    import requests
-   
+
    app = Flask(__name__)
    auth = HTTPBasicAuth()
-   
-   # Configuración de JWT
-   app.config['JWT_SECRET_KEY'] = 'tu_clave_secreta_jwt'  # Cambia esto por una clave secreta segura
+
+   # JWT Configuration
+   app.config['JWT_SECRET_KEY'] = 'your_jwt_secret_key'  # Change this to a secure secret key
    jwt = JWTManager(app)
-   
-   # Base de datos simulada para almacenar estudiantes
-   estudiantes = {
-       # 'nombre_estudiante': {'password': 'hashed_password', 'api_key': 'api_key'}
+
+   # Simulated database to store students
+   students = {
+       # 'student_name': {'password': 'hashed_password', 'api_key': 'api_key'}
    }
-   
+
    @auth.verify_password
    def verify_password(username, password):
-       if username in estudiantes and check_password_hash(estudiantes.get(username)['password'], password):
+       if username in students and check_password_hash(students.get(username)['password'], password):
            return username
        return None
-   
-   @app.route('/estudiantes', methods=['____'])
+
+   @app.route('/students', methods=['____'])
    def register_student():
        data = request.get_json()
        username = data.get('username')
        password = data.get('password')
-       
+
        if not username or not password:
            return jsonify({'message': 'Username and password are required.'}), 400
-       if username in estudiantes:
+       if username in students:
            return jsonify({'message': 'User already exists.'}), 400
-       
-       # Hashear la contraseña antes de almacenarla
-       estudiantes[username] = {
+
+       # Hash the password before storing it
+       students[username] = {
            'password': generate_password_hash(password),
-           'api_key': 'api_key_placeholder'  # Implementa la generación de API Key si aplica
+           'api_key': 'api_key_placeholder'  # Implement API Key generation if applicable
        }
        return jsonify({'message': 'User registered successfully.'}), 201
-   
+
    @app.route('/login', methods=['____'])
    @auth.login_required
    def login():
        current_user = auth.current_user()
        access_token = create_access_token(identity=current_user)
        return jsonify({'access_token': access_token}), 200
-   
-   @app.route('/perfil', methods=['____'])
+
+   @app.route('/profile', methods=['____'])
    @jwt_required()
-   def perfil():
+   def profile():
        current_user = get_jwt_identity()
-       return jsonify({'perfil': f'Información del perfil de {current_user}'}), 200
-   
-   # Crear Estudiante
-   @app.route('/estudiantes', methods=['____'])
+       return jsonify({'profile': f'Profile information for {current_user}'}), 200
+
+   # Create Student
+   @app.route('/students', methods=['____'])
    @jwt_required()
-   def crear_estudiante():
+   def create_student():
        data = request.get_json()
        username = data.get('username')
        password = data.get('password')
-       
+
        if not username or not password:
            return jsonify({'message': 'Username and password are required.'}), 400
-       if username in estudiantes:
+       if username in students:
            return jsonify({'message': 'Student already exists.'}), 400
-       
-       estudiantes[username] = {
+
+       students[username] = {
            'password': generate_password_hash(password),
-           'api_key': 'api_key_placeholder'  # Implementa la generación de API Key si aplica
+           'api_key': 'api_key_placeholder'  # Implement API Key generation if applicable
        }
        return jsonify({'message': 'Student created successfully.'}), 201
-   
-   # Obtener Estudiantes
-   @app.route('/estudiantes', methods=['___'])
+
+   # Get Students
+   @app.route('/students', methods=['___'])
    @jwt_required()
-   def obtener_estudiantes():
-       return jsonify({'students': list(estudiantes.keys())}), 200
-   
-   # Actualizar Estudiante
-   @app.route('/estudiantes/<username>', methods=['___'])
+   def get_students():
+       return jsonify({'students': list(students.keys())}), 200
+
+   # Update Student
+   @app.route('/students/<username>', methods=['___'])
    @jwt_required()
-   def actualizar_estudiante(username):
-       if username not in estudiantes:
+   def update_student(username):
+       if username not in students:
            return jsonify({'message': 'Student not found.'}), 404
-       
+
        data = request.get_json()
        password = data.get('password')
-       
+
        if password:
-           estudiantes[username]['password'] = generate_password_hash(password)
+           students[username]['password'] = generate_password_hash(password)
            return jsonify({'message': 'Student updated successfully.'}), 200
        else:
            return jsonify({'message': 'Nothing to update.'}), 400
-   
-   # Eliminar Estudiante
-   @app.route('/estudiantes/<username>', methods=['___'])
+
+   # Delete Student
+   @app.route('/students/<username>', methods=['___'])
    @jwt_required()
-   def eliminar_estudiante(username):
-       if username not in estudiantes:
+   def delete_student(username):
+       if username not in students:
            return jsonify({'message': 'Student not found.'}), 404
-       
-       del estudiantes[username]
+
+       del students[username]
        return jsonify({'message': 'Student deleted successfully.'}), 200
-   
+
    @app.errorhandler(404)
    def not_found(error):
        return jsonify({'error': 'Resource not found.'}), 404
-   
+
    @app.errorhandler(405)
    def method_not_allowed(error):
        return jsonify({'error': 'Method not allowed.'}), 405
-   
+
    if __name__ == '__main__':
        app.run(debug=True)
+   ```
+
+3. **Run the Application:**
+
+   ```bash
+   python app.py
+   ```
+
+4. **Test the API:**
+
+   Use Postman or `curl` to test the CRUD endpoints:
+
+   - **Register a Student:**
+     ```bash
+     curl -X POST http://127.0.0.1:5000/students -H "Content-Type: application/json" -d '{"username": "student1", "password": "password123"}'
+     ```
+
+   - **Login:**
+     ```bash
+     curl -X POST http://127.0.0.1:5000/login -u student1:password123
+     ```
+
+   - **Get Students (use the token from login):**
+     ```bash
+     curl -X GET http://127.0.0.1:5000/students -H "Authorization: Bearer YOUR_TOKEN"
+     ```
+
+   - **Update a Student:**
+     ```bash
+     curl -X PUT http://127.0.0.1:5000/students/student1 -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"password": "newpassword456"}'
+     ```
+
+   - **Delete a Student:**
+     ```bash
+     curl -X DELETE http://127.0.0.1:5000/students/student1 -H "Authorization: Bearer YOUR_TOKEN"
+     ```
+
+## Expected Results
+
+- The API should allow you to create, read, update, and delete students.
+- All protected routes should require a valid JWT token.
+- Error responses should be returned for invalid inputs or when resources are not found.
+
+## Additional Resources
+
+- [Flask Documentation](https://flask.palletsprojects.com/)
+- [Flask-JWT-Extended Documentation](https://flask-jwt-extended.readthedocs.io/)
+- [REST API Best Practices](https://restfulapi.net/)
+
+## Notes
+
+- This exercise uses in-memory storage, so all data will be lost when the application restarts.
+- In a production environment, you would use a proper database and implement additional security measures.

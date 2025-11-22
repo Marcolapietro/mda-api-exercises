@@ -1,128 +1,128 @@
-# Ejercicio 9: Implementación de Roles y Permisos en una API Flask
+# Exercise 9: Implementation of Roles and Permissions in a Flask API
 
-## Objetivo
-- **Asignación de Roles y Permisos:** Implementar un sistema de control de acceso basado en roles para la API.
-- **Protección de Rutas:** Asegurar que solo los usuarios con los permisos adecuados puedan acceder a rutas específicas.
-- **Autenticación y Seguridad:** Utilizar JWT (JSON Web Tokens) y Flask-Principal para gestionar usuarios, roles y permisos.
+## Objective
+- **Role and Permission Assignment:** Implement a role-based access control system for the API.
+- **Route Protection:** Ensure that only users with appropriate permissions can access specific routes.
+- **Authentication and Security:** Use JWT (JSON Web Tokens) and Flask-Principal to manage users, roles, and permissions.
 
 ---
 
-## Requisitos Previos
+## Prerequisites
 
-1. **Instalar Dependencias:**
-   Asegúrate de tener instaladas las siguientes bibliotecas:
+1. **Install Dependencies:**
+   Make sure you have the following libraries installed:
    - Flask
    - Flask-JWT-Extended
    - Flask-Principal
    - Werkzeug
 
-   Puedes instalarlas con:
+   You can install them with:
    ```bash
    pip install Flask Flask-JWT-Extended Flask-Principal Werkzeug
    ```
 
-2. **Clonar el Proyecto:**
-   Clona el repositorio o copia el archivo `app.py` proporcionado.
+2. **Clone the Project:**
+   Clone the repository or copy the provided `app.py` file.
 
-3. **Ejecutar el Script:**
-   Inicia la aplicación con:
+3. **Run the Script:**
+   Start the application with:
    ```bash
    python app.py
    ```
 
 ---
 
-## Funcionalidades
+## Features
 
-### **Registro de Usuarios**
-Permite registrar nuevos usuarios asignándoles un rol predeterminado o personalizado.
+### **User Registration**
+Allows registering new users by assigning them a default or custom role.
 
-### **Inicio de Sesión**
-Autentica a los usuarios y les proporciona un token JWT que será necesario para acceder a las rutas protegidas.
+### **Login**
+Authenticates users and provides them with a JWT token that will be required to access protected routes.
 
-### **Roles Disponibles**
+### **Available Roles**
 1. **Admin:**
-   - Acceso a todas las rutas, incluidas aquellas que gestionan usuarios.
-   - Puede realizar acciones como actualizar o eliminar otros usuarios.
+   - Access to all routes, including those that manage users.
+   - Can perform actions such as updating or deleting other users.
 
 2. **Student:**
-   - Acceso restringido a rutas específicas diseñadas para estudiantes.
+   - Restricted access to specific routes designed for students.
 
-### **Protección de Rutas**
-El acceso a las rutas está restringido según el rol del usuario. Esto se gestiona mediante los decoradores de Flask-Principal que verifican los permisos asignados.
-
----
-
-## Estructura de la API
-
-### **Endpoints Principales**
-
-1. **Registro de Usuarios**
-   - **Método:** `POST`
-   - **Ruta:** `/register`
-   - **Descripción:** Registra un nuevo usuario con un rol específico.
-
-2. **Inicio de Sesión**
-   - **Método:** `POST`
-   - **Ruta:** `/login`
-   - **Descripción:** Autentica a un usuario y retorna un token JWT.
-
-3. **Perfil del Usuario**
-   - **Método:** `GET`
-   - **Ruta:** `/perfil`
-   - **Descripción:** Devuelve información del usuario autenticado.
-
-4. **Listar Usuarios**
-   - **Método:** `GET`
-   - **Ruta:** `/usuarios`
-   - **Descripción:** Devuelve una lista paginada de usuarios registrados.
-
-5. **Actualizar Usuario**
-   - **Método:** `PUT`
-   - **Ruta:** `/usuarios/<username>`
-   - **Descripción:** Actualiza información del usuario (contraseña o rol).
-   - **Requiere:** Rol de administrador.
-
-6. **Eliminar Usuario**
-   - **Método:** `DELETE`
-   - **Ruta:** `/usuarios/<username>`
-   - **Descripción:** Elimina a un usuario.
-   - **Requiere:** Rol de administrador.
-
-7. **Dashboard de Administrador**
-   - **Método:** `GET`
-   - **Ruta:** `/admin/dashboard`
-   - **Descripción:** Devuelve información exclusiva para administradores.
-
-8. **Datos del Estudiante**
-   - **Método:** `GET`
-   - **Ruta:** `/student/data`
-   - **Descripción:** Devuelve información específica del estudiante autenticado.
+### **Route Protection**
+Access to routes is restricted based on the user's role. This is managed through Flask-Principal decorators that verify assigned permissions.
 
 ---
 
-## Pruebas
+## API Structure
 
-### **Pruebas Básicas**
-- Registra un usuario y verifica que puede iniciar sesión.
-- Intenta acceder a rutas protegidas sin un token JWT y verifica que el acceso sea denegado.
-- Genera un token válido e intenta acceder a rutas específicas según el rol del usuario.
+### **Main Endpoints**
 
-### **Pruebas de Roles**
-1. Crea usuarios con roles diferentes.
-2. Intenta acceder a rutas restringidas con cada rol y verifica que las restricciones se aplican correctamente.
+1. **User Registration**
+   - **Method:** `POST`
+   - **Route:** `/register`
+   - **Description:** Registers a new user with a specific role.
 
-### **Errores Comunes**
-- **Token Inválido:** Asegúrate de incluir el token JWT en el encabezado `Authorization` con el formato `Bearer <token>`.
-- **Acceso Denegado:** Verifica que el usuario tiene el rol correcto para acceder a la ruta.
+2. **Login**
+   - **Method:** `POST`
+   - **Route:** `/login`
+   - **Description:** Authenticates a user and returns a JWT token.
+
+3. **User Profile**
+   - **Method:** `GET`
+   - **Route:** `/profile`
+   - **Description:** Returns information about the authenticated user.
+
+4. **List Users**
+   - **Method:** `GET`
+   - **Route:** `/users`
+   - **Description:** Returns a paginated list of registered users.
+
+5. **Update User**
+   - **Method:** `PUT`
+   - **Route:** `/users/<username>`
+   - **Description:** Updates user information (password or role).
+   - **Requires:** Administrator role.
+
+6. **Delete User**
+   - **Method:** `DELETE`
+   - **Route:** `/users/<username>`
+   - **Description:** Deletes a user.
+   - **Requires:** Administrator role.
+
+7. **Admin Dashboard**
+   - **Method:** `GET`
+   - **Route:** `/admin/dashboard`
+   - **Description:** Returns information exclusive to administrators.
+
+8. **Student Data**
+   - **Method:** `GET`
+   - **Route:** `/student/data`
+   - **Description:** Returns specific information about the authenticated student.
 
 ---
 
-## Notas Adicionales
-- Usa herramientas como Postman o curl para probar las rutas de la API.
-- Asegúrate de que el archivo `app.py` esté configurado correctamente antes de ejecutar las pruebas.
-- Puedes ajustar los roles y permisos según las necesidades de tu aplicación.
+## Testing
+
+### **Basic Tests**
+- Register a user and verify they can log in.
+- Try to access protected routes without a JWT token and verify that access is denied.
+- Generate a valid token and try to access specific routes based on the user's role.
+
+### **Role Tests**
+1. Create users with different roles.
+2. Try to access restricted routes with each role and verify that restrictions are applied correctly.
+
+### **Common Errors**
+- **Invalid Token:** Make sure to include the JWT token in the `Authorization` header with the format `Bearer <token>`.
+- **Access Denied:** Verify that the user has the correct role to access the route.
 
 ---
 
-¡Buena suerte implementando roles y permisos en tu API Flask! 🎉
+## Additional Notes
+- Use tools like Postman or curl to test the API routes.
+- Make sure the `app.py` file is configured correctly before running the tests.
+- You can adjust roles and permissions according to your application's needs.
+
+---
+
+Good luck implementing roles and permissions in your Flask API!
