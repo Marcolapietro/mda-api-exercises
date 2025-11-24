@@ -126,6 +126,30 @@ def template_example():
 - Practica escribiendo código regularmente
 - No tengas miedo de experimentar
 - Únete a comunidades de Flask/Python
+
+## Tarea del ejercicio (lo que debes entregar)
+
+Objetivo: ejecutar una app mínima de Flask y documentar sus endpoints en Postman.
+
+1) Ejecuta la aplicación
+- Crea (o reutiliza) un archivo `app.py` con los endpoints de ejemplo de esta guía (al menos `/`, `/about`, `/user/<username>` y `/login` GET/POST).
+- Activa tu entorno y ejecuta: `python app.py`.
+- Comprueba en el navegador: `http://127.0.0.1:5000/` y las demás rutas.
+
+2) Documenta en Postman
+- Crea una colección llamada "Flask Intro" (no la subas al repositorio; guárdala localmente).
+- Añade las peticiones para todos los endpoints implementados.
+- Incluye: nombre claro, breve descripción, headers necesarios (si aplica) y ejemplos de cuerpos/respuestas (para `POST /login`).
+
+3) Entregable (cómo demostrarlo)
+- Evidencia de la app en ejecución (captura de pantalla o breve nota con la URL y salida de consola).
+- Exporta la colección de Postman y compártela por el canal indicado (no la añadas al repo).
+
+4) Criterios de evaluación
+- La app inicia y responde en `localhost`.
+- Todos los endpoints probados desde Postman.
+- La colección tiene descripciones y ejemplos mínimos.
+- Buenas prácticas básicas (entorno virtual, mensajes claros, rutas funcionando).
 - Revisa proyectos de código abierto
 - Mantén un registro de tu aprendizaje
 

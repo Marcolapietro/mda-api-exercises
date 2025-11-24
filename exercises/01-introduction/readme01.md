@@ -1,5 +1,10 @@
 # Exercise 1: Introduction to APIs
 
+## Quick Start
+
+- This is a theory/overview exercise. There is no app to run.
+- Read through the concepts, then proceed to Exercise 2 to practice with Postman.
+
 ## Objective
 Understand what an API is and its importance in software development. Identify examples of popular APIs and their uses.
 

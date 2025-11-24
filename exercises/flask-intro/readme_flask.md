@@ -130,3 +130,26 @@ def template_example():
 - Keep a learning journal
 
 Happy learning!
+
+## Exercise Task (what to deliver)
+
+Goal: run a minimal Flask app and document its endpoints in Postman.
+
+1) Run the app
+- Create (or reuse) an `app.py` with endpoints from this guide (at least `/`, `/about`, `/user/<username>` and `/login` GET/POST).
+- Activate your venv and run: `python app.py`.
+- Verify in the browser: `http://127.0.0.1:5000/` and the other routes.
+
+2) Document in Postman
+- Create a collection named "Flask Intro" (do not commit it; keep it local).
+- Add requests for all implemented endpoints.
+- Include: clear name, short description, required headers (if any), and example bodies/responses (for `POST /login`).
+
+3) Deliverable (proof)
+- Evidence of the app running (screenshot or a short note with URL and console output).
+- Export the Postman collection and share it via the instructed channel (do not add it to the repo).
+
+4) Evaluation criteria
+- App starts and responds on localhost.
+- All endpoints tested via Postman.
+- Collection has minimal descriptions and examples.
