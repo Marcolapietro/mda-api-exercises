@@ -1,6 +1,12 @@
 
 # Exercise: Exploring a Public API with Postman
 
+## Quick Start
+
+- This exercise uses Postman only; no Flask app to run.
+- Install Postman, import or create requests, and follow the steps below.
+
+
 ## **Objective**
 - Install and configure Postman.
 - Perform a query to a public API to retrieve data.

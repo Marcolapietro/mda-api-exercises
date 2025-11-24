@@ -1,36 +1,36 @@
-# Guía de Introducción a Flask 🚀
+# Flask Introduction Guide
 
-## Índice
-1. [¿Qué es Flask?](#qué-es-flask)
-2. [Preparación del Entorno](#preparación-del-entorno)
-3. [Tu Primera Aplicación Flask](#tu-primera-aplicación-flask)
-4. [Conceptos Básicos](#conceptos-básicos)
-5. [Proyectos Prácticos](#proyectos-prácticos)
-6. [Recursos Adicionales](#recursos-adicionales)
+## Table of Contents
+1. [What is Flask?](#what-is-flask)
+2. [Environment Setup](#environment-setup)
+3. [Your First Flask Application](#your-first-flask-application)
+4. [Basic Concepts](#basic-concepts)
+5. [Practical Projects](#practical-projects)
+6. [Additional Resources](#additional-resources)
 
-## ¿Qué es Flask?
-Flask es un framework web minimalista escrito en Python que permite crear aplicaciones web de manera rápida y con un mínimo número de líneas de código. Es especialmente popular por su simplicidad y flexibilidad.
+## What is Flask?
+Flask is a minimalist web framework written in Python that allows you to create web applications quickly with a minimum number of lines of code. It is especially popular for its simplicity and flexibility.
 
-### Características Principales:
-- Servidor de desarrollo integrado
-- Depurador integrado
-- Soporte para pruebas unitarias
-- Motor de plantillas Jinja2
-- Compatible con WSGI 1.0
-- Documentación extensiva
-- Gran comunidad y muchas extensiones disponibles
+### Main Features:
+- Built-in development server
+- Built-in debugger
+- Unit testing support
+- Jinja2 template engine
+- WSGI 1.0 compatible
+- Extensive documentation
+- Large community and many available extensions
 
-## Preparación del Entorno
+## Environment Setup
 
-### Paso 1: Instalación de Python
-1. Descarga Python desde [python.org](https://python.org)
-2. Asegúrate de marcar la opción "Add Python to PATH" durante la instalación
-3. Verifica la instalación abriendo una terminal y escribiendo:
+### Step 1: Python Installation
+1. Download Python from [python.org](https://python.org)
+2. Make sure to check the "Add Python to PATH" option during installation
+3. Verify the installation by opening a terminal and typing:
    ```bash
    python --version
    ```
 
-### Paso 2: Crear un Entorno Virtual
+### Step 2: Create a Virtual Environment
 ```bash
 # Windows
 python -m venv venv
@@ -38,7 +38,7 @@ python -m venv venv
 # Linux/Mac
 python3 -m venv venv
 
-# Activar el entorno virtual
+# Activate the virtual environment
 # Windows
 venv\Scripts\activate
 
@@ -46,14 +46,14 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-### Paso 3: Instalar Flask
+### Step 3: Install Flask
 ```bash
 pip install flask
 ```
 
-## Tu Primera Aplicación Flask
+## Your First Flask Application
 
-### Paso 1: Crear el archivo app.py
+### Step 1: Create the app.py file
 ```python
 from flask import Flask
 
@@ -61,72 +61,95 @@ app = Flask(__name__)
 
 @app.route('/')
 def hello_world():
-    return '¡Hola, estudiantes!'
+    return 'Hello, students!'
 
 if __name__ == '__main__':
     app.run(debug=True)
 ```
 
-### Paso 2: Ejecutar la aplicación
+### Step 2: Run the application
 ```bash
 python app.py
 ```
-Visita http://localhost:5000 en tu navegador
+Visit http://localhost:5000 in your browser
 
-## Conceptos Básicos
+## Basic Concepts
 
-### 1. Rutas (Routes)
+### 1. Routes
 ```python
 @app.route('/about')
 def about():
-    return '¡Bienvenidos a mi primera aplicación Flask!'
+    return 'Welcome to my first Flask application!'
 
 @app.route('/user/<username>')
 def show_user(username):
-    return f'¡Hola, {username}!'
+    return f'Hello, {username}!'
 ```
 
-### 2. Métodos HTTP
+### 2. HTTP Methods
 ```python
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        return 'Procesando login...'
-    return 'Por favor, inicia sesión'
+        return 'Processing login...'
+    return 'Please log in'
 ```
 
-### 3. Plantillas (Templates)
+### 3. Templates
 ```python
 from flask import render_template
 
 @app.route('/template')
 def template_example():
-    return render_template('index.html', titulo='Mi Página')
+    return render_template('index.html', title='My Page')
 ```
 
-## Recursos Adicionales
+## Additional Resources
 
-### Documentación Oficial
-- [Documentación de Flask](https://flask.palletsprojects.com/)
-- [Tutorial Oficial de Flask](https://flask.palletsprojects.com/tutorial/)
+### Official Documentation
+- [Flask Documentation](https://flask.palletsprojects.com/)
+- [Official Flask Tutorial](https://flask.palletsprojects.com/tutorial/)
 
-### Herramientas Útiles
-- Postman (para probar APIs)
-- SQLite Browser (para bases de datos)
-- Git (para control de versiones)
+### Useful Tools
+- Postman (for testing APIs)
+- SQLite Browser (for databases)
+- Git (for version control)
 
-### Mejores Prácticas
-1. Siempre usa entornos virtuales
-2. Mantén el código organizado en módulos
-3. Implementa manejo de errores
-4. Escribe pruebas para tu código
-5. Documenta tu código adecuadamente
+### Best Practices
+1. Always use virtual environments
+2. Keep code organized in modules
+3. Implement error handling
+4. Write tests for your code
+5. Document your code properly
 
-## Consejos para Estudiantes
-- Practica escribiendo código regularmente
-- No tengas miedo de experimentar
-- Únete a comunidades de Flask/Python
-- Revisa proyectos de código abierto
-- Mantén un registro de tu aprendizaje
+## Tips for Students
+- Practice writing code regularly
+- Don't be afraid to experiment
+- Join Flask/Python communities
+- Review open source projects
+- Keep a learning journal
 
-¡Feliz aprendizaje! 🎉
+Happy learning!
+
+## Exercise Task (what to deliver)
+
+Goal: run a minimal Flask app and document its endpoints in Postman.
+
+1) Run the app
+- Create (or reuse) an `app.py` with endpoints from this guide (at least `/`, `/about`, `/user/<username>` and `/login` GET/POST).
+- Activate your venv and run: `python app.py`.
+- Verify in the browser: `http://127.0.0.1:5000/` and the other routes.
+
+2) Document in Postman
+- Create a collection named "Flask Intro" (do not commit it; keep it local).
+- Add requests for all implemented endpoints.
+- Include: clear name, short description, required headers (if any), and example bodies/responses (for `POST /login`).
+
+3) Deliverable (proof)
+- Evidence of the app running (screenshot or a short note with URL and console output).
+- Export the Postman collection and share it via the instructed channel (do not add it to the repo).
+
+4) Evaluation criteria
+- App starts and responds on localhost.
+- All endpoints tested via Postman.
+- Collection has minimal descriptions and examples.

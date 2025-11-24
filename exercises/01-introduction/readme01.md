@@ -1,72 +1,76 @@
-# Ejercicio 1: Introducción a las APIs
+# Exercise 1: Introduction to APIs
 
-## Objetivo
-Comprender qué es una API y su importancia en el desarrollo de software. Identificar ejemplos de APIs populares y sus usos.
+## Quick Start
 
-## Descripción
-En este ejercicio, investigarás el concepto de API (Interfaz de Programación de Aplicaciones), su funcionamiento básico y su relevancia en el mundo del desarrollo de software. Además, identificarás y describirás al menos tres APIs populares, explicando su propósito y cómo se utilizan.
+- This is a theory/overview exercise. There is no app to run.
+- Read through the concepts, then proceed to Exercise 2 to practice with Postman.
 
-## Requisitos
-1. **Definición de API:**
-   - Escribe una definición clara y concisa de lo que es una API.
-   - Explica brevemente cómo funcionan las APIs en el contexto de aplicaciones web.
+## Objective
+Understand what an API is and its importance in software development. Identify examples of popular APIs and their uses.
 
-2. **Importancia de las APIs:**
-   - Describe por qué las APIs son importantes en el desarrollo moderno de software.
-   - Menciona al menos dos beneficios clave de utilizar APIs.
+## Description
+In this exercise, you will research the concept of API (Application Programming Interface), its basic functionality, and its relevance in the world of software development. Additionally, you will identify and describe at least three popular APIs, explaining their purpose and how they are used.
 
-3. **Ejemplos de APIs Populares:**
-   - Selecciona al menos tres APIs ampliamente utilizadas en la industria.
-   - Para cada API, proporciona:
-     - **Nombre de la API**
-     - **Descripción breve**: Qué hace y para qué se utiliza.
-     - **Uso común**: Ejemplos de aplicaciones o servicios que la utilizan.
-     - **Enlace a la documentación oficial** (si está disponible públicamente).
+## Requirements
+1. **API Definition:**
+   - Write a clear and concise definition of what an API is.
+   - Briefly explain how APIs work in the context of web applications.
 
-4. **Formato de Entrega:**
-   - Crea un documento en Markdown (`introduccion.md`) que contenga toda la información solicitada.
-   - Asegúrate de que el documento esté bien estructurado y sea fácil de leer.
+2. **Importance of APIs:**
+   - Describe why APIs are important in modern software development.
+   - Mention at least two key benefits of using APIs.
 
-## Pasos Sugeridos
+3. **Examples of Popular APIs:**
+   - Select at least three widely used APIs in the industry.
+   - For each API, provide:
+     - **API Name**
+     - **Brief Description**: What it does and what it is used for.
+     - **Common Use**: Examples of applications or services that use it.
+     - **Link to official documentation** (if publicly available).
 
-1. **Investigación:**
-   - Busca información sobre APIs en recursos como documentación oficial, artículos técnicos y tutoriales.
+4. **Submission Format:**
+   - Create a Markdown document (`introduction.md`) containing all the requested information.
+   - Ensure the document is well-structured and easy to read.
 
-2. **Definir API:**
-   - Basándote en tu investigación, redacta una definición propia de API.
+## Suggested Steps
 
-3. **Explorar la Importancia de las APIs:**
-   - Piensa en cómo las APIs facilitan la integración entre diferentes servicios y aplicaciones.
-   - Identifica beneficios como la modularidad, escalabilidad y reutilización de código.
+1. **Research:**
+   - Search for information about APIs in resources such as official documentation, technical articles, and tutorials.
 
-4. **Seleccionar y Describir APIs Populares:**
-   - Elige 1 API que sea relevantes y ampliamente reconocida, como:
+2. **Define API:**
+   - Based on your research, write your own definition of API.
+
+3. **Explore the Importance of APIs:**
+   - Think about how APIs facilitate integration between different services and applications.
+   - Identify benefits such as modularity, scalability, and code reusability.
+
+4. **Select and Describe Popular APIs:**
+   - Choose 1 API that is relevant and widely recognized, such as:
      - **Google Maps API**
      - **Twitter API**
      - **Stripe API**
-   - Investiga cada una para ver para que sirven.
+   - Research each one to see what they are used for.
 
-5. **Menciona frameworks que se utilicen para el desarrollo de API.**
-   - Realiza una busqueda sobre diferentes frameworks de desarrollo de APIs.
+5. **Mention frameworks used for API development.**
+   - Conduct a search about different API development frameworks.
 
 
 
-## Recursos
+## Resources
 
-- **Artículos Introductorios:**
+- **Introductory Articles:**
   - [What is an API?](https://www.redhat.com/en/topics/api/what-are-application-programming-interfaces)
   - [API Basics](https://www.ibm.com/cloud/learn/api)
 
-- **Documentación Oficial de APIs Populares:**
+- **Official Documentation of Popular APIs:**
   - [Google Maps Platform Documentation](https://developers.google.com/maps/documentation)
   - [Twitter Developer Documentation](https://developer.twitter.com/en/docs)
   - [Stripe API Reference](https://stripe.com/docs/api)
 
-- **Tutoriales y Videos:**
+- **Tutorials and Videos:**
   - [APIs for Beginners - How to use an API (Full Course / Tutorial)](https://www.youtube.com/watch?v=GZvSYJDk-us)
   - [REST API Concepts and Examples](https://www.youtube.com/watch?v=7YcW25PHnAA)
 
-## Solución (Opcional)
+## Solution (Optional)
 
-Puedes consultar la carpeta `solucion/` para ver una posible implementación de este ejercicio.
-
+You can check the `solution/` folder to see a possible implementation of this exercise.
