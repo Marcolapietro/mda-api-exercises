@@ -12,3 +12,6 @@ SECURITY_CHECKLIST.md
 *.postman_globals.json
 postman/
 Postman/
+
+# Demo projects (not tracked in git)
+x-api-demo-simple/
