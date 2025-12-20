@@ -5,7 +5,7 @@
 2. [Environment Setup](#environment-setup)
 3. [Your First Flask Application](#your-first-flask-application)
 4. [Basic Concepts](#basic-concepts)
-5. [Practical Projects](#practical-projects)
+5. [Working with JSON](#working-with-json)
 6. [Additional Resources](#additional-resources)
 
 ## What is Flask?
@@ -88,6 +88,8 @@ def show_user(username):
 
 ### 2. HTTP Methods
 ```python
+from flask import request
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -95,14 +97,130 @@ def login():
     return 'Please log in'
 ```
 
-### 3. Templates
+### 3. Dynamic URL Parameters
 ```python
-from flask import render_template
+@app.route('/user/<username>')
+def show_user(username):
+    return f'User profile for: {username}'
 
-@app.route('/template')
-def template_example():
-    return render_template('index.html', title='My Page')
+@app.route('/post/<int:post_id>')
+def show_post(post_id):
+    return f'Displaying post {post_id}'
 ```
+
+## Working with JSON
+
+Since you'll be building APIs in this course, it's important to learn how Flask handles JSON data. JSON is the standard format for sending and receiving data in web APIs.
+
+### 1. Returning JSON Responses
+
+Use `jsonify()` to return JSON data from your endpoints:
+
+```python
+from flask import jsonify
+
+@app.route('/api/hello')
+def hello_api():
+    return jsonify({'message': 'Hello, World!'})
+
+@app.route('/api/user/<int:user_id>')
+def get_user(user_id):
+    user = {'id': user_id, 'name': 'John Doe', 'email': 'john@example.com'}
+    return jsonify(user)
+
+@app.route('/api/users')
+def get_users():
+    users = [
+        {'id': 1, 'name': 'Alice'},
+        {'id': 2, 'name': 'Bob'}
+    ]
+    return jsonify(users)
+```
+
+### 2. Reading JSON from Requests
+
+When a client sends JSON data to your API, use `request.get_json()` to read it:
+
+```python
+from flask import request, jsonify
+
+@app.route('/api/greet', methods=['POST'])
+def greet():
+    # Get JSON data from request body
+    data = request.get_json()
+
+    # Access fields from the JSON
+    name = data.get('name', 'Guest')
+
+    # Return a JSON response
+    return jsonify({'greeting': f'Hello, {name}!'})
+```
+
+**Testing with Postman:**
+- Set method to POST
+- In Body tab, select "raw" and "JSON"
+- Enter: `{"name": "Alice"}`
+- Send the request
+
+### 3. Simple In-Memory Data Storage
+
+For these exercises, we'll use Python dictionaries to store data (no database needed):
+
+```python
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+# Store users in memory
+users = {}
+next_id = 1
+
+@app.route('/api/users', methods=['GET', 'POST'])
+def handle_users():
+    global next_id
+
+    if request.method == 'POST':
+        # Create a new user
+        data = request.get_json()
+        user = {
+            'id': next_id,
+            'name': data.get('name'),
+            'email': data.get('email')
+        }
+        users[next_id] = user
+        next_id += 1
+        return jsonify(user)
+
+    else:  # GET
+        # Return all users
+        return jsonify(list(users.values()))
+
+@app.route('/api/users/<int:user_id>')
+def get_user(user_id):
+    if user_id in users:
+        return jsonify(users[user_id])
+    else:
+        return jsonify({'error': 'User not found'}), 404
+
+if __name__ == '__main__':
+    app.run(debug=True)
+```
+
+### 4. Query Parameters
+
+Access URL query parameters with `request.args`:
+
+```python
+from flask import request, jsonify
+
+@app.route('/api/search')
+def search():
+    # Access query parameter: /api/search?q=flask
+    query = request.args.get('q', '')
+    return jsonify({'search_query': query})
+```
+
+**Note:** You'll learn more about HTTP status codes, validation, and error handling in the next exercises.
 
 ## Additional Resources
 
@@ -133,23 +251,61 @@ Happy learning!
 
 ## Exercise Task (what to deliver)
 
-Goal: run a minimal Flask app and document its endpoints in Postman.
+**Goal:** Create your first Flask application with simple routes and test it using Postman.
 
-1) Run the app
-- Create (or reuse) an `app.py` with endpoints from this guide (at least `/`, `/about`, `/user/<username>` and `/login` GET/POST).
-- Activate your venv and run: `python app.py`.
-- Verify in the browser: `http://127.0.0.1:5000/` and the other routes.
+### 1) Build the Application
+Create an `app.py` file with the following endpoints:
 
-2) Document in Postman
-- Create a collection named "Flask Intro" (do not commit it; keep it local).
-- Add requests for all implemented endpoints.
-- Include: clear name, short description, required headers (if any), and example bodies/responses (for `POST /login`).
+**Required endpoints:**
+- `GET /` - Return a welcome message (text or JSON)
+- `GET /about` - Return information about the app
+- `GET /api/hello` - Return a JSON message: `{"message": "Hello, World!"}`
+- `GET /api/user/<username>` - Return JSON with the username
+- `POST /api/greet` - Accept JSON with a "name" field, return a greeting
 
-3) Deliverable (proof)
-- Evidence of the app running (screenshot or a short note with URL and console output).
-- Export the Postman collection and share it via the instructed channel (do not add it to the repo).
+**Example for the POST endpoint:**
+```python
+# Request body: {"name": "Alice"}
+# Response: {"greeting": "Hello, Alice!"}
+```
 
-4) Evaluation criteria
-- App starts and responds on localhost.
-- All endpoints tested via Postman.
-- Collection has minimal descriptions and examples.
+### 2) Run the Application
+```bash
+# Create and activate virtual environment
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Linux/Mac
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the app
+python app.py
+```
+
+Visit http://127.0.0.1:5000 in your browser to see your app running.
+
+### 3) Test with Postman
+- Create a Postman collection named "Flask Intro" (keep it local, do not commit)
+- Add requests for all 5 endpoints
+- For each request, include:
+  - A clear name (e.g., "Get Welcome Message")
+  - A brief description of what the endpoint does
+  - The correct HTTP method (GET or POST)
+  - Example response
+- For the POST request, remember to:
+  - Set Body to "raw" and "JSON"
+  - Include a sample JSON body: `{"name": "Your Name"}`
+
+### 4) Deliverables
+Submit the following:
+1. Your `app.py` file
+2. Screenshot showing the app running in your terminal
+3. Screenshot of your Postman collection showing all 5 requests
+4. Exported Postman collection (JSON file) shared via instructed channel
+
+### 5) Tips
+- Use the examples from this guide as reference
+- Test each endpoint in your browser (for GET requests) before testing in Postman
+- Make sure your app is running before testing in Postman
+- Don't worry about error handling or validation yet - you'll learn that in the next exercises
