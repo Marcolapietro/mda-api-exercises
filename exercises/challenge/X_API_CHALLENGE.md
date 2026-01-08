@@ -319,7 +319,7 @@ Note: X API free tier doesn't support webhooks FROM X, but you can create webhoo
 GitHub Webhook → Your API (ngrok) → Validates & formats → Posts to X API
 ```
 
-**API Documentation** *(Exercise 11-12 - Swagger)*
+**API Documentation** *(Exercise OpenAPI - Swagger)*
 - **OpenAPI/Swagger**: Document your API endpoints with interactive documentation
 - **Auto-generated docs**: Use tools like Flask-RESTX, Swagger UI, Redoc, Springdoc
 - **Try-it-out feature**: Allow users to test your API directly from the docs
