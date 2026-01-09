@@ -6,7 +6,6 @@ In this exercise, you'll learn how to expose your local Flask API to the interne
 - Receiving webhook notifications from GitHub when code is pushed
 - Sharing your API with team members without deploying
 - Understanding how services communicate via webhooks
-- Preparing for the upcoming **ProManage team project** where team members need to access each other's APIs
 - Learning production webhook patterns used in CI/CD systems
 
 ## Learning Objectives
