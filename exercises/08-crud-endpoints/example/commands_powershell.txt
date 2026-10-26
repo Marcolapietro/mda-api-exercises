@@ -1,55 +1,93 @@
-# Exercise 8: Creating CRUD Endpoints (PowerShell)
+# Exercise 8: CRUD Endpoints - Notes API (Windows PowerShell 5.1)
+# Start the API first: python app.py   (it starts with 3 seed notes: ids 1, 2, 3)
+# Paste the blocks in order. Step 0 defines a helper used by the other steps.
 
-# Initial variables
+# 0. Base URL + helper that prints status code, key headers and body.
+#    Windows PowerShell 5.1 THROWS on 4xx/5xx, so the helper uses try/catch to show them too.
 $baseUrl = "http://127.0.0.1:5000"
-$headers = @{
-    "Content-Type" = "application/json"
+
+function Show-Http {
+    param(
+        [string]$Method,
+        [string]$Uri,
+        [string]$Body,
+        [string]$ContentType = "application/json"
+    )
+    Write-Host ("=" * 70)
+    Write-Host "$Method $Uri"
+    $params = @{ Method = $Method; Uri = $Uri; UseBasicParsing = $true }
+    if ($Body) { $params.Body = $Body; $params.ContentType = $ContentType }
+    try {
+        $r = Invoke-WebRequest @params
+        Write-Host ("Status: {0}" -f [int]$r.StatusCode)
+        foreach ($h in "Content-Type", "Location") {
+            if ($r.Headers[$h]) { Write-Host ("{0}: {1}" -f $h, $r.Headers[$h]) }
+        }
+        if ($r.Content) { Write-Host $r.Content } else { Write-Host "(empty body)" }
+    } catch {
+        $resp = $_.Exception.Response
+        if ($resp -eq $null) { throw }
+        Write-Host ("Status: {0}" -f [int]$resp.StatusCode)
+        Write-Host ("Content-Type: {0}" -f $resp.ContentType)
+        if ($resp.Headers["Allow"]) { Write-Host ("Allow: {0}" -f $resp.Headers["Allow"]) }
+        Write-Host $_.ErrorDetails.Message
+    }
 }
 
-# 1. Register normal user
-$body = @{
-    username = "user1"
-    password = "pass123"
-} | ConvertTo-Json
+# 1. List notes (newest first) -> 200. Invoke-RestMethod turns the JSON into objects.
+$list = Invoke-RestMethod -Method Get -Uri "$baseUrl/notes"
+$list.data | Format-Table id, title, updated_at | Out-String | Write-Host
+Write-Host ("page: " + ($list.page | ConvertTo-Json -Compress))
 
-Invoke-RestMethod -Method Post -Uri "$baseUrl/users" -Headers $headers -Body $body
+# 2. List with a page size -> 200 (default 20, values above 100 are clamped to 100)
+Show-Http -Method Get -Uri "$baseUrl/notes?limit=10"
 
-# 2. Login to get JWT token
-$pair = "user1:pass123"
-$encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
-$authHeaders = @{
-    Authorization = "Basic $encodedCreds"
-}
+# 3. Get one note -> 200
+Show-Http -Method Get -Uri "$baseUrl/notes/1"
 
-$loginResponse = Invoke-RestMethod -Method Post -Uri "$baseUrl/login" -Headers $authHeaders
-$token = $loginResponse.access_token
+# 4. Create a note -> 201 Created + Location header. We keep the Location for the next steps.
+$body = @{ title = "My first note"; content = "Created from PowerShell" } | ConvertTo-Json
+$r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "$baseUrl/notes" -ContentType "application/json" -Body $body
+Write-Host ("Status: {0}" -f [int]$r.StatusCode)
+Write-Host ("Location: {0}" -f $r.Headers["Location"])
+Write-Host $r.Content
+$noteUrl = $r.Headers["Location"]
 
-# 3. Configure headers with JWT
-$jwtHeaders = @{
-    "Content-Type" = "application/json"
-    Authorization = "Bearer $token"
-}
+# 5. Replace the whole note with PUT (title AND content) -> 200
+$body = @{ title = "Replaced title"; content = "Replaced content" } | ConvertTo-Json
+Show-Http -Method Put -Uri $noteUrl -Body $body
 
-# 4. Create user by admin
-$adminUserBody = @{
-    username = "user2"
-    password = "pass456"
-} | ConvertTo-Json
+# 6. PUT with only the title -> 422 (PUT needs the complete resource)
+$body = @{ title = "Only the title" } | ConvertTo-Json
+Show-Http -Method Put -Uri $noteUrl -Body $body
 
-Invoke-RestMethod -Method Post -Uri "$baseUrl/users/admin" -Headers $jwtHeaders -Body $adminUserBody
+# 7. Partial update with PATCH (only content) -> 200, the title stays the same
+$body = @{ content = "Only the content changed" } | ConvertTo-Json
+Show-Http -Method Patch -Uri $noteUrl -Body $body
 
-# 5. Get list of users
-Invoke-RestMethod -Method Get -Uri "$baseUrl/users" -Headers $jwtHeaders
+# 8. Delete the note -> 204 No Content (empty body)
+Show-Http -Method Delete -Uri $noteUrl
 
-# 6. Update user
-$updateBody = @{
-    password = "newpass123"
-} | ConvertTo-Json
+# 9. Get the deleted note -> 404 (application/problem+json)
+Show-Http -Method Get -Uri $noteUrl
 
-Invoke-RestMethod -Method Put -Uri "$baseUrl/users/user2" -Headers $jwtHeaders -Body $updateBody
+# --- Errors (all of them are application/problem+json) ---
 
-# 7. Delete user
-Invoke-RestMethod -Method Delete -Uri "$baseUrl/users/user2" -Headers $jwtHeaders
+# 10. Wrong Content-Type -> 415
+Show-Http -Method Post -Uri "$baseUrl/notes" -Body "title=bad" -ContentType "text/plain"
 
-# 8. View profile
-Invoke-RestMethod -Method Get -Uri "$baseUrl/profile" -Headers $jwtHeaders
+# 11. Malformed JSON -> 400
+Show-Http -Method Post -Uri "$baseUrl/notes" -Body '{"title": '
+
+# 12. Valid JSON, invalid data (empty title, content is a number) -> 422 with an "errors" list
+$body = @{ title = ""; content = 42 } | ConvertTo-Json
+Show-Http -Method Post -Uri "$baseUrl/notes" -Body $body
+
+# 13. Valid JSON that is not an object -> 422
+Show-Http -Method Post -Uri "$baseUrl/notes" -Body '[1,2]'
+
+# 14. Method not allowed -> 405 (look at the Allow header)
+Show-Http -Method Delete -Uri "$baseUrl/notes"
+
+# 15. Invalid limit -> 400
+Show-Http -Method Get -Uri "$baseUrl/notes?limit=0"

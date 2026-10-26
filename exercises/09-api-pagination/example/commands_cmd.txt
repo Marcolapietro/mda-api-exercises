@@ -1,30 +1,56 @@
-REM Exercise 9: Implementing Pagination in Endpoints (Windows CMD)
+REM Exercise 9: Pagination - Notes API (Windows CMD)
+REM Start the API first: python app.py   (it starts with 95 seed notes: ids 1..95, newest first)
+REM Always put URLs that contain & between double quotes in CMD.
+REM -i shows the status line and the headers (look at the Link header).
 
-REM 1. Register initial user
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"example\", \"password\":\"secret\"}" http://127.0.0.1:5000/register
+REM --- Offset pagination: ?offset=N&limit=M ---
 
-REM 2. Login to get a token (/login expects a JSON body)
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"example\", \"password\":\"secret\"}" http://127.0.0.1:5000/login
+REM 1. First page of 5 -> 200, notes 95..91, page.total = 95, Link: rel="next"
+curl -i "http://127.0.0.1:5000/notes?offset=0&limit=5"
 
-REM 3. Save the obtained token (replace YOUR_TOKEN_HERE with the actual token)
-set TOKEN=YOUR_TOKEN_HERE
+REM 2. A page in the middle (the slide's example) -> notes 55..36, Link with rel="next" and rel="prev"
+curl -i "http://127.0.0.1:5000/notes?offset=40&limit=20"
 
-REM 4. Register more students (the app already generates 500 random ones at start-up)
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"student1\", \"password\":\"pass1\"}" http://127.0.0.1:5000/register
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"student2\", \"password\":\"pass2\"}" http://127.0.0.1:5000/register
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"student3\", \"password\":\"pass3\"}" http://127.0.0.1:5000/register
+REM 3. Last page -> notes 5..1, page.next = null, only rel="prev"
+curl -i "http://127.0.0.1:5000/notes?offset=90&limit=5"
 
-REM 5. Test pagination - First page (10 elements)
-curl -X GET -H "Authorization: Bearer %TOKEN%" "http://127.0.0.1:5000/students?page=1&per_page=10"
+REM --- Cursor pagination: ?cursor=<opaque>&limit=M ---
 
-REM 6. Test pagination - Second page (10 elements)
-curl -X GET -H "Authorization: Bearer %TOKEN%" "http://127.0.0.1:5000/students?page=2&per_page=10"
+REM 4. First page (no cursor) -> 200, notes 95..91, page.next_cursor = "OTE" (base64 of "91")
+curl -i "http://127.0.0.1:5000/notes?limit=5"
 
-REM 7. Test pagination - First page with 5 elements
-curl -X GET -H "Authorization: Bearer %TOKEN%" "http://127.0.0.1:5000/students?page=1&per_page=5"
+REM 5. Next page using the cursor -> notes 90..86
+curl -i "http://127.0.0.1:5000/notes?cursor=OTE&limit=5"
 
-REM 8. Test page out of range (expected: 404)
-curl -i -X GET -H "Authorization: Bearer %TOKEN%" "http://127.0.0.1:5000/students?page=1000"
+REM 6. Default page size (20) and maximum (100: limit=500 is clamped to 100)
+curl -i "http://127.0.0.1:5000/notes"
+curl -i "http://127.0.0.1:5000/notes?limit=500"
 
-REM 9. Test with an invalid number of elements per page (expected: 400)
-curl -i -X GET -H "Authorization: Bearer %TOKEN%" "http://127.0.0.1:5000/students?per_page=0"
+REM --- Errors (application/problem+json) ---
+
+REM 7. Mixing offset and cursor -> 400
+curl -i "http://127.0.0.1:5000/notes?offset=0&cursor=OTE"
+
+REM 8. Invalid cursor -> 400
+curl -i "http://127.0.0.1:5000/notes?cursor=not-a-real-cursor"
+
+REM 9. Invalid limit / offset -> 400
+curl -i "http://127.0.0.1:5000/notes?limit=0"
+curl -i "http://127.0.0.1:5000/notes?offset=-1"
+
+REM --- Experiment: insert a note while you paginate ---
+
+REM 10. OFFSET. Read page 1, insert a note, read page 2.
+REM     The note that was last on page 1 shows up AGAIN as the first one on page 2.
+curl "http://127.0.0.1:5000/notes?offset=0&limit=5"
+curl -X POST -H "Content-Type: application/json" -d "{\"title\":\"Inserted while paginating\"}" http://127.0.0.1:5000/notes
+curl "http://127.0.0.1:5000/notes?offset=5&limit=5"
+
+REM 11. CURSOR. Read page 1 and copy its "next_cursor".
+curl "http://127.0.0.1:5000/notes?limit=5"
+
+REM     Replace PASTE_NEXT_CURSOR_HERE with the next_cursor you just got, then insert a note and read page 2.
+REM     Page 2 continues right after the last note of page 1: no duplicates.
+set CURSOR=PASTE_NEXT_CURSOR_HERE
+curl -X POST -H "Content-Type: application/json" -d "{\"title\":\"Inserted while paginating (cursor)\"}" http://127.0.0.1:5000/notes
+curl "http://127.0.0.1:5000/notes?cursor=%CURSOR%&limit=5"

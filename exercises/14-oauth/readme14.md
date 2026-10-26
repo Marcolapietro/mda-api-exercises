@@ -1,8 +1,8 @@
-# Exercise 14: OAuth 2.0 Authentication with GitHub
+# Exercise 14: OAuth Authentication with GitHub (Authorization Code + PKCE)
 
 ## Objective
 
-Learn how to implement **OAuth 2.0 authentication** in a Flask REST API by integrating with a third-party provider (GitHub). Understand the OAuth flow, handle redirects and callbacks, and combine OAuth with JWT for API authentication.
+Learn how to implement **OAuth authentication** in a Flask REST API by integrating with a third-party provider (GitHub), using the flow that current best practice (RFC 9700, OAuth 2.1) recommends for every client: **Authorization Code + PKCE**. Understand the OAuth flow, handle redirects and callbacks, identify users by the provider's stable id, and combine OAuth with JWT for API authentication.
 
 ## Quick Start
 
@@ -21,6 +21,11 @@ python app.py
 ## What is OAuth 2.0?
 
 **OAuth 2.0** is an authorization framework that enables applications to obtain limited access to user accounts on third-party services (like GitHub, Google, Facebook) **without exposing passwords**.
+
+> **OAuth 2.0 vs OAuth 2.1:** OAuth 2.0 (RFC 6749, 2012) is the published standard. Since then, security
+> experience has been collected in **RFC 9700** (OAuth 2.0 Security Best Current Practice, 2025), and the
+> **OAuth 2.1** draft consolidates it: Authorization Code **always with PKCE**, and the Implicit and Password
+> grants removed. This exercise follows that modern profile (see "Understanding OAuth Flows" below).
 
 ### Real-World Examples
 
@@ -54,14 +59,14 @@ Before starting this exercise, complete:
 
 ## What You'll Learn
 
-1. **OAuth 2.0 Authorization Code Flow** (most common OAuth flow)
+1. **OAuth Authorization Code Flow with PKCE** (the recommended flow for every client)
 2. **Third-party integration** with GitHub OAuth
 3. **Redirect handling** and callback URLs
 4. **Token exchange** (authorization code → access token)
 5. **API consumption** using OAuth access tokens
 6. **Combining OAuth with JWT** for stateless API authentication
 7. **Session management** in OAuth flows
-8. **Security best practices** (state parameters, HTTPS, secrets)
+8. **Security best practices** (PKCE, state parameter, HTTPS, secrets, stable user ids)
 
 ---
 
@@ -101,7 +106,9 @@ Before starting this exercise, complete:
                             │ /login/github│
                             └─────────────┘
                                    │
-                                   │ Redirects to GitHub
+                                   │ Creates code_verifier (kept secret)
+                                   │ Redirects to GitHub with
+                                   │ code_challenge = SHA-256(verifier)
                                    ▼
 2. User authorizes on GitHub
    ┌──────────────────────────────────┐
@@ -133,8 +140,10 @@ Before starting this exercise, complete:
    {
      client_id: "your_client_id",
      client_secret: "your_client_secret",
-     code: "abc123"
+     code: "abc123",
+     code_verifier: "dBjftJeZ4CVP..."   ← PKCE
    }
+   GitHub checks SHA-256(code_verifier) == code_challenge
                   │
                   ▼
    Response: { access_token: "gho_xxxx..." }
@@ -147,7 +156,8 @@ Before starting this exercise, complete:
                   │                                │
                   ▼                                │
    Response: {                                     │
-     login: "alice",                               │
+     id: 12345678,      ← stable, never changes    │
+     login: "alice",    ← can be renamed           │
      email: "alice@example.com",                   │
      name: "Alice Smith"                           │
    }                                               │
@@ -155,7 +165,7 @@ Before starting this exercise, complete:
                   │                                │
 6. Your app creates JWT token                     │
                   │                                │
-   jwt_token = create_access_token(identity="alice")
+   jwt_token = create_access_token(identity="12345678")
                   │                                │
                   ▼                                │
    ┌─────────────────────────────────┐             │
@@ -175,6 +185,85 @@ Before starting this exercise, complete:
 - Authorization code must be exchanged on **server-side** (never client-side JavaScript)
 - Client secret **never leaves your server**
 - User's GitHub password **never touches your app**
+- With **PKCE**, a stolen code cannot be exchanged without the `code_verifier`
+- Users are identified by GitHub's numeric **`id`**, not by `login` (see below)
+
+### PKCE: Proof Key for Code Exchange (always on in this exercise)
+
+The flow above has one weak spot: the **authorization code** travels through the browser (step 3). If an
+attacker steals it (a malicious app registered for the same redirect, a leaked log, browser history...), they
+could try to exchange it for a token. **PKCE** (RFC 7636, pronounced "pixy") closes that gap: only the app that
+*started* the login can finish it.
+
+The current best practice ([RFC 9700](https://datatracker.ietf.org/doc/rfc9700/), OAuth 2.0 Security Best
+Current Practice, and the OAuth 2.1 draft) is **Authorization Code + PKCE for every client**: server-side apps
+like this one, SPAs and mobile apps. For a confidential client like our Flask app, PKCE is used **in addition
+to** the client secret, not instead of it. GitHub supports PKCE with `S256`.
+
+**The 6 steps (as in the slides):**
+
+```
+ Your Flask app                          Browser / User                 GitHub (authorization server)
+ ──────────────                          ──────────────                 ─────────────────────────────
+ 1. Create a random code_verifier
+    code_challenge = BASE64URL(SHA-256(code_verifier))
+    (keep the verifier in the session, never in a URL)
+ 2. Redirect ─────────────────────────►  /login/oauth/authorize
+                                         ?code_challenge=...&code_challenge_method=S256
+                                         &state=...&redirect_uri=...   ──────────────►  stores the challenge
+ 3.                                      User logs in and authorizes   ◄─────────────►
+ 4. /callback?code=...&state=...  ◄────  GitHub redirects back with the code  ◄───────
+ 5. POST /login/oauth/access_token
+    code + code_verifier (+ client_id, client_secret, redirect_uri)  ─────────────────►
+ 6.                                                                   checks SHA-256(code_verifier)
+                                                                      == stored code_challenge
+    ◄─────────────────────────────────────────────── access_token  (only if they match)
+```
+
+1. **Verifier and challenge created:** the app generates a random `code_verifier` (43-128 characters) and computes `code_challenge = BASE64URL(SHA-256(code_verifier))`.
+2. **Redirect with the challenge:** the authorize URL carries `code_challenge` and `code_challenge_method=S256` (and `state`). Only the hash leaves the app.
+3. **Login:** the user signs in on GitHub and authorizes the app.
+4. **Code back:** GitHub redirects to `/callback` with a short-lived, single-use `code` (and the same `state`).
+5. **Code + verifier:** the app sends the `code` **and the original `code_verifier`** to the token endpoint.
+6. **The server checks:** GitHub computes `SHA-256(code_verifier)` and compares it with the challenge it stored in step 2. If they don't match, no token. A stolen code is useless without the verifier, and the verifier is never sent in a URL: whoever intercepts the redirect gets the code, not the verifier.
+
+**With Authlib it is one setting** in `client_kwargs`, already present in `app.py`:
+
+```python
+github = oauth.register(
+    name='github',
+    # ... client_id, client_secret, URLs ...
+    client_kwargs={'scope': 'user:email', 'code_challenge_method': 'S256'},
+)
+```
+
+With that setting, Authlib does steps 1, 2 and 5 for you: `authorize_redirect()` generates the `code_verifier`,
+keeps it in the session and adds `code_challenge` + `code_challenge_method=S256` to the redirect;
+`authorize_access_token()` reads it back and sends `code_verifier` in the token request. Your `/login/github`
+and `/callback` code doesn't change.
+
+**What Authlib computes for you** (to understand it, not needed in the app):
+
+```python
+import base64, hashlib, secrets
+
+code_verifier = secrets.token_urlsafe(48)
+code_challenge = base64.urlsafe_b64encode(
+    hashlib.sha256(code_verifier.encode()).digest()
+).rstrip(b'=').decode()
+```
+
+> Common mistake: sending the `code_verifier` itself as the `code_challenge` (that is the `plain` method). With
+> `S256` the challenge must be the hash; otherwise the server rejects the exchange. Always use `S256`.
+
+> **Where does Authlib keep the verifier?** In the Flask `session`. Flask's default session is a signed cookie in
+> the user's own browser (see "Session vs JWT" below), so the verifier never appears in URLs, logs or the
+> `Referer` header, which is where codes leak. In production you can pass a server-side `cache` to `OAuth(app, cache=...)`
+> so that the OAuth state data stays on the server.
+
+**`state` and PKCE are complementary:** `state` (a random value Authlib stores in the session and checks on
+`/callback`) protects **your user** against CSRF, i.e. being logged in with someone else's code. PKCE protects the
+**code** against being redeemed by someone else. Keep both.
 
 ---
 
@@ -285,13 +374,17 @@ You need to fill in **8 blanks** (`_____`). The secrets (`app.secret_key`, `clie
 | # | Where (function / section) | What to write |
 |---|----------------------------|---------------|
 | 1 | `oauth.register(...)` (line 32) | Provider name: `'github'` |
-| 2 | `login_github()` (line 86) | Endpoint for the callback URL: `url_for('callback', _external=True)` |
-| 3 | `login_github()` (line 90) | Redirect to GitHub: `github.authorize_redirect(redirect_uri)` |
-| 4 | `callback()` (line 112) | Exchange the code for a token: `github.authorize_access_token()` |
-| 5 | `callback()` (line 116) | GitHub API endpoint for the profile: `github.get('user')` |
-| 6 | `callback()` (line 138) | Create our JWT: `create_access_token(identity=username)` |
-| 7 | `@app.route('/profile', ...)` (line 159) | HTTP method: `'GET'` |
-| 8 | `profile()` (line 175) | Read the user from the JWT: `get_jwt_identity()` |
+| 2 | `login_github()` (line 94) | Endpoint for the callback URL: `url_for('callback', _external=True)` |
+| 3 | `login_github()` (line 98) | Redirect to GitHub: `github.authorize_redirect(redirect_uri)` |
+| 4 | `callback()` (line 120) | Exchange the code (+ PKCE verifier) for a token: `github.authorize_access_token()` |
+| 5 | `callback()` (line 124) | GitHub API endpoint for the profile: `github.get('user')` |
+| 6 | `callback()` (line 152) | Create our JWT: `create_access_token(identity=user_id)` |
+| 7 | `@app.route('/profile', ...)` (line 175) | HTTP method: `'GET'` |
+| 8 | `profile()` (line 191) | Read the user from the JWT: `get_jwt_identity()` |
+
+PKCE (`'code_challenge_method': 'S256'`) and the user id (`user_id = str(github_id)`) are already written in
+`app.py`: they are not blanks, but read them, they are what makes the flow secure (see "PKCE" above and
+"Handling the Callback" below).
 
 (Line numbers refer to the original `app.py`; search for `_____` if they have shifted.)
 
@@ -317,7 +410,10 @@ github = oauth.register(
     access_token_url='https://github.com/login/oauth/access_token',
     authorize_url='https://github.com/login/oauth/authorize',
     api_base_url='https://api.github.com/',
-    client_kwargs={'scope': 'user:email'}  # Permissions requested
+    client_kwargs={
+        'scope': 'user:email',            # Permissions requested
+        'code_challenge_method': 'S256',  # PKCE on (OAuth 2.1 / RFC 9700)
+    }
 )
 ```
 
@@ -348,6 +444,8 @@ def login_github():
      &redirect_uri=http://127.0.0.1:5000/callback
      &scope=user:email
      &state=random_csrf_token
+     &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+     &code_challenge_method=S256
    ```
 2. User is redirected to GitHub
 3. GitHub shows authorization prompt
@@ -366,7 +464,8 @@ def login_github():
 def callback():
     # Step 1: Exchange authorization code for access token
     token = github.authorize_access_token()
-    # Behind the scenes: POST to GitHub with code + client_secret
+    # Behind the scenes: checks state, then POST to GitHub with
+    # code + code_verifier (PKCE) + client_secret
     # Returns: { "access_token": "gho_xxxx...", "scope": "user:email", ... }
 
     # Step 2: Use access token to fetch user profile
@@ -374,18 +473,29 @@ def callback():
     user_info = response.json()
 
     # Step 3: Extract user data
-    username = user_info.get('login')
+    github_id = user_info.get('id')        # 12345678 - stable, never changes
+    username = user_info.get('login')      # "alice"  - can be renamed
     email = user_info.get('email')
     name = user_info.get('name')
 
-    # Step 4: Store user in database
-    users[username] = { ... }
+    # Step 4: Store (or update) the user, keyed by the stable id
+    user_id = str(github_id)
+    users[user_id] = {'github_id': github_id, 'username': username, ...}
 
-    # Step 5: Create JWT token for your API
-    access_token = create_access_token(identity=username)
+    # Step 5: Create JWT token for your API (sub = the id, as a string)
+    access_token = create_access_token(identity=user_id)
 
     return jsonify({'access_token': access_token})
 ```
+
+**Why the `id` and not the `login`?**
+- On GitHub you can **rename your account**: `login` changes, `id` never does. If we keyed users by `login`, a
+  rename would create a "new" user and orphan the old data.
+- Worse: after a rename, the old `login` becomes **free**, and someone else can register it. If our database
+  were keyed by `login`, that person would inherit the previous owner's account in our app.
+- So the **identity** is the provider's stable id (`sub` in OpenID Connect, `id` in GitHub's API); `login`, name and
+  avatar are just **display attributes** that we refresh on every login.
+- The JWT `sub` claim must be a **string** (PyJWT rejects non-string subjects), so we use `str(github_id)`.
 
 **Why two tokens?**
 - **OAuth access token** (`gho_xxxx`): Used to call **GitHub API**
@@ -419,7 +529,7 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
 
 # Authlib stores temporary OAuth data in session:
 # - state (CSRF protection)
-# - nonce (replay attack protection)
+# - code_verifier (PKCE - kept here, never sent in a URL)
 # - redirect_uri (validation)
 
 # After successful OAuth, session can be cleared
@@ -480,6 +590,7 @@ Headers:
 **Expected response:**
 ```json
 {
+  "user_id": "12345678",
   "username": "your-github-username",
   "profile": {
     "github_id": 12345678,
@@ -501,8 +612,11 @@ Headers:
 **Expected response:**
 ```json
 {
-  "users": ["alice", "bob", "charlie"],
-  "count": 3
+  "users": [
+    {"id": "12345678", "username": "alice"},
+    {"id": "23456789", "username": "bob"}
+  ],
+  "count": 2
 }
 ```
 
@@ -530,32 +644,40 @@ curl -X POST http://127.0.0.1:5000/logout
 
 ## Understanding OAuth Flows
 
-### OAuth 2.0 Grant Types
+### OAuth Grant Types Today (OAuth 2.1 / RFC 9700)
 
-OAuth 2.0 has **four main grant types** (flows):
+OAuth 2.0 (RFC 6749, 2012) defined several grant types. Years of attacks showed which ones are safe, and the
+current guidance consolidates them:
 
-| Grant Type | Use Case | Security |
-|------------|----------|----------|
-| **Authorization Code** | Web apps with server | ✅ Most secure |
-| **Implicit** | Legacy SPAs (deprecated) | ⚠️ Less secure |
-| **Client Credentials** | Server-to-server | ✅ Secure |
-| **Password** | Trusted first-party apps | ⚠️ Not recommended |
+| Grant Type | Use Case | Status |
+|------------|----------|--------|
+| **Authorization Code + PKCE** | **Every client** where a user logs in: server-side web apps, SPAs, mobile and desktop apps | ✅ Recommended choice |
+| **Client Credentials** | Machine-to-machine: a service calling another service, no user involved | ✅ Use for M2M |
+| **Device Authorization (Device Code)** | Devices with no browser or keyboard: smart TVs, CLIs (e.g. `gh auth login`) | ✅ Use for TVs / CLIs |
+| **Refresh Token** | Getting a new access token without asking the user again | ✅ Alongside the above |
+| ~~Implicit~~ | (was: SPAs) | ❌ **Removed in OAuth 2.1**: the access token is returned in the URL fragment, where browser history, extensions and logs can leak it, and it cannot be bound to the client |
+| ~~Resource Owner Password~~ | (was: "trusted" first-party apps) | ❌ **Removed in OAuth 2.1**: the app receives the user's password, which is exactly what OAuth exists to avoid, and it cannot support MFA or SSO |
 
-**This exercise uses Authorization Code Grant** (the most common and secure).
+**This exercise uses Authorization Code + PKCE**, the recommended choice.
 
-### Why Authorization Code is Most Secure
+> **Status of the documents:** OAuth 2.1 is still an **IETF draft** (draft-ietf-oauth-v2-1), not a published RFC.
+> The current, published best-practice document is **RFC 9700** ("OAuth 2.0 Security Best Current Practice",
+> January 2025). OAuth 2.1 mostly bundles RFC 6749 + RFC 7636 (PKCE) + RFC 9700 into one spec, so following
+> RFC 9700 today means you are already OAuth 2.1-ready.
+
+### Why Authorization Code (+ PKCE) is the Safe Choice
 
 ```
-❌ Implicit Flow (old way):
+❌ Implicit Flow (removed):
 GitHub → Browser → App
          ↑
       Access token in URL (visible to browser, extensions, history)
 
-✅ Authorization Code Flow (this exercise):
+✅ Authorization Code + PKCE (this exercise):
 GitHub → Browser → App
          ↑          ↓
-      Code only   Server exchanges code for token
-                  (Token never touches browser)
+      Code only   Server exchanges code + code_verifier for token
+                  (Token never touches browser; a stolen code is useless)
 ```
 
 **Benefits:**
@@ -563,6 +685,7 @@ GitHub → Browser → App
 - Access token never in URL (not logged, not in history)
 - Code is single-use and short-lived
 - Server-to-server token exchange
+- PKCE binds the code to the app that started the flow
 
 ---
 
@@ -591,7 +714,14 @@ GitHub → Browser → App
    - Protects against CSRF attacks
    - Random value verified on callback
 
-5. **Request minimal scopes**
+5. **Use PKCE with S256** (`'code_challenge_method': 'S256'`)
+   - Recommended for every client (RFC 9700, OAuth 2.1)
+   - A stolen authorization code is useless without the `code_verifier`
+
+6. **Identify users by the provider's stable id**
+   - GitHub `id` (or OIDC `sub`), never the `login`/email, which can change or be reassigned
+
+7. **Request minimal scopes**
    ```python
    # ❌ Bad: Requesting unnecessary permissions
    client_kwargs={'scope': 'user repo delete_repo admin:org'}
@@ -600,11 +730,11 @@ GitHub → Browser → App
    client_kwargs={'scope': 'user:email'}
    ```
 
-6. **Validate tokens**
+8. **Validate tokens**
    - Check token expiration
    - Verify token signature (JWT does this)
 
-7. **Handle errors gracefully**
+9. **Handle errors gracefully**
    ```python
    try:
        token = github.authorize_access_token()
@@ -621,9 +751,9 @@ GitHub → Browser → App
    config.py
    ```
 
-2. **Don't use Implicit Flow** (deprecated since 2019)
-   - Less secure than Authorization Code
-   - Use Authorization Code + PKCE for SPAs
+2. **Don't use the Implicit or Password grants** (removed in OAuth 2.1)
+   - Implicit puts the access token in the URL; Password hands the user's password to your app
+   - Use Authorization Code + PKCE instead, for SPAs and mobile apps too
 
 3. **Don't skip HTTPS** in production
    - Development (localhost): HTTP is fine
@@ -727,13 +857,13 @@ if not email:
 
 Your implementation should:
 
-- ✅ Register GitHub as OAuth provider with Authlib
-- ✅ Redirect to GitHub authorization page
+- ✅ Register GitHub as OAuth provider with Authlib, with PKCE (`code_challenge_method='S256'`)
+- ✅ Redirect to GitHub authorization page (with `state`, `code_challenge` and `code_challenge_method=S256`)
 - ✅ Handle OAuth callback with authorization code
-- ✅ Exchange code for access token (server-side)
+- ✅ Exchange code + `code_verifier` for access token (server-side)
 - ✅ Fetch user profile from GitHub API
-- ✅ Store user in database
-- ✅ Generate JWT token after successful OAuth
+- ✅ Store user in database keyed by GitHub's numeric `id` (`login` only as display attribute)
+- ✅ Generate JWT token after successful OAuth, with `sub` = the GitHub id as a string
 - ✅ Protect routes with `@jwt_required()` decorator
 - ✅ Use JWT for subsequent API requests
 - ✅ Handle OAuth errors gracefully
@@ -777,7 +907,7 @@ Store OAuth refresh tokens for long-term API access:
 
 ```python
 # When storing user
-users[username] = {
+users[user_id] = {
     'github_id': github_id,
     'access_token': token['access_token'],
     'refresh_token': token.get('refresh_token'),
@@ -789,7 +919,7 @@ if datetime.now().timestamp() > user['expires_at']:
     new_token = github.fetch_access_token(
         refresh_token=user['refresh_token']
     )
-    users[username]['access_token'] = new_token['access_token']
+    users[user_id]['access_token'] = new_token['access_token']
 ```
 
 ### 3. Add OAuth Scopes Management
@@ -813,7 +943,7 @@ Allow users to link multiple OAuth providers:
 
 ```python
 users = {
-    'alice': {
+    '12345678': {  # our user id
         'primary_email': 'alice@example.com',
         'oauth_providers': {
             'github': {'id': 12345, 'username': 'alice'},
@@ -848,41 +978,7 @@ def link_callback():
     return jsonify({'message': 'GitHub account linked'})
 ```
 
-### 5. Add PKCE for Enhanced Security
-
-Implement Proof Key for Code Exchange (PKCE), which OAuth 2.1 makes mandatory for every client.
-
-**How it works:**
-1. Before redirecting, the app creates a random secret, the `code_verifier`, and keeps it.
-2. It sends only its hash to the authorization server: `code_challenge = BASE64URL(SHA256(code_verifier))` with `code_challenge_method=S256`.
-3. When exchanging the code for a token, the app sends the original `code_verifier`. The server hashes it and checks it matches, so a stolen authorization code is useless without the verifier.
-
-**With Authlib it is one line** — add `code_challenge_method` to `client_kwargs`:
-
-```python
-github = oauth.register(
-    name='github',
-    # ... same settings as before ...
-    client_kwargs={'scope': 'user:email', 'code_challenge_method': 'S256'},
-)
-```
-
-Authlib then generates the `code_verifier`, stores it in the session, sends the `code_challenge` in the redirect and the `code_verifier` in the token request. `/login/github` and `/callback` don't change.
-
-**What Authlib computes for you** (to understand it, not needed in the app):
-
-```python
-import base64, hashlib, secrets
-
-code_verifier = secrets.token_urlsafe(48)
-code_challenge = base64.urlsafe_b64encode(
-    hashlib.sha256(code_verifier.encode()).digest()
-).rstrip(b'=').decode()
-```
-
-> Common mistake: sending the `code_verifier` itself as the `code_challenge`. With `S256` the challenge must be the hash, otherwise the server rejects the exchange.
-
-### 6. Fetch Additional User Data
+### 5. Fetch Additional User Data
 
 Get repositories, organizations, etc.:
 
@@ -904,7 +1000,7 @@ def get_repos():
     repos = response.json()
 
     return jsonify({
-        'username': current_user,
+        'username': user_data['username'],
         'repositories': [
             {
                 'name': repo['name'],
@@ -981,6 +1077,9 @@ def get_repos():
 ## Additional Resources
 
 - **RFC 6749**: [OAuth 2.0 Authorization Framework](https://tools.ietf.org/html/rfc6749)
+- **RFC 7636**: [Proof Key for Code Exchange (PKCE)](https://datatracker.ietf.org/doc/html/rfc7636)
+- **RFC 9700**: [OAuth 2.0 Security Best Current Practice](https://datatracker.ietf.org/doc/rfc9700/) (the current best-practice document)
+- **OAuth 2.1** (IETF draft): [draft-ietf-oauth-v2-1](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/) and [oauth.net/2.1](https://oauth.net/2.1/)
 - **Authlib Documentation**: https://docs.authlib.org/en/latest/
 - **GitHub OAuth**: https://docs.github.com/en/developers/apps/building-oauth-apps
 - **OAuth 2.0 Playground**: https://www.oauth.com/playground/
@@ -992,15 +1091,16 @@ def get_repos():
 
 **Key Takeaways:**
 
-1. **OAuth 2.0 = Delegated Authorization**
+1. **OAuth = Delegated Authorization**
    - Users log in with trusted providers (GitHub, Google)
    - Your app never sees user passwords
    - Provider handles security and account management
 
-2. **Authorization Code Flow**
-   - Most secure OAuth flow for web apps
-   - Authorization code → Access token exchange on server
-   - Client secret never exposed to browser
+2. **Authorization Code + PKCE**
+   - The recommended flow for every client (RFC 9700, OAuth 2.1); Implicit and Password are removed
+   - Authorization code + code_verifier → Access token exchange on server
+   - Client secret never exposed to browser; a stolen code is useless without the verifier
+   - Users identified by the provider's stable `id`, not by `login`
 
 3. **OAuth + JWT Pattern**
    - OAuth for initial authentication

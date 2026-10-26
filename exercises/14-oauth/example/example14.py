@@ -19,7 +19,7 @@ jwt = JWTManager(app)
 # OAuth Configuration
 oauth = OAuth(app)
 
-# Register GitHub as an OAuth provider
+# Register GitHub as an OAuth provider (Authorization Code + PKCE)
 # Credentials come ONLY from environment variables — never commit them to the repo
 for var in ('GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'):
     if not os.environ.get(var):
@@ -35,10 +35,14 @@ github = oauth.register(
     authorize_url='https://github.com/login/oauth/authorize',
     authorize_params=None,
     api_base_url='https://api.github.com/',
-    client_kwargs={'scope': 'user:email'},
+    # 'code_challenge_method': 'S256' turns PKCE on: Authlib creates a random code_verifier,
+    # sends SHA-256(code_verifier) as code_challenge in the redirect, keeps the verifier in the
+    # session and sends it with the code in the token request (OAuth 2.1 / RFC 9700)
+    client_kwargs={'scope': 'user:email', 'code_challenge_method': 'S256'},
 )
 
-# In-memory user database
+# In-memory user database, keyed by GitHub's numeric user id (as a string).
+# The id never changes; the login (username) can be renamed, so it is only a display attribute.
 users = {}
 
 @app.route('/')
@@ -50,7 +54,7 @@ def home():
         200: Welcome message with available endpoints
     """
     return jsonify({
-        'message': 'OAuth 2.0 Authentication API',
+        'message': 'OAuth Authentication API (Authorization Code + PKCE)',
         'endpoints': {
             'GET /': 'This help message',
             'GET /login/github': 'Initiate GitHub OAuth login',
@@ -76,6 +80,9 @@ def login_github():
     This redirects the user to GitHub's authorization page.
     After authorization, GitHub redirects back to /callback.
 
+    Behind the scenes Authlib adds state (CSRF protection) and the PKCE
+    code_challenge + code_challenge_method=S256 to the redirect URL.
+
     Returns:
         302: Redirect to GitHub authorization page
     """
@@ -92,18 +99,18 @@ def callback():
     OAuth callback endpoint - handles the redirect from GitHub.
 
     This endpoint:
-    1. Receives the authorization code from GitHub
-    2. Exchanges it for an access token
+    1. Receives the authorization code from GitHub (and checks state)
+    2. Exchanges code + code_verifier (PKCE) for an access token
     3. Fetches user profile from GitHub API
-    4. Creates/updates user in database
-    5. Generates JWT token for our API
+    4. Creates/updates user in database, keyed by GitHub's stable numeric id
+    5. Generates JWT token for our API (sub = that id, as a string)
 
     Returns:
         200: JWT token and user info on success
         400: Error if OAuth flow fails
     """
     try:
-        # Exchange authorization code for access token
+        # Exchange authorization code (+ PKCE code_verifier) for access token
         token = github.authorize_access_token()
 
         # Fetch user profile from GitHub API
@@ -117,24 +124,31 @@ def callback():
         name = user_info.get('name')
         avatar_url = user_info.get('avatar_url')
 
-        # Store or update user in database
-        if username not in users:
-            users[username] = {
-                'github_id': github_id,
-                'username': username,
-                'email': email,
-                'name': name,
-                'avatar_url': avatar_url
-            }
+        if github_id is None:
+            raise ValueError('GitHub user info has no id')
+
+        # Identify the user by GitHub's stable numeric id, never by login (it can be renamed).
+        # JWT 'sub' must be a string, so we use the id's string form as the key and identity.
+        user_id = str(github_id)
+
+        # Store or update user in database (login, name... may have changed since last time)
+        users[user_id] = {
+            'github_id': github_id,
+            'username': username,
+            'email': email,
+            'name': name,
+            'avatar_url': avatar_url
+        }
 
         # Create a JWT token for the user
-        access_token = create_access_token(identity=username)
+        access_token = create_access_token(identity=user_id)
 
         return jsonify({
             'message': 'Login successful',
             'access_token': access_token,
             'token_type': 'Bearer',
             'user': {
+                'id': user_id,
                 'username': username,
                 'email': email,
                 'name': name,
@@ -164,7 +178,7 @@ def profile():
         401: Missing or invalid token
         404: User not found
     """
-    # Get current user identity from JWT token
+    # Get current user identity from JWT token (the GitHub id, as a string)
     current_user = get_jwt_identity()
 
     if current_user not in users:
@@ -174,7 +188,8 @@ def profile():
         }), 404
 
     return jsonify({
-        'username': current_user,
+        'user_id': current_user,
+        'username': users[current_user]['username'],
         'profile': users[current_user]
     }), 200
 
@@ -188,13 +203,13 @@ def get_users():
     Requires JWT token in Authorization header.
 
     Returns:
-        200: List of usernames
+        200: List of users (GitHub id + login)
         401: Missing or invalid token
     """
-    usernames = list(users.keys())
+    user_list = [{'id': user_id, 'username': user['username']} for user_id, user in users.items()]
     return jsonify({
-        'users': usernames,
-        'count': len(usernames)
+        'users': user_list,
+        'count': len(user_list)
     }), 200
 
 
@@ -238,7 +253,7 @@ def internal_error(e):
 
 if __name__ == '__main__':
     print('='*60)
-    print('OAuth 2.0 Authentication API')
+    print('OAuth Authentication API (Authorization Code + PKCE)')
     print('='*60)
     print('\nBefore running this app, you need to:')
     print('1. Create a GitHub OAuth App at:')

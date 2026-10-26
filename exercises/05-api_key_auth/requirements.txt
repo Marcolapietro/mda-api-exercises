@@ -9,4 +9,4 @@ Werkzeug==3.0.1
 # HTTP Basic authentication support
 Flask-HTTPAuth==4.8.0
 
-# Note: uuid is part of Python standard library, no installation needed
+# Note: secrets, hashlib and hmac are part of Python standard library, no installation needed
