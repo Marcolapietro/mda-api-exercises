@@ -1,3 +1,5 @@
+import os
+import secrets
 from flask import Flask, jsonify, request
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -6,8 +8,7 @@ app = Flask(__name__)
 
 # JWT Configuration
 # WARNING: In production, use environment variables for secrets!
-# Example: app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY')
-app.config['JWT_SECRET_KEY'] = 'your_jwt_secret_key'  # TODO: Change this to a secure secret key (only for educational purposes)
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
 
 # Optional: Set token expiration time (default is 15 minutes)
 # app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
@@ -184,4 +185,4 @@ if __name__ == '__main__':
     print("\nServer running at: http://127.0.0.1:5000")
     print("="*70 + "\n")
 
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

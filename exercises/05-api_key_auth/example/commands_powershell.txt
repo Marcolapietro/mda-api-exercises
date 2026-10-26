@@ -5,9 +5,9 @@ $headers = @{
     "Content-Type" = "application/json"
 }
 
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "Exercise 5: API Key Authentication Tests" -ForegroundColor Cyan
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 # ============================================================================
@@ -55,9 +55,9 @@ try {
 # API KEY PROTECTED ENDPOINTS
 # ============================================================================
 
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "API KEY PROTECTED ENDPOINTS" -ForegroundColor Cyan
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "==> 2. Getting users list with API key..." -ForegroundColor Yellow
@@ -79,9 +79,9 @@ try {
 # BASIC AUTH PROTECTED ENDPOINTS (API Key Recovery)
 # ============================================================================
 
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "BASIC AUTH PROTECTED ENDPOINTS (Key Recovery)" -ForegroundColor Cyan
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "==> 3. Retrieving API key using Basic Auth..." -ForegroundColor Yellow
@@ -105,9 +105,9 @@ try {
 # ERROR TESTING
 # ============================================================================
 
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "ERROR TESTING" -ForegroundColor Cyan
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "==> 4. Testing with missing API key (should fail)..." -ForegroundColor Yellow
@@ -136,9 +136,9 @@ try {
 # REGISTER SECOND USER
 # ============================================================================
 
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "MULTIPLE USERS TEST" -ForegroundColor Cyan
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "==> 6. Registering second user 'bob'..." -ForegroundColor Yellow
@@ -176,9 +176,9 @@ try {
 # SUMMARY
 # ============================================================================
 
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "All tests completed!" -ForegroundColor Green
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "Summary:" -ForegroundColor Cyan

@@ -3,6 +3,7 @@ Flask Introduction Exercise
 Create a simple Flask application with basic routes and JSON responses.
 """
 
+import os
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
@@ -57,4 +58,4 @@ def greet():
 
 if __name__ == '__main__':
     # Run the Flask application in debug mode
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

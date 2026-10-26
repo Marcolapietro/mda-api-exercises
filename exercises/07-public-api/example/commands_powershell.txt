@@ -5,9 +5,9 @@ $headers = @{
     "Content-Type" = "application/json"
 }
 
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "Exercise 7: Public API Consumption - Weather API Tests" -ForegroundColor Cyan
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 # ============================================================================
@@ -65,9 +65,9 @@ try {
 # WEATHER API TESTS (PUBLIC - No Authentication Required)
 # ============================================================================
 
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "WEATHER API TESTS (Public - No JWT Required)" -ForegroundColor Cyan
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "==> 4. Getting weather for default city (Madrid)..." -ForegroundColor Yellow
@@ -78,7 +78,7 @@ try {
     Write-Host ""
 } catch {
     Write-Host "Weather error: $_" -ForegroundColor Red
-    Write-Host "HINT: Make sure you configured OPENWEATHER_API_KEY in app.py" -ForegroundColor Yellow
+    Write-Host 'HINT: Make sure the OPENWEATHER_API_KEY environment variable is set ($env:OPENWEATHER_API_KEY = "your-key")' -ForegroundColor Yellow
     Write-Host ""
 }
 
@@ -144,9 +144,9 @@ try {
     Write-Host ""
 }
 
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "All tests completed!" -ForegroundColor Green
-Write-Host "="*70 -ForegroundColor Cyan
+Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "Summary:" -ForegroundColor Cyan

@@ -15,3 +15,7 @@ Postman/
 
 # Demo projects (not tracked in git)
 x-api-demo-simple/
+
+# Python bytecode
+__pycache__/
+*.pyc

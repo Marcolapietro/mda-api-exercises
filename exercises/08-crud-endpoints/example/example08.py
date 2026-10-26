@@ -1,3 +1,5 @@
+import os
+import secrets
 from flask import Flask, jsonify, request
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,8 +10,7 @@ auth = HTTPBasicAuth()
 
 # JWT Configuration
 # WARNING: In production, use environment variables for secrets!
-# Example: app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY')
-app.config['JWT_SECRET_KEY'] = 'super_secret_jwt_key'  # Only for educational purposes
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
 jwt = JWTManager(app)
 
 # Simulated database to store users
@@ -36,7 +37,7 @@ def register_user():
             return jsonify({'message': 'Username and password are required.'}), 400
 
         if username in users:
-            return jsonify({'message': 'User already exists.'}), 400
+            return jsonify({'message': 'User already exists.'}), 409
 
         users[username] = {
             'password': generate_password_hash(password)
@@ -72,7 +73,7 @@ def create_user_admin():
         return jsonify({'message': 'Username and password are required.'}), 400
 
     if username in users:
-        return jsonify({'message': 'User already exists.'}), 400
+        return jsonify({'message': 'User already exists.'}), 409
 
     users[username] = {
         'password': generate_password_hash(password)
@@ -123,4 +124,4 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error.'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

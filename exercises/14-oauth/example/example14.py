@@ -1,3 +1,4 @@
+import secrets
 from flask import Flask, request, jsonify, redirect, url_for, session
 from authlib.integrations.flask_client import OAuth
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -8,10 +9,10 @@ app = Flask(__name__)
 
 # Secret key for session management
 # IMPORTANT: Change this in production! Use environment variables
-app.secret_key = 'your-super-secret-key-change-in-production-12345'
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
 
 # JWT Configuration
-app.config['JWT_SECRET_KEY'] = 'your-jwt-secret-key-change-in-production'
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 jwt = JWTManager(app)
 
@@ -19,10 +20,16 @@ jwt = JWTManager(app)
 oauth = OAuth(app)
 
 # Register GitHub as an OAuth provider
+# Credentials come ONLY from environment variables — never commit them to the repo
+for var in ('GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'):
+    if not os.environ.get(var):
+        raise SystemExit(f"Missing {var}. Create a GitHub OAuth App and set it as an environment "
+                         f"variable (see readme14.md, 'Part 2: Configure Your App').")
+
 github = oauth.register(
     name='github',
-    client_id=os.getenv('GITHUB_CLIENT_ID', 'Ov23ct2hCM0q3nQk0aMq'),
-    client_secret=os.getenv('GITHUB_CLIENT_SECRET', '6dd1fe3248335ad88262ba6e9baa50e93ab2a513'),
+    client_id=os.environ['GITHUB_CLIENT_ID'],
+    client_secret=os.environ['GITHUB_CLIENT_SECRET'],
     access_token_url='https://github.com/login/oauth/access_token',
     access_token_params=None,
     authorize_url='https://github.com/login/oauth/authorize',
@@ -135,10 +142,11 @@ def callback():
             }
         }), 200
 
-    except Exception as e:
+    except Exception:
+        app.logger.exception('OAuth callback failed')
         return jsonify({
             'error': 'OAuth authentication failed',
-            'message': str(e)
+            'message': 'Could not complete the login with GitHub. Start again at /login/github.'
         }), 400
 
 
@@ -237,8 +245,8 @@ if __name__ == '__main__':
     print('   https://github.com/settings/developers')
     print('2. Set Authorization callback URL to:')
     print('   http://127.0.0.1:5000/callback')
-    print('3. Copy Client ID and Client Secret to this file')
+    print('3. Set the environment variables GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET')
     print('\nStarting server at http://127.0.0.1:5000')
     print('Visit http://127.0.0.1:5000/ for instructions')
     print('='*60)
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

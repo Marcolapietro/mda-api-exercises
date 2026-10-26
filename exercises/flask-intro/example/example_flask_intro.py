@@ -3,6 +3,7 @@ Flask Introduction Exercise - Complete Solution
 This is the reference solution for the Flask introduction exercise.
 """
 
+import os
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
@@ -71,4 +72,4 @@ def greet():
 if __name__ == '__main__':
     # Run the Flask application in debug mode
     # Debug mode enables auto-reload and better error messages
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

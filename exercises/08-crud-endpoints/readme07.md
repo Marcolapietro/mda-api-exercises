@@ -12,7 +12,7 @@ In this exercise, you will expand the API developed in previous exercises to inc
 cd exercises/08-crud-endpoints
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install Flask Flask-JWT-Extended Werkzeug
+pip install -r requirements.txt
 python app.py
 ```
 
@@ -41,131 +41,24 @@ python app.py
 
 ## Suggested Steps
 
-1. **Update the `app.py` File:**
-   - Import the necessary libraries.
-   - Create routes for CRUD operations on "students".
+1. **Read `app.py`:**
+   - Registration (`POST /users`), login (`POST /login`), `GET /users` and `POST /users/admin` are already implemented.
+   - Notice how each route combines a URL with an HTTP method: the same URL `/users/<username>` can do different things depending on the method.
 
-2. **Develop CRUD Operations in `app.py`:**
-
-   Complete the following code in `exercises/08-crud-endpoints/app.py`, filling in the blank spaces indicated by `_____`:
+2. **Fill in the blanks (`_____`) in `exercises/08-crud-endpoints/app.py`:**
 
    ```python
-   from flask import Flask, jsonify, request
-   from flask_httpauth import HTTPBasicAuth
-   from werkzeug.security import generate_password_hash, check_password_hash
-   from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-   import requests
-
-   app = Flask(__name__)
-   auth = HTTPBasicAuth()
-
-   # JWT Configuration
-   app.config['JWT_SECRET_KEY'] = 'your_jwt_secret_key'  # Change this to a secure secret key
-   jwt = JWTManager(app)
-
-   # Simulated database to store students
-   students = {
-       # 'student_name': {'password': 'hashed_password', 'api_key': 'api_key'}
-   }
-
-   @auth.verify_password
-   def verify_password(username, password):
-       if username in students and check_password_hash(students.get(username)['password'], password):
-           return username
-       return None
-
-   @app.route('/students', methods=['____'])
-   def register_student():
-       data = request.get_json()
-       username = data.get('username')
-       password = data.get('password')
-
-       if not username or not password:
-           return jsonify({'message': 'Username and password are required.'}), 400
-       if username in students:
-           return jsonify({'message': 'User already exists.'}), 400
-
-       # Hash the password before storing it
-       students[username] = {
-           'password': generate_password_hash(password),
-           'api_key': 'api_key_placeholder'  # Implement API Key generation if applicable
-       }
-       return jsonify({'message': 'User registered successfully.'}), 201
-
-   @app.route('/login', methods=['____'])
-   @auth.login_required
-   def login():
-       current_user = auth.current_user()
-       access_token = create_access_token(identity=current_user)
-       return jsonify({'access_token': access_token}), 200
-
-   @app.route('/profile', methods=['____'])
+   @app.route('/users/<username>', methods=['_____'])  # TODO: Set the correct HTTP method
+   # Hint: Use 'PUT' for updates
    @jwt_required()
-   def profile():
-       current_user = get_jwt_identity()
-       return jsonify({'profile': f'Profile information for {current_user}'}), 200
+   def update_user(username):
+       ...
 
-   # Create Student
-   @app.route('/students', methods=['____'])
+   @app.route('/users/<username>', methods=['_____'])  # TODO: Set the correct HTTP method
+   # Hint: Use 'DELETE' to remove a resource
    @jwt_required()
-   def create_student():
-       data = request.get_json()
-       username = data.get('username')
-       password = data.get('password')
-
-       if not username or not password:
-           return jsonify({'message': 'Username and password are required.'}), 400
-       if username in students:
-           return jsonify({'message': 'Student already exists.'}), 400
-
-       students[username] = {
-           'password': generate_password_hash(password),
-           'api_key': 'api_key_placeholder'  # Implement API Key generation if applicable
-       }
-       return jsonify({'message': 'Student created successfully.'}), 201
-
-   # Get Students
-   @app.route('/students', methods=['___'])
-   @jwt_required()
-   def get_students():
-       return jsonify({'students': list(students.keys())}), 200
-
-   # Update Student
-   @app.route('/students/<username>', methods=['___'])
-   @jwt_required()
-   def update_student(username):
-       if username not in students:
-           return jsonify({'message': 'Student not found.'}), 404
-
-       data = request.get_json()
-       password = data.get('password')
-
-       if password:
-           students[username]['password'] = generate_password_hash(password)
-           return jsonify({'message': 'Student updated successfully.'}), 200
-       else:
-           return jsonify({'message': 'Nothing to update.'}), 400
-
-   # Delete Student
-   @app.route('/students/<username>', methods=['___'])
-   @jwt_required()
-   def delete_student(username):
-       if username not in students:
-           return jsonify({'message': 'Student not found.'}), 404
-
-       del students[username]
-       return jsonify({'message': 'Student deleted successfully.'}), 200
-
-   @app.errorhandler(404)
-   def not_found(error):
-       return jsonify({'error': 'Resource not found.'}), 404
-
-   @app.errorhandler(405)
-   def method_not_allowed(error):
-       return jsonify({'error': 'Method not allowed.'}), 405
-
-   if __name__ == '__main__':
-       app.run(debug=True)
+   def delete_user(username):
+       ...
    ```
 
 3. **Run the Application:**
@@ -178,30 +71,37 @@ python app.py
 
    Use Postman or `curl` to test the CRUD endpoints:
 
-   - **Register a Student:**
+   - **Register a user:**
      ```bash
-     curl -X POST http://127.0.0.1:5000/students -H "Content-Type: application/json" -d '{"username": "student1", "password": "password123"}'
+     curl -X POST http://127.0.0.1:5000/users -H "Content-Type: application/json" -d '{"username": "user1", "password": "password123"}'
      ```
 
-   - **Login:**
+   - **Login (Basic Auth, returns a JWT):**
      ```bash
-     curl -X POST http://127.0.0.1:5000/login -u student1:password123
+     curl -X POST http://127.0.0.1:5000/login -u user1:password123
      ```
 
-   - **Get Students (use the token from login):**
+   - **Get users (use the token from login):**
      ```bash
-     curl -X GET http://127.0.0.1:5000/students -H "Authorization: Bearer YOUR_TOKEN"
+     curl -X GET http://127.0.0.1:5000/users -H "Authorization: Bearer YOUR_TOKEN"
      ```
 
-   - **Update a Student:**
+   - **Update a user:**
      ```bash
-     curl -X PUT http://127.0.0.1:5000/students/student1 -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"password": "newpassword456"}'
+     curl -X PUT http://127.0.0.1:5000/users/user1 -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_TOKEN" -d '{"password": "newpassword456"}'
      ```
 
-   - **Delete a Student:**
+   - **Delete a user:**
      ```bash
-     curl -X DELETE http://127.0.0.1:5000/students/student1 -H "Authorization: Bearer YOUR_TOKEN"
+     curl -X DELETE http://127.0.0.1:5000/users/user1 -H "Authorization: Bearer YOUR_TOKEN"
      ```
+
+   - **Register the same user twice (expected: 409 Conflict):**
+     ```bash
+     curl -i -X POST http://127.0.0.1:5000/users -H "Content-Type: application/json" -d '{"username": "user1", "password": "password123"}'
+     ```
+
+   > **Windows:** ready-to-run versions of these commands are in `example/commands_cmd.txt` and `example/commands_powershell.txt` (in PowerShell use `curl.exe`, not `curl`).
 
 ## Expected Results
 

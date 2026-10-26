@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify, request
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -172,4 +173,4 @@ if __name__ == '__main__':
     print("\nServer running at: http://127.0.0.1:5000")
     print("="*70 + "\n")
 
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

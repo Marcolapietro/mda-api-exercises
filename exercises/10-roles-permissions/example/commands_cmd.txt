@@ -1,36 +1,41 @@
-REM 1. Registrar un usuario admin
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"admin\",\"password\":\"admin123\",\"role\":\"admin\"}" http://127.0.0.1:5000/register
-
-REM 2. Registrar un estudiante
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"student1\",\"password\":\"pass123\",\"role\":\"student\"}" http://127.0.0.1:5000/register
-
-REM 3. Login como admin (guardar el token que devuelve)
-curl -X POST -H "Content-Type: application/json" --user admin:admin123 http://127.0.0.1:5000/login
-
-REM 4. Login como estudiante (guardar el token que devuelve)
-curl -X POST -H "Content-Type: application/json" --user student1:pass123 http://127.0.0.1:5000/login
-
-REM 5. Usar el admin dashboard (reemplazar TOKEN_ADMIN con el token obtenido)
-curl -X GET -H "Authorization: Bearer TOKEN_ADMIN" http://127.0.0.1:5000/admin/dashboard
-
-REM 6. Intentar acceder al admin dashboard con usuario estudiante (reemplazar TOKEN_STUDENT)
-curl -X GET -H "Authorization: Bearer TOKEN_STUDENT" http://127.0.0.1:5000/admin/dashboard
-
-REM 7. Acceder a datos de estudiante
-curl -X GET -H "Authorization: Bearer TOKEN_STUDENT" http://127.0.0.1:5000/student/data
-
-REM 8. Ver lista de usuarios (como admin)
-curl -X GET -H "Authorization: Bearer TOKEN_ADMIN" http://127.0.0.1:5000/usuarios
-
-REM 9. Ver lista de usuarios con paginación
-curl -X GET -H "Authorization: Bearer TOKEN_ADMIN" "http://127.0.0.1:5000/usuarios?page=1&per_page=5"
-
-REM 10. Crear nuevo usuario (como admin)
-curl -X POST -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_ADMIN" -d "{\"username\":\"student2\",\"password\":\"pass456\",\"role\":\"student\"}" http://127.0.0.1:5000/usuarios
-
-REM 11. Actualizar usuario (como admin)
-curl -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_ADMIN" -d "{\"password\":\"newpass\"}" http://127.0.0.1:5000/usuarios/student1
-
-REM 12. Eliminar usuario (como admin)
-curl -X DELETE -H "Authorization: Bearer TOKEN_ADMIN" http://127.0.0.1:5000/usuarios/student2
 REM Exercise 10: Roles & Permissions (Windows CMD)
+
+REM 0. Start the app with a known admin password (or copy the one printed at start-up):
+REM    set ADMIN_PASSWORD=admin123
+REM    python app.py
+
+REM 1. Register a student (new users are always students)
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"student1\",\"password\":\"pass123\"}" http://127.0.0.1:5000/register
+
+REM 2. Try to register as admin: the role in the body is ignored, you get "role": "student"
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"mallory\",\"password\":\"pass123\",\"role\":\"admin\"}" http://127.0.0.1:5000/register
+
+REM 3. Login as admin (copy the access_token as TOKEN_ADMIN)
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"admin\",\"password\":\"admin123\"}" http://127.0.0.1:5000/login
+
+REM 4. Login as student (copy the access_token as TOKEN_STUDENT)
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"student1\",\"password\":\"pass123\"}" http://127.0.0.1:5000/login
+
+set TOKEN_ADMIN=PASTE_ADMIN_TOKEN_HERE
+set TOKEN_STUDENT=PASTE_STUDENT_TOKEN_HERE
+
+REM 5. Admin dashboard as admin (expected: 200)
+curl -X GET -H "Authorization: Bearer %TOKEN_ADMIN%" http://127.0.0.1:5000/admin/dashboard
+
+REM 6. Admin dashboard as student (expected: 403)
+curl -i -X GET -H "Authorization: Bearer %TOKEN_STUDENT%" http://127.0.0.1:5000/admin/dashboard
+
+REM 7. Student data as student (expected: 200)
+curl -X GET -H "Authorization: Bearer %TOKEN_STUDENT%" http://127.0.0.1:5000/student/data
+
+REM 8. List users with pagination
+curl -X GET -H "Authorization: Bearer %TOKEN_ADMIN%" "http://127.0.0.1:5000/users?page=1&per_page=5"
+
+REM 9. Try to update a user as a student (expected: 403)
+curl -i -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer %TOKEN_STUDENT%" -d "{\"password\":\"hacked\"}" http://127.0.0.1:5000/users/admin
+
+REM 10. Promote student1 to admin (admins only) - from now on student1's token gets admin access
+curl -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer %TOKEN_ADMIN%" -d "{\"role\":\"admin\"}" http://127.0.0.1:5000/users/student1
+
+REM 11. Delete a user (admins only)
+curl -X DELETE -H "Authorization: Bearer %TOKEN_ADMIN%" http://127.0.0.1:5000/users/mallory

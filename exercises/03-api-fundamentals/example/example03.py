@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -16,12 +17,12 @@ def notes_collection():
     if request.method == 'GET':
         return jsonify(list(notes.values())), 200
 
-    if request.headers.get('Content-Type', '').lower() != 'application/json':
+    if request.mimetype != 'application/json':  # also accepts 'application/json; charset=utf-8'
         return jsonify({'error': 'Unsupported Media Type', 'message': 'Content-Type must be application/json'}), 415
 
     data = request.get_json(silent=True)
     if data is None:
-        return jsonify({'error': 'Invalid JSON', 'message': 'Request body must be valid JSON'}), 415
+        return jsonify({'error': 'Invalid JSON', 'message': 'Request body must be valid JSON'}), 400
 
     errors = []
     title = data.get('title')
@@ -76,4 +77,4 @@ if __name__ == '__main__':
     print("="*70)
     print("Try: GET http://127.0.0.1:5000/health")
     print("="*70 + "\n")
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

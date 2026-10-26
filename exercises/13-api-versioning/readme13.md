@@ -287,23 +287,25 @@ Tells clients which version they're using
 API-Version: v2
 ```
 
-**`Deprecation` header (RFC 8594):**
-Warns clients that the version is deprecated
+**`Deprecation` header (RFC 9745):**
+Tells clients the version is deprecated and since when: `@` followed by a Unix timestamp (here, 1 January 2026)
 ```
-Deprecation: true
+Deprecation: @1767225600
 ```
 
 **`Sunset` header (RFC 8594):**
-Tells clients when the version will be removed
+Tells clients when the version will stop working, as an HTTP date
 ```
-Sunset: 2025-06-01
+Sunset: Wed, 30 Jun 2027 00:00:00 GMT
 ```
 
-**`Warning` header:**
-Provides human-readable deprecation notice
+**`Link` header with `rel="successor-version"`:**
+Points clients to the version that replaces this one
 ```
-Warning: 299 - "API v1 is deprecated. Please migrate to v2."
+Link: </api/v2>; rel="successor-version"
 ```
+
+> The old `Warning` header (`Warning: 299 - "..."`) is obsolete since RFC 9111 (2022): don't use it in new APIs.
 
 ## Part 2: Implementing Version Headers (15 minutes)
 
@@ -320,30 +322,32 @@ def add_version_headers(response, version):
     response.headers['API-Version'] = _____
 
     if API_VERSIONS[version]['status'] == 'deprecated':
-        # TODO: Add Deprecation header (value should be "true")
+        # TODO: Add Deprecation header (RFC 9745): "@" + when it was deprecated, as a Unix timestamp
         response.headers['Deprecation'] = _____
 
-        # TODO: Add Sunset header with the deprecation date
+        # TODO: Add Sunset header (RFC 8594): when the version will stop working, as an HTTP date
         response.headers['Sunset'] = _____
 
-        # TODO: Add Warning header with deprecation notice
-        response.headers['Warning'] = _____
+        # TODO: Add Link header pointing clients to the version that replaces this one
+        response.headers['Link'] = _____
 
     return response
 ```
 
+The helpers `to_epoch()` and `to_http_date()` (defined right after `API_VERSIONS`) convert the dates stored as `'2026-01-01'` into the formats the headers need.
+
 **Your tasks:**
 1. Fill in `API-Version` header with the version parameter
-2. Add `Deprecation` header with value `"true"`
-3. Add `Sunset` header with the sunset date from `API_VERSIONS`
-4. Add `Warning` header with the deprecation notice
+2. Add `Deprecation` header: `@` followed by `to_epoch(...)` of the deprecation date
+3. Add `Sunset` header: `to_http_date(...)` of the sunset date from `API_VERSIONS`
+4. Add `Link` header pointing to the successor version
 
 **Solution:**
 ```python
 response.headers['API-Version'] = version
-response.headers['Deprecation'] = "true"
-response.headers['Sunset'] = API_VERSIONS[version]['sunset_date']
-response.headers['Warning'] = f'299 - "{API_VERSIONS[version]["deprecation_notice"]}"'
+response.headers['Deprecation'] = f"@{to_epoch(API_VERSIONS[version]['deprecation_date'])}"
+response.headers['Sunset'] = to_http_date(API_VERSIONS[version]['sunset_date'])
+response.headers['Link'] = f'<{API_VERSIONS[version]["successor"]}>; rel="successor-version"'
 ```
 
 ## Part 3: Implementing Version 1 (20 minutes)
@@ -545,9 +549,9 @@ curl -i http://127.0.0.1:5000/api/v1/notes \
 **Check the headers - you should see deprecation warnings:**
 ```
 API-Version: v1
-Deprecation: true
-Sunset: 2025-06-01
-Warning: 299 - "API v1 is deprecated. Please migrate to v2."
+Deprecation: @1767225600
+Sunset: Wed, 30 Jun 2027 00:00:00 GMT
+Link: </api/v2>; rel="successor-version"
 ```
 
 **Response body (v1 format - simple array):**
@@ -682,12 +686,16 @@ curl http://127.0.0.1:5000/api/versions
   "versions": {
     "v1": {
       "status": "deprecated",
-      "sunset_date": "2025-06-01",
+      "deprecation_date": "2026-01-01",
+      "sunset_date": "2027-06-30",
+      "successor": "/api/v2",
       "deprecation_notice": "API v1 is deprecated. Please migrate to v2."
     },
     "v2": {
       "status": "current",
+      "deprecation_date": null,
       "sunset_date": null,
+      "successor": null,
       "deprecation_notice": null
     }
   },
@@ -779,16 +787,16 @@ Because `notes` is now an object `{data: [...]}`, not an array!
 
 **In response headers (automatic):**
 ```
-Deprecation: true
-Sunset: 2025-06-01
-Warning: 299 - "API v1 is deprecated. Please migrate to v2."
+Deprecation: @1767225600
+Sunset: Wed, 30 Jun 2027 00:00:00 GMT
+Link: </api/v2>; rel="successor-version"
 ```
 
 **In documentation:**
 ```markdown
 ## ⚠️ Deprecation Notice
 
-API v1 is deprecated and will be sunset on **June 1, 2025**.
+API v1 is deprecated and will be sunset on **June 30, 2027**.
 
 Please migrate to v2. See migration guide: [link]
 ```
@@ -799,7 +807,7 @@ Subject: Action Required: Migrate to API v2
 
 Dear valued customer,
 
-API v1 will be retired on June 1, 2025. Please migrate to v2
+API v1 will be retired on June 30, 2027. Please migrate to v2
 before this date to avoid service interruption.
 
 Migration guide: [link]

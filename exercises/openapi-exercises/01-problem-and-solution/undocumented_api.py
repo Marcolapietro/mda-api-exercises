@@ -3,6 +3,7 @@ Undocumented Books API
 This API has NO documentation - students must figure it out through trial and error.
 """
 
+import os
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
@@ -108,4 +109,4 @@ if __name__ == '__main__':
     print("🚀 Undocumented Books API is running!")
     print("📍 http://127.0.0.1:5000")
     print("❓ Can you figure out how to use it?")
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

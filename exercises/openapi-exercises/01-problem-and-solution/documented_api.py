@@ -3,6 +3,7 @@ Documented Books API using Flask-RESTX
 This API automatically generates Swagger UI documentation at /docs
 """
 
+import os
 from flask import Flask
 from flask_restx import Api, Resource, fields
 
@@ -165,4 +166,4 @@ if __name__ == '__main__':
     print("📖 Swagger UI: http://127.0.0.1:5000/docs")
     print("📄 OpenAPI Spec: http://127.0.0.1:5000/swagger.json")
     print("\n✨ Much better than the undocumented version, right?")
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

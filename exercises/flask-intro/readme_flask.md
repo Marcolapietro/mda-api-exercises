@@ -64,7 +64,7 @@ def hello_world():
     return 'Hello, students!'
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True)  # only while developing locally - never on a public server (the app.py reads FLASK_DEBUG)
 ```
 
 ### Step 2: Run the application
@@ -203,7 +203,7 @@ def get_user(user_id):
         return jsonify({'error': 'User not found'}), 404
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True)  # only while developing locally - never on a public server (the app.py reads FLASK_DEBUG)
 ```
 
 ### 4. Query Parameters

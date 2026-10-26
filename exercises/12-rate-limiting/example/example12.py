@@ -3,6 +3,9 @@ Exercise 12: Rate Limiting and API Security - COMPLETE SOLUTION
 Learn to protect your API from abuse using Flask-Limiter
 """
 
+import os
+import time
+import secrets
 from flask import Flask, jsonify, request
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_limiter import Limiter
@@ -13,7 +16,7 @@ from datetime import timedelta
 app = Flask(__name__)
 
 # JWT Configuration
-app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-in-production'
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 jwt = JWTManager(app)
 
@@ -22,6 +25,7 @@ limiter = Limiter(
     app=app,
     key_func=get_remote_address,  # Use IP address to identify clients
     default_limits=["200 per day", "50 per hour"],  # Default limits for all routes
+    headers_enabled=True,  # send X-RateLimit-* and Retry-After headers
     storage_uri="memory://"  # Use in-memory storage (can use Redis in production)
 )
 
@@ -63,7 +67,7 @@ def register():
 
     username = data['username']
     password = data['password']
-    role = data.get('role', 'user')  # Default role is 'user'
+    role = 'user'  # never taken from the request body (prevents self-registering as admin)
 
     if username in users:
         return jsonify({'error': 'User already exists'}), 409
@@ -110,12 +114,12 @@ def login():
 
 
 @app.route('/api/data', methods=['GET'])
-@jwt_required()
 @limiter.limit("20 per minute")  # General API usage limit
+@jwt_required()  # after the limiter: requests with invalid tokens also count
 def get_data():
     """
     General data endpoint
-    Rate limited to 20 requests per minute per user
+    Rate limited to 20 requests per minute per client IP
     """
     current_user = get_jwt_identity()
 
@@ -137,8 +141,8 @@ def get_data():
 
 
 @app.route('/api/search', methods=['GET'])
-@jwt_required()
 @limiter.limit("5 per minute")  # Strict limit for expensive operations
+@jwt_required()  # after the limiter: requests with invalid tokens also count
 def search():
     """
     Expensive search endpoint
@@ -183,8 +187,8 @@ def unlimited():
 
 
 @app.route('/api/stats', methods=['GET'])
-@jwt_required()
 @limiter.limit("10 per minute")
+@jwt_required()  # after the limiter: requests with invalid tokens also count
 def get_stats():
     """Get API usage statistics for current user"""
     current_user = get_jwt_identity()
@@ -204,10 +208,12 @@ def ratelimit_handler(e):
     Custom handler for rate limit exceeded errors
     Returns a JSON response instead of plain text
     """
+    current = limiter.current_limit
+    retry_after = max(int(current.reset_at - time.time()), 1) if current else None
     return jsonify({
         'error': 'Rate limit exceeded',
         'message': str(e.description),
-        'retry_after': 'Check the Retry-After header'
+        'retry_after_seconds': retry_after  # same value as the Retry-After header
     }), 429
 
 
@@ -227,4 +233,4 @@ if __name__ == '__main__':
     print("Rate limit info included in response headers")
     print("="*60 + "\n")
 
-    app.run(debug=True, port=5000)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1", port=5000)

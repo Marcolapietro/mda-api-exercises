@@ -64,7 +64,7 @@ def hello_world():
     return '¡Hola, estudiantes!'
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True)  # solo mientras desarrollas en local - nunca en un servidor público (app.py usa FLASK_DEBUG)
 ```
 
 ### Paso 2: Ejecutar la aplicación
@@ -203,7 +203,7 @@ def get_user(user_id):
         return jsonify({'error': 'Usuario no encontrado'}), 404
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True)  # solo mientras desarrollas en local - nunca en un servidor público (app.py usa FLASK_DEBUG)
 ```
 
 ### 4. Parámetros de Consulta

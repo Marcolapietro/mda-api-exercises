@@ -81,14 +81,21 @@ a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 
 ### 2. Configure Your API Key
 
-Open `app.py` and replace:
+**Never paste the key into `app.py`**: code ends up on GitHub and keys pushed to public repos are found by bots within minutes. `app.py` reads it from an environment variable instead:
 ```python
-OPENWEATHER_API_KEY = 'YOUR_API_KEY_HERE'
+OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', 'YOUR_API_KEY_HERE')
 ```
 
-With your actual key:
-```python
-OPENWEATHER_API_KEY = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6'
+Set the variable in the terminal where you run the app:
+```bash
+# Linux / macOS
+export OPENWEATHER_API_KEY="a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+
+# Windows PowerShell
+$env:OPENWEATHER_API_KEY="a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+
+# Windows CMD
+set OPENWEATHER_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 ```
 
 ---
@@ -189,56 +196,70 @@ GET https://api.openweathermap.org/data/2.5/weather?lat=40.4165&lon=-3.7026&appi
 
 ### TODOs in app.py
 
-You need to fill in **9 strategic blanks**:
+You need to complete **10 TODOs** (13 `_____` blanks; the two params dicts have several each).
+Line numbers can shift as you type, so search for `_____`:
 
 #### Authentication TODOs (from Exercise 06):
-1. Line 79: Create JWT access token
-2. Line 94: Get user identity from JWT
+1. `login()` (line 81): Create the JWT access token: `create_access_token(identity=username)`
+2. `profile()` (line 96): Get the user identity from the JWT: `get_jwt_identity()`
 
-#### Geocoding API TODOs:
-3. Line 147: Build geocoding URL with query and API key
-4. Line 153: Make GET request to geocoding API
-5. Line 165: Parse JSON response from geocoding API
-6. Line 178: Extract latitude from response
-7. Line 182: Extract longitude from response
+#### Geocoding API TODOs (in `weather()`, step 1):
+3. `geo_params` (line 151): Fill `'q'` with `query` and `'appid'` with `OPENWEATHER_API_KEY`
+4. `geo_response` (line 157): Make the GET request: `requests.get(GEOCODING_API_URL, params=geo_params, timeout=10)`
+5. `geo_data` (line 169): Parse the JSON response: `geo_response.json()`
+6. `latitude` (line 182): `geo_data[0]['lat']`
+7. `longitude` (line 186): `geo_data[0]['lon']`
 
-#### Weather API TODOs:
-8. Line 207: Build weather URL with coordinates and API key
-9. Line 212: Make GET request to weather API
-10. Line 223: Parse JSON response from weather API
+#### Weather API TODOs (in `weather()`, step 2):
+8. `weather_params` (lines 215-217): Fill `'lat'`, `'lon'` and `'appid'`
+9. `weather_response` (line 225): Make the GET request: `requests.get(WEATHER_API_URL, params=weather_params, timeout=10)`
+10. `weather_data` (line 236): Parse the JSON response: `weather_response.json()`
 
 ### Key Concepts to Implement
 
-**1. Building API URLs:**
+**1. Building the request parameters:**
 ```python
-# Geocoding API URL format
-url = f'{GEOCODING_API_URL}?q={query}&appid={API_KEY}&limit=1'
+# Geocoding API: GET {GEOCODING_API_URL}?q=...&appid=...&limit=1
+geo_params = {'q': query, 'appid': OPENWEATHER_API_KEY, 'limit': 1}
 
-# Weather API URL format
-url = f'{WEATHER_API_URL}?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=en'
+# Weather API: GET {WEATHER_API_URL}?lat=...&lon=...&appid=...&units=metric&lang=en
+weather_params = {'lat': latitude, 'lon': longitude, 'appid': OPENWEATHER_API_KEY,
+                  'units': 'metric', 'lang': 'en'}
 ```
+
+**Why a `params` dict and not an f-string URL?** `requests` URL-encodes every value. With
+`f'...?q={query}&appid=...'`, a user who asks for `?city=Paris%26limit%3D50` would inject an extra
+`limit=50` parameter into the call to OpenWeatherMap, and a space in `New York` would break the URL.
+With `params=`, `Paris&limit=50` is sent as **one** value of `q` (`q=Paris%26limit%3D50`).
 
 **2. Making HTTP Requests:**
 ```python
 import requests
 
-response = requests.get(url)
+# Always set a timeout on outbound calls: without it a slow upstream API blocks your worker forever
+response = requests.get(GEOCODING_API_URL, params=geo_params, timeout=10)
 if response.status_code == 200:
     data = response.json()
     # Process data
 else:
-    # Handle error
+    # Handle error (502 Bad Gateway: the upstream API failed, not your client)
 ```
 
 **3. Error Handling:**
 ```python
 try:
-    response = requests.get(url)
+    response = requests.get(GEOCODING_API_URL, params=geo_params, timeout=10)
     data = response.json()
-except requests.exceptions.RequestException as e:
-    # Network error
-except (KeyError, ValueError) as e:
+except requests.exceptions.RequestException:
+    # Network error. Do NOT return str(e) to the client: the exception message
+    # can include the full URL, and that URL contains your appid (API key).
+    app.logger.exception('Geocoding API request failed')   # details stay in the server log
+    return jsonify({'error': 'Network error',
+                    'message': 'Could not connect to Geocoding API'}), 502
+except (KeyError, IndexError, ValueError):
     # Invalid response format
+    app.logger.exception('Invalid response from Geocoding API')
+    return jsonify({'error': 'Invalid response from Geocoding API'}), 502
 ```
 
 ---
@@ -248,14 +269,14 @@ except (KeyError, ValueError) as e:
 ### 1. Test Without API Key (Should Fail)
 
 ```bash
-curl http://127.0.0.1:5000/weather?city=Madrid
+curl "http://127.0.0.1:5000/weather?city=Madrid"
 ```
 
 **Expected Response:**
 ```json
 {
   "error": "OpenWeatherMap API key not configured",
-  "message": "Please set OPENWEATHER_API_KEY in app.py",
+  "message": "Please set the OPENWEATHER_API_KEY environment variable",
   "help": "Get a free API key at https://openweathermap.org/api"
 }
 ```
@@ -263,7 +284,7 @@ curl http://127.0.0.1:5000/weather?city=Madrid
 ### 2. Test With API Key - Default City
 
 ```bash
-curl http://127.0.0.1:5000/weather
+curl "http://127.0.0.1:5000/weather"
 ```
 
 **Expected Response (Madrid, default):**
@@ -299,28 +320,34 @@ curl http://127.0.0.1:5000/weather
 
 ```bash
 # Paris, France
-curl http://127.0.0.1:5000/weather?city=Paris&country=FR
+curl "http://127.0.0.1:5000/weather?city=Paris&country=FR"
 
 # London, UK
-curl http://127.0.0.1:5000/weather?city=London&country=GB
+curl "http://127.0.0.1:5000/weather?city=London&country=GB"
 
-# New York, USA
-curl http://127.0.0.1:5000/weather?city=New%20York&country=US
+# New York, USA (the space is encoded as %20)
+curl "http://127.0.0.1:5000/weather?city=New%20York&country=US"
 
 # Tokyo, Japan
-curl http://127.0.0.1:5000/weather?city=Tokyo&country=JP
+curl "http://127.0.0.1:5000/weather?city=Tokyo&country=JP"
 ```
 
-**Note:** Use `%20` for spaces in URLs, or use quotes in curl:
+**Always quote URLs that contain `&`.** Unquoted, bash treats `&` as "run in the background" and
+drops `country=...`; PowerShell refuses to parse it; in CMD you must escape it as `^&`.
+
+**Spaces:** a literal space is not valid in a URL, so quotes alone are not enough
+(`"...city=New York..."` fails). Either encode it as `%20` (above) or let curl encode it:
 ```bash
-curl "http://127.0.0.1:5000/weather?city=New York&country=US"
+curl -G "http://127.0.0.1:5000/weather" --data-urlencode "city=New York" --data-urlencode "country=US"
 ```
+
+**Windows PowerShell 5.1:** `curl` is an alias of `Invoke-WebRequest`; use `curl.exe` to run the real curl.
 
 ### 4. Test Ambiguous City Names
 
 **Without country code:**
 ```bash
-curl http://127.0.0.1:5000/weather?city=Paris
+curl "http://127.0.0.1:5000/weather?city=Paris"
 # Returns: Paris, France (most common)
 ```
 
@@ -333,7 +360,7 @@ curl "http://127.0.0.1:5000/weather?city=Paris&country=US"
 ### 5. Test Invalid City (Should Fail)
 
 ```bash
-curl http://127.0.0.1:5000/weather?city=InvalidCityXYZ
+curl "http://127.0.0.1:5000/weather?city=InvalidCityXYZ"
 ```
 
 **Expected Response:**
@@ -376,16 +403,19 @@ print(data['key'])
 
 ### With Query Parameters
 
-**Method 1: URL string**
-```python
-url = f'https://api.example.com/data?param1={value1}&param2={value2}'
-response = requests.get(url)
-```
-
-**Method 2: params dictionary (cleaner)**
+**Method 1: params dictionary (use this one)**
 ```python
 params = {'param1': value1, 'param2': value2}
-response = requests.get('https://api.example.com/data', params=params)
+response = requests.get('https://api.example.com/data', params=params, timeout=10)
+```
+`requests` URL-encodes each value, so spaces, `&`, `=` or `#` in user input can't break the URL
+or add extra parameters.
+
+**Method 2: URL string (avoid with user input)**
+```python
+# ❌ value1 is not encoded: "a&admin=1" becomes an extra parameter
+url = f'https://api.example.com/data?param1={value1}&param2={value2}'
+response = requests.get(url, timeout=10)
 ```
 
 ### Error Handling
@@ -571,7 +601,8 @@ OpenWeatherMap has deprecated city name queries:
 **Old Way (Deprecated, but still works):**
 ```python
 # Direct city name query - NOT RECOMMENDED
-url = f'http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}'
+requests.get('https://api.openweathermap.org/data/2.5/weather',
+             params={'q': city, 'appid': api_key}, timeout=10)
 ```
 
 **Problems:**
@@ -583,11 +614,13 @@ url = f'http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}'
 **New Way (Recommended):**
 ```python
 # Step 1: Geocode
-geocoding_url = f'https://api.openweathermap.org/geo/1.0/direct?q={city}&appid={api_key}'
+requests.get('https://api.openweathermap.org/geo/1.0/direct',
+             params={'q': city, 'appid': api_key, 'limit': 1}, timeout=10)
 # Get coordinates
 
 # Step 2: Weather by coordinates
-weather_url = f'https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}'
+requests.get('https://api.openweathermap.org/data/2.5/weather',
+             params={'lat': lat, 'lon': lon, 'appid': api_key}, timeout=10)
 ```
 
 **Benefits:**

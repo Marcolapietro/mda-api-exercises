@@ -6,7 +6,7 @@
 cd exercises/09-api-pagination
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install Flask Flask-JWT-Extended Werkzeug
+pip install -r requirements.txt
 python app.py
 ```
 
@@ -108,11 +108,23 @@ def get_students():
         }), 200
 
     except Exception as e:
-        # General error handling
-        return jsonify({'error': 'An error occurred while processing the request.', 'details': str(e)}), 500
+        # Log the details on the server, but don't expose them to the client
+        app.logger.error(f'Pagination error: {str(e)}')
+        return jsonify({'error': 'An error occurred while processing the request.'}), 500
 ```
 
 ## Testing with Postman or `curl`
+
+0. **First Get a Token:**
+
+   `/students` requires a JWT, so register a user and log in first (ready-made commands for Windows: `example/commands_cmd.txt` and `example/commands_powershell.txt`):
+
+   ```bash
+   curl -X POST "http://127.0.0.1:5000/register" -H "Content-Type: application/json" -d '{"username": "example", "password": "secret"}'
+   curl -X POST "http://127.0.0.1:5000/login" -H "Content-Type: application/json" -d '{"username": "example", "password": "secret"}'
+   ```
+
+   Copy the `access_token` from the login response and use it as `<your_jwt_token>` below.
 
 1. **Request Specific Page:**
 
@@ -122,13 +134,15 @@ def get_students():
 
 2. **Expected Result:**
 
+   The values are illustrative: the 500 students are generated with random names at start-up (plus the user you registered), so your names and totals will differ.
+
    ```json
    {
-     "students": ["student6", "student7", "student8", "student9", "student10"],
-     "total_pages": 3,
+     "students": ["kQzLmPwa", "TbXeRnuJ", "vHcsYpOq", "MdWgaKlE", "rFjtNxiB"],
+     "total_pages": 101,
      "current_page": 2,
      "per_page": 5,
-     "total_students": 13,
+     "total_students": 501,
      "links": {
        "prev": "http://127.0.0.1:5000/students?page=1&per_page=5",
        "next": "http://127.0.0.1:5000/students?page=3&per_page=5"
@@ -139,7 +153,7 @@ def get_students():
 3. **Page Out of Range:**
 
    ```bash
-   curl -X GET "http://127.0.0.1:5000/students?page=100&per_page=5" -H "Authorization: Bearer <your_jwt_token>"
+   curl -X GET "http://127.0.0.1:5000/students?page=1000&per_page=5" -H "Authorization: Bearer <your_jwt_token>"
    ```
 
    Response:

@@ -6,7 +6,7 @@
 cd exercises/09-api-pagination
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install Flask Flask-JWT-Extended Werkzeug
+pip install -r requirements.txt
 python app.py
 ```
 
@@ -18,7 +18,7 @@ python app.py
 
 ## Descripción
 
-En este ejercicio, implementarás la funcionalidad de paginación en la ruta `GET /estudiantes`. La paginación permitirá dividir la lista de estudiantes en páginas más pequeñas, controladas por parámetros de consulta como `page` y `per_page`.
+En este ejercicio, implementarás la funcionalidad de paginación en la ruta `GET /students`. La paginación permitirá dividir la lista de estudiantes en páginas más pequeñas, controladas por parámetros de consulta como `page` y `per_page`.
 
 ## Requisitos
 
@@ -27,7 +27,7 @@ En este ejercicio, implementarás la funcionalidad de paginación en la ruta `GE
    - Utiliza la biblioteca `math` (incluida por defecto en Python) para calcular el número total de páginas.
 
 2. **Estructura de la API:**
-   - **Ruta Paginada (`GET /estudiantes`):** Retorna una lista paginada de estudiantes, permitiendo especificar el número de página y la cantidad de estudiantes por página mediante parámetros de consulta.
+   - **Ruta Paginada (`GET /students`):** Retorna una lista paginada de estudiantes, permitiendo especificar el número de página y la cantidad de estudiantes por página mediante parámetros de consulta.
 
 3. **Implementación de Paginación:**
    - Utiliza parámetros de consulta como `page` y `per_page` para controlar la paginación.
@@ -40,8 +40,8 @@ En este ejercicio, implementarás la funcionalidad de paginación en la ruta `GE
 
 ## Pasos Detallados
 
-1. **Configura la Ruta `/estudiantes`**:
-   - Modifica la ruta que maneja `GET /estudiantes` para aceptar parámetros de consulta `page` y `per_page`.
+1. **Configura la Ruta `/students`**:
+   - Modifica la ruta que maneja `GET /students` para aceptar parámetros de consulta `page` y `per_page`.
    - Calcula los índices para obtener el subconjunto de estudiantes de acuerdo con la página solicitada.
 
 2. **Calcula el Total de Páginas:**
@@ -56,7 +56,7 @@ En este ejercicio, implementarás la funcionalidad de paginación en la ruta `GE
 ## Ejemplo de Código
 
 ```python
-@app.route('/estudiantes', methods=['GET'])
+@app.route('/students', methods=['GET'])
 @jwt_required()
 def obtener_estudiantes():
     try:
@@ -108,30 +108,44 @@ def obtener_estudiantes():
         }), 200
 
     except Exception as e:
-        # Manejo de errores generales
-        return jsonify({'error': 'Ocurrió un error al procesar la solicitud.', 'details': str(e)}), 500
+        # Registrar el detalle en el servidor, pero no exponerlo al cliente
+        app.logger.error(f'Pagination error: {str(e)}')
+        return jsonify({'error': 'Ocurrió un error al procesar la solicitud.'}), 500
 ```
 
 ## Pruebas con Postman o `curl`
 
+0. **Primero Obtén un Token:**
+
+   `/students` requiere un JWT, así que primero registra un usuario e inicia sesión (comandos listos para Windows: `example/commands_cmd.txt` y `example/commands_powershell.txt`):
+
+   ```bash
+   curl -X POST "http://127.0.0.1:5000/register" -H "Content-Type: application/json" -d '{"username": "example", "password": "secret"}'
+   curl -X POST "http://127.0.0.1:5000/login" -H "Content-Type: application/json" -d '{"username": "example", "password": "secret"}'
+   ```
+
+   Copia el `access_token` de la respuesta del login y úsalo como `<tu_token_jwt>` a continuación.
+
 1. **Solicitar Página Específica:**
 
    ```bash
-   curl -X GET "http://127.0.0.1:5000/estudiantes?page=2&per_page=5" -H "Authorization: Bearer <tu_token_jwt>"
+   curl -X GET "http://127.0.0.1:5000/students?page=2&per_page=5" -H "Authorization: Bearer <tu_token_jwt>"
    ```
 
 2. **Resultado Esperado:**
 
+   Los valores son ilustrativos: los 500 estudiantes se generan con nombres aleatorios al arrancar (más el usuario que registraste), así que tus nombres y totales serán distintos.
+
    ```json
    {
-     "students": ["student6", "student7", "student8", "student9", "student10"],
-     "total_pages": 3,
+     "students": ["kQzLmPwa", "TbXeRnuJ", "vHcsYpOq", "MdWgaKlE", "rFjtNxiB"],
+     "total_pages": 101,
      "current_page": 2,
      "per_page": 5,
-     "total_students": 13,
+     "total_students": 501,
      "links": {
-       "prev": "http://127.0.0.1:5000/estudiantes?page=1&per_page=5",
-       "next": "http://127.0.0.1:5000/estudiantes?page=3&per_page=5"
+       "prev": "http://127.0.0.1:5000/students?page=1&per_page=5",
+       "next": "http://127.0.0.1:5000/students?page=3&per_page=5"
      }
    }
    ```
@@ -139,7 +153,7 @@ def obtener_estudiantes():
 3. **Página Fuera de Rango:**
 
    ```bash
-   curl -X GET "http://127.0.0.1:5000/estudiantes?page=100&per_page=5" -H "Authorization: Bearer <tu_token_jwt>"
+   curl -X GET "http://127.0.0.1:5000/students?page=1000&per_page=5" -H "Authorization: Bearer <tu_token_jwt>"
    ```
 
    Respuesta:

@@ -193,6 +193,14 @@ Before starting this exercise, complete:
    Authorization callback URL: http://127.0.0.1:5000/callback
    ```
 
+   > **Use `127.0.0.1` everywhere, not `localhost`.** The app builds its `redirect_uri` from the
+   > host you typed in the browser (`url_for('callback', _external=True)`). If you open
+   > `http://localhost:5000/login/github`, the app sends `redirect_uri=http://localhost:5000/callback`,
+   > and GitHub compares it **character by character** with the registered callback URL, so it rejects it
+   > ("redirect_uri MUST match"). The browser also treats `localhost` and `127.0.0.1` as different
+   > sites, so the session cookie that holds the OAuth `state` would not be sent back to the other one.
+   > Always start the flow at **http://127.0.0.1:5000/login/github**.
+
 3. **Register the app:**
    - Click **"Register application"**
    - You'll see:
@@ -206,40 +214,43 @@ Before starting this exercise, complete:
 
 ### Part 2: Configure Your App
 
-Open `app.py` and update these lines:
+The app reads the credentials **only from environment variables** (`GITHUB_CLIENT_ID` and
+`GITHUB_CLIENT_SECRET`). Do **not** paste them into `app.py`: anything in the code ends up in Git.
+If either variable is missing, the app stops at startup with a `Missing GITHUB_CLIENT_ID ...` message.
 
-```python
-github = oauth.register(
-    name='github',  # TODO: Fill this in
-    client_id='YOUR_CLIENT_ID_HERE',  # TODO: Paste your Client ID
-    client_secret='YOUR_CLIENT_SECRET_HERE',  # TODO: Paste your Client Secret
-    # ... rest of config
-)
-```
+Set them **in the same terminal** where you will run `python app.py` (they only last for that terminal session):
 
-**Security Best Practice:**
-
-In production, use **environment variables**:
-
-```python
-import os
-
-client_id=os.getenv('GITHUB_CLIENT_ID'),
-client_secret=os.getenv('GITHUB_CLIENT_SECRET'),
-```
-
-Then run:
 ```bash
-export GITHUB_CLIENT_ID="Iv1.abc123..."  # Linux/Mac
+# Linux / macOS (bash, zsh)
+export GITHUB_CLIENT_ID="Iv1.abc123..."
 export GITHUB_CLIENT_SECRET="1a2b3c4d..."
+```
 
-# Windows CMD
-set GITHUB_CLIENT_ID=Iv1.abc123...
-set GITHUB_CLIENT_SECRET=1a2b3c4d...
-
+```powershell
 # Windows PowerShell
 $env:GITHUB_CLIENT_ID="Iv1.abc123..."
 $env:GITHUB_CLIENT_SECRET="1a2b3c4d..."
+```
+
+```bat
+:: Windows CMD (no quotes, no spaces around =)
+set GITHUB_CLIENT_ID=Iv1.abc123...
+set GITHUB_CLIENT_SECRET=1a2b3c4d...
+```
+
+Then start the app and open **http://127.0.0.1:5000/login/github** in the browser.
+
+The `.env.example` file at the root of the repo lists every variable the exercises use
+(`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and optionally `FLASK_SECRET_KEY` and `JWT_SECRET_KEY`).
+It is only a reference: the app does **not** load it automatically, so you still need to set the
+variables with the commands above. If `FLASK_SECRET_KEY` / `JWT_SECRET_KEY` are not set, the app
+generates random ones at startup (tokens stop working when you restart it).
+
+This is how the app uses them:
+
+```python
+client_id=os.environ['GITHUB_CLIENT_ID'],
+client_secret=os.environ['GITHUB_CLIENT_SECRET'],
 ```
 
 ---
@@ -268,19 +279,21 @@ $env:GITHUB_CLIENT_SECRET="1a2b3c4d..."
 
 ### TODOs in app.py
 
-You need to fill in **7 strategic blanks**:
+You need to fill in **8 blanks** (`_____`). The secrets (`app.secret_key`, `client_id`,
+`client_secret`) are **not** blanks: they are read from environment variables (see Part 2).
 
-1. **Line 12**: Set `app.secret_key` for session management
-2. **Line 21**: Set OAuth provider name (`'github'`)
-3. **Line 22**: Set your GitHub `client_id`
-4. **Line 23**: Set your GitHub `client_secret`
-5. **Line 53**: Generate callback URL with `url_for()`
-6. **Line 56**: Call `github.authorize_redirect()`
-7. **Line 76**: Exchange code for token with `authorize_access_token()`
-8. **Line 79**: Fetch user profile from GitHub API
-9. **Line 101**: Create JWT token with `create_access_token()`
-10. **Line 114**: Set HTTP method for `/profile` endpoint
-11. **Line 129**: Get current user from JWT with `get_jwt_identity()`
+| # | Where (function / section) | What to write |
+|---|----------------------------|---------------|
+| 1 | `oauth.register(...)` (line 32) | Provider name: `'github'` |
+| 2 | `login_github()` (line 86) | Endpoint for the callback URL: `url_for('callback', _external=True)` |
+| 3 | `login_github()` (line 90) | Redirect to GitHub: `github.authorize_redirect(redirect_uri)` |
+| 4 | `callback()` (line 112) | Exchange the code for a token: `github.authorize_access_token()` |
+| 5 | `callback()` (line 116) | GitHub API endpoint for the profile: `github.get('user')` |
+| 6 | `callback()` (line 138) | Create our JWT: `create_access_token(identity=username)` |
+| 7 | `@app.route('/profile', ...)` (line 159) | HTTP method: `'GET'` |
+| 8 | `profile()` (line 175) | Read the user from the JWT: `get_jwt_identity()` |
+
+(Line numbers refer to the original `app.py`; search for `_____` if they have shifted.)
 
 ### Key Concepts to Implement
 
@@ -402,7 +415,7 @@ Create JWT   ─────────►  Use JWT token
 
 ```python
 # Flask sessions are needed for OAuth state management
-app.secret_key = 'your-secret-key'
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
 
 # Authlib stores temporary OAuth data in session:
 # - state (CSRF protection)
@@ -417,8 +430,11 @@ def logout():
 ```
 
 **Session vs JWT:**
-- **Session**: Temporary, server-side, OAuth flow only
-- **JWT**: Long-lived, client-side, API authentication
+- **Session**: Temporary, OAuth flow only. Flask's default session is a **signed cookie stored in the
+  browser** (client-side): `secret_key` prevents tampering, but the content is only base64-encoded, not
+  encrypted, so never put secrets in it.
+- **JWT**: Short-lived (the solution uses `JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)`), sent by the
+  client in the `Authorization` header, API authentication
 
 ---
 
@@ -635,8 +651,10 @@ GitHub error: The redirect_uri MUST match the registered callback URL for this a
 **Solution:**
 - Check GitHub OAuth App settings
 - Callback URL must **exactly** match: `http://127.0.0.1:5000/callback`
+- Start the flow at `http://127.0.0.1:5000/login/github` (the app builds `redirect_uri` from the host you used)
 - Common mistakes:
-  - `http://localhost:5000/callback` ≠ `http://127.0.0.1:5000/callback`
+  - `http://localhost:5000/callback` ≠ `http://127.0.0.1:5000/callback` (GitHub compares the exact string,
+    and the browser treats them as different sites)
   - `https://` vs `http://`
   - Trailing slash: `/callback/` vs `/callback`
 
@@ -666,7 +684,7 @@ RuntimeError: The session is unavailable because no secret key was set.
 **Solution:**
 ```python
 # Add this to your app
-app.secret_key = 'your-secret-key-change-in-production'
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
 ```
 
 ### Issue 4: "OAuth Callback Never Happens"
@@ -832,32 +850,37 @@ def link_callback():
 
 ### 5. Add PKCE for Enhanced Security
 
-Implement Proof Key for Code Exchange (OAuth 2.1):
+Implement Proof Key for Code Exchange (PKCE), which OAuth 2.1 makes mandatory for every client.
+
+**How it works:**
+1. Before redirecting, the app creates a random secret, the `code_verifier`, and keeps it.
+2. It sends only its hash to the authorization server: `code_challenge = BASE64URL(SHA256(code_verifier))` with `code_challenge_method=S256`.
+3. When exchanging the code for a token, the app sends the original `code_verifier`. The server hashes it and checks it matches, so a stolen authorization code is useless without the verifier.
+
+**With Authlib it is one line** — add `code_challenge_method` to `client_kwargs`:
 
 ```python
-from authlib.common.security import generate_token
-
-@app.route('/login/github/pkce')
-def login_github_pkce():
-    # Generate code verifier and challenge
-    code_verifier = generate_token(48)
-    session['code_verifier'] = code_verifier
-
-    redirect_uri = url_for('callback_pkce', _external=True)
-    return github.authorize_redirect(
-        redirect_uri,
-        code_challenge=code_verifier,
-        code_challenge_method='S256'
-    )
-
-@app.route('/callback/pkce')
-def callback_pkce():
-    code_verifier = session.pop('code_verifier', None)
-    token = github.authorize_access_token(
-        code_verifier=code_verifier
-    )
-    # ... rest of callback logic
+github = oauth.register(
+    name='github',
+    # ... same settings as before ...
+    client_kwargs={'scope': 'user:email', 'code_challenge_method': 'S256'},
+)
 ```
+
+Authlib then generates the `code_verifier`, stores it in the session, sends the `code_challenge` in the redirect and the `code_verifier` in the token request. `/login/github` and `/callback` don't change.
+
+**What Authlib computes for you** (to understand it, not needed in the app):
+
+```python
+import base64, hashlib, secrets
+
+code_verifier = secrets.token_urlsafe(48)
+code_challenge = base64.urlsafe_b64encode(
+    hashlib.sha256(code_verifier.encode()).digest()
+).rstrip(b'=').decode()
+```
+
+> Common mistake: sending the `code_verifier` itself as the `code_challenge`. With `S256` the challenge must be the hash, otherwise the server rejects the exchange.
 
 ### 6. Fetch Additional User Data
 

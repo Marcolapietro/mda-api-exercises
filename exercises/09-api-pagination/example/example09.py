@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify, request
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,7 +11,7 @@ from urllib.parse import urlencode
 app = Flask(__name__)
 
 # JWT configuration
-app.config['JWT_SECRET_KEY'] = 'super_secret_jwt_key'
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
 jwt = JWTManager(app)
 
 # Simulated database to store students
@@ -19,11 +20,14 @@ students = {}
 # Generate test users
 def generate_users(students, total):
     """Generates test users with random names"""
+    # These users only exist to have data to paginate (nobody logs in with them).
+    # Hashing one random password once keeps start-up fast: hashing 500 passwords
+    # one by one takes many seconds.
+    unusable_hash = generate_password_hash(secrets.token_hex(16))
     for _ in range(total):
         username = ''.join(random.choices(string.ascii_letters, k=8))
-        password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
         students[username] = {
-            'password': generate_password_hash(password),
+            'password': unusable_hash,
             'api_key': secrets.token_hex(16)
         }
 
@@ -153,4 +157,4 @@ def get_students():
 if __name__ == '__main__':
     # Generate test users at startup
     generate_users(students, 500)  # Generate 500 users to test pagination
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

@@ -1,92 +1,78 @@
-# Configuración inicial
+# Exercise 10: Roles & Permissions (PowerShell)
+
+# 0. Start the app with a known admin password (or use the one printed at start-up):
+#    $env:ADMIN_PASSWORD="admin123"
+#    python app.py
+
 $baseUrl = "http://127.0.0.1:5000"
 $headers = @{
     "Content-Type" = "application/json"
 }
 
-# 1. Registrar usuario admin
-$adminBody = @{
-    username = "admin"
-    password = "admin123"
-    role = "admin"
-} | ConvertTo-Json
-
-Invoke-RestMethod -Method Post -Uri "$baseUrl/register" -Headers $headers -Body $adminBody
-
-# 2. Registrar estudiante
+# 1. Register a student (new users are always students)
 $studentBody = @{
     username = "student1"
     password = "pass123"
-    role = "student"
 } | ConvertTo-Json
 
 Invoke-RestMethod -Method Post -Uri "$baseUrl/register" -Headers $headers -Body $studentBody
 
-# 3. Login como admin
-$pair = "admin:admin123"
-$encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
-$basicAuthHeader = @{
-    Authorization = "Basic $encodedCreds"
-    "Content-Type" = "application/json"
-}
+# 2. Try to register as admin: the role in the body is ignored, you get "role": "student"
+$malloryBody = @{
+    username = "mallory"
+    password = "pass123"
+    role = "admin"
+} | ConvertTo-Json
 
-$adminLogin = Invoke-RestMethod -Method Post -Uri "$baseUrl/login" -Headers $basicAuthHeader
-$adminToken = $adminLogin.access_token
+Invoke-RestMethod -Method Post -Uri "$baseUrl/register" -Headers $headers -Body $malloryBody
 
-# 4. Login como estudiante
-$pair = "student1:pass123"
-$encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
-$basicAuthHeader = @{
-    Authorization = "Basic $encodedCreds"
-    "Content-Type" = "application/json"
-}
+# 3. Login as admin (/login expects a JSON body)
+$adminBody = @{
+    username = "admin"
+    password = "admin123"
+} | ConvertTo-Json
 
-$studentLogin = Invoke-RestMethod -Method Post -Uri "$baseUrl/login" -Headers $basicAuthHeader
-$studentToken = $studentLogin.access_token
+$adminToken = (Invoke-RestMethod -Method Post -Uri "$baseUrl/login" -Headers $headers -Body $adminBody).access_token
 
-# 5. Headers con token para admin
+# 4. Login as student
+$studentToken = (Invoke-RestMethod -Method Post -Uri "$baseUrl/login" -Headers $headers -Body $studentBody).access_token
+
 $adminAuthHeaders = @{
     Authorization = "Bearer $adminToken"
     "Content-Type" = "application/json"
 }
-
-# 6. Headers con token para estudiante
 $studentAuthHeaders = @{
     Authorization = "Bearer $studentToken"
     "Content-Type" = "application/json"
 }
 
-# 7. Usar el admin dashboard
+# 5. Admin dashboard as admin (expected: 200)
 Invoke-RestMethod -Method Get -Uri "$baseUrl/admin/dashboard" -Headers $adminAuthHeaders
 
-# 8. Intentar acceder al admin dashboard con usuario estudiante
-Invoke-RestMethod -Method Get -Uri "$baseUrl/admin/dashboard" -Headers $studentAuthHeaders
+# 6. Admin dashboard as student (expected: 403)
+try {
+    Invoke-RestMethod -Method Get -Uri "$baseUrl/admin/dashboard" -Headers $studentAuthHeaders
+} catch {
+    Write-Host "Expected error: $($_.Exception.Message)"
+}
 
-# 9. Acceder a datos de estudiante
+# 7. Student data as student (expected: 200)
 Invoke-RestMethod -Method Get -Uri "$baseUrl/student/data" -Headers $studentAuthHeaders
 
-# 10. Ver lista de usuarios (como admin)
-Invoke-RestMethod -Method Get -Uri "$baseUrl/usuarios" -Headers $adminAuthHeaders
+# 8. List users with pagination
+Invoke-RestMethod -Method Get -Uri "$baseUrl/users?page=1&per_page=5" -Headers $adminAuthHeaders
 
-# 11. Ver lista de usuarios con paginación
-Invoke-RestMethod -Method Get -Uri "$baseUrl/usuarios?page=1&per_page=5" -Headers $adminAuthHeaders
+# 9. Try to update a user as a student (expected: 403)
+$hackBody = @{ password = "hacked" } | ConvertTo-Json
+try {
+    Invoke-RestMethod -Method Put -Uri "$baseUrl/users/admin" -Headers $studentAuthHeaders -Body $hackBody
+} catch {
+    Write-Host "Expected error: $($_.Exception.Message)"
+}
 
-# 12. Crear nuevo usuario (como admin)
-$newUserBody = @{
-    username = "student2"
-    password = "pass456"
-    role = "student"
-} | ConvertTo-Json
+# 10. Promote student1 to admin (admins only) - from now on student1's token gets admin access
+$promoteBody = @{ role = "admin" } | ConvertTo-Json
+Invoke-RestMethod -Method Put -Uri "$baseUrl/users/student1" -Headers $adminAuthHeaders -Body $promoteBody
 
-Invoke-RestMethod -Method Post -Uri "$baseUrl/usuarios" -Headers $adminAuthHeaders -Body $newUserBody
-
-# 13. Actualizar usuario (como admin)
-$updateBody = @{
-    password = "newpass"
-} | ConvertTo-Json
-
-Invoke-RestMethod -Method Put -Uri "$baseUrl/usuarios/student1" -Headers $adminAuthHeaders -Body $updateBody
-
-# 14. Eliminar usuario (como admin)
-Invoke-RestMethod -Method Delete -Uri "$baseUrl/usuarios/student2" -Headers $adminAuthHeaders
-# Exercise 10: Roles & Permissions (PowerShell)
+# 11. Delete a user (admins only)
+Invoke-RestMethod -Method Delete -Uri "$baseUrl/users/mallory" -Headers $adminAuthHeaders

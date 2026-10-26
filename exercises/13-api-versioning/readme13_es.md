@@ -256,23 +256,25 @@ Indica a los clientes qué versión están usando
 API-Version: v2
 ```
 
-**Cabecera `Deprecation` (RFC 8594):**
-Advierte a los clientes que la versión está deprecada
+**Cabecera `Deprecation` (RFC 9745):**
+Indica a los clientes que la versión está deprecada y desde cuándo: `@` seguido de un timestamp Unix (aquí, 1 de enero de 2026)
 ```
-Deprecation: true
+Deprecation: @1767225600
 ```
 
 **Cabecera `Sunset` (RFC 8594):**
-Indica cuándo se eliminará la versión
+Indica a los clientes cuándo dejará de funcionar la versión, como fecha HTTP
 ```
-Sunset: 2025-06-01
+Sunset: Wed, 30 Jun 2027 00:00:00 GMT
 ```
 
-**Cabecera `Warning`:**
-Proporciona aviso de deprecación legible
+**Cabecera `Link` con `rel="successor-version"`:**
+Indica a los clientes qué versión sustituye a esta
 ```
-Warning: 299 - "API v1 está deprecada. Por favor migra a v2."
+Link: </api/v2>; rel="successor-version"
 ```
+
+> La antigua cabecera `Warning` (`Warning: 299 - "..."`) está obsoleta desde el RFC 9111 (2022): no la uses en APIs nuevas.
 
 ## Parte 2: Implementando Cabeceras de Versión (15 minutos)
 
@@ -288,30 +290,32 @@ def add_version_headers(response, version):
     response.headers['API-Version'] = _____
 
     if API_VERSIONS[version]['status'] == 'deprecated':
-        # TODO: Agregar cabecera Deprecation (valor debe ser "true")
+        # TODO: Agregar cabecera Deprecation (RFC 9745): "@" + cuándo se deprecó, como timestamp Unix
         response.headers['Deprecation'] = _____
 
-        # TODO: Agregar cabecera Sunset con la fecha de deprecación
+        # TODO: Agregar cabecera Sunset (RFC 8594): cuándo dejará de funcionar, como fecha HTTP
         response.headers['Sunset'] = _____
 
-        # TODO: Agregar cabecera Warning con aviso de deprecación
-        response.headers['Warning'] = _____
+        # TODO: Agregar cabecera Link apuntando a la versión que sustituye a esta
+        response.headers['Link'] = _____
 
     return response
 ```
 
+Las funciones `to_epoch()` y `to_http_date()` (definidas justo después de `API_VERSIONS`) convierten las fechas guardadas como `'2026-01-01'` al formato que necesitan las cabeceras.
+
 **Tus tareas:**
-1. Completa `API-Version` con el parámetro version
-2. Agrega cabecera `Deprecation` con valor `"true"`
-3. Agrega cabecera `Sunset` con la fecha de sunset desde `API_VERSIONS`
-4. Agrega cabecera `Warning` con el aviso de deprecación
+1. Completa la cabecera `API-Version` con el parámetro version
+2. Agrega la cabecera `Deprecation`: `@` seguido de `to_epoch(...)` de la fecha de deprecación
+3. Agrega la cabecera `Sunset`: `to_http_date(...)` de la fecha de sunset de `API_VERSIONS`
+4. Agrega la cabecera `Link` apuntando a la versión sucesora
 
 **Solución:**
 ```python
 response.headers['API-Version'] = version
-response.headers['Deprecation'] = "true"
-response.headers['Sunset'] = API_VERSIONS[version]['sunset_date']
-response.headers['Warning'] = f'299 - "{API_VERSIONS[version]["deprecation_notice"]}"'
+response.headers['Deprecation'] = f"@{to_epoch(API_VERSIONS[version]['deprecation_date'])}"
+response.headers['Sunset'] = to_http_date(API_VERSIONS[version]['sunset_date'])
+response.headers['Link'] = f'<{API_VERSIONS[version]["successor"]}>; rel="successor-version"'
 ```
 
 ## Parte 3: Implementando Versión 1 (20 minutos)
@@ -481,9 +485,9 @@ curl -i http://127.0.0.1:5000/api/v1/notes \
 **Revisa las cabeceras - deberías ver advertencias de deprecación:**
 ```
 API-Version: v1
-Deprecation: true
-Sunset: 2025-06-01
-Warning: 299 - "API v1 está deprecada. Por favor migra a v2."
+Deprecation: @1767225600
+Sunset: Wed, 30 Jun 2027 00:00:00 GMT
+Link: </api/v2>; rel="successor-version"
 ```
 
 **Cuerpo de respuesta (formato v1 - array simple):**
@@ -603,12 +607,16 @@ curl http://127.0.0.1:5000/api/versions
   "versions": {
     "v1": {
       "status": "deprecated",
-      "sunset_date": "2025-06-01",
+      "deprecation_date": "2026-01-01",
+      "sunset_date": "2027-06-30",
+      "successor": "/api/v2",
       "deprecation_notice": "API v1 está deprecada. Por favor migra a v2."
     },
     "v2": {
       "status": "current",
+      "deprecation_date": null,
       "sunset_date": null,
+      "successor": null,
       "deprecation_notice": null
     }
   },

@@ -1,3 +1,5 @@
+REM Exercise 8: Creating CRUD Endpoints (Windows CMD)
+
 REM 1. Register user
 curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"user1\",\"password\":\"pass123\"}" http://127.0.0.1:5000/users
 
@@ -18,4 +20,3 @@ curl -X DELETE -H "Authorization: Bearer TOKEN" http://127.0.0.1:5000/users/user
 
 REM 7. View profile
 curl -X GET -H "Authorization: Bearer TOKEN" http://127.0.0.1:5000/profile
-REM Exercise 8: Creating CRUD Endpoints (Windows CMD)

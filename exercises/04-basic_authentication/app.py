@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -100,5 +101,5 @@ def internal_error(e):
 
 if __name__ == '__main__':
     # Run the application in debug mode to facilitate testing
-    # WARNING: Do not use debug=True in production!!
-    app.run(debug=True)
+    # Debug mode only when FLASK_DEBUG=1 — never in production
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

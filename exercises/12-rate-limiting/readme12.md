@@ -203,7 +203,26 @@ for i in {1..6}; do
 done
 ```
 
+Windows PowerShell (5.1 and 7):
+```powershell
+for ($i = 1; $i -le 6; $i++) {
+  $body = @{ username = "user$i"; password = "pass123" } | ConvertTo-Json
+  try {
+    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:5000/register" `
+      -ContentType "application/json" -Body $body
+    Write-Host "user$i -> $($r.StatusCode)"
+  } catch {
+    # Windows PowerShell 5.1 throws on any non-2xx status: read the status code from the error
+    $resp = $_.Exception.Response
+    if (-not $resp) { throw }  # no HTTP response at all (is the app running?)
+    Write-Host "user$i -> $($resp.StatusCode.value__)"
+  }
+}
+```
+
 **Expected:** First 5 succeed, 6th returns HTTP 429 (Rate limit exceeded)
+
+> This test uses up the hour's 5 registrations for your IP. Restart the app before Task 3.2, or its registrations will also return 429.
 
 ### Task 2.2: Protect Login Endpoint
 
@@ -329,11 +348,19 @@ Endpoints:
 
 ### Task 3.2: Test Registration Rate Limit
 
+> **Already ran the Task 2.1 test?** Those 6 attempts used up this hour's 5 registrations for your IP, so Step 1 below would return 429 — even with a new username, because the limit is per client IP, not per username. Restart the app first (`Ctrl+C`, then `python app.py`): the `memory://` storage starts empty again (counters *and* registered users).
+
 **Step 1: Register a user (should succeed):**
 ```bash
 curl -X POST http://127.0.0.1:5000/register \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password123"}'
+```
+
+Windows PowerShell (5.1 and 7):
+```powershell
+$body = @{ username = "alice"; password = "password123" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/register" -ContentType "application/json" -Body $body
 ```
 
 **Expected response:**
@@ -344,15 +371,27 @@ curl -X POST http://127.0.0.1:5000/register \
 ```
 
 **Step 2: Try to register 5 more users rapidly:**
-```bash
-# Windows PowerShell:
-for ($i=1; $i -le 5; $i++) {
-  curl -X POST http://127.0.0.1:5000/register `
-    -H "Content-Type: application/json" `
-    -d "{`"username`":`"user$i`",`"password`":`"pass123`"}"
-}
 
-# Mac/Linux:
+Windows PowerShell (5.1 and 7):
+```powershell
+for ($i = 1; $i -le 5; $i++) {
+  $body = @{ username = "user$i"; password = "pass123" } | ConvertTo-Json
+  try {
+    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:5000/register" `
+      -ContentType "application/json" -Body $body
+    Write-Host "user$i -> $($r.StatusCode)  X-RateLimit-Remaining: $($r.Headers['X-RateLimit-Remaining'])"
+  } catch {
+    # Windows PowerShell 5.1 throws on any non-2xx status: read the response from the error
+    $resp = $_.Exception.Response
+    if (-not $resp) { throw }  # no HTTP response at all (is the app running?)
+    Write-Host "user$i -> $($resp.StatusCode.value__)  Retry-After: $($resp.Headers.GetValues('Retry-After'))"
+    Write-Host $_.ErrorDetails.Message  # the JSON body of the error
+  }
+}
+```
+
+Mac/Linux:
+```bash
 for i in {1..5}; do
   curl -X POST http://127.0.0.1:5000/register \
     -H "Content-Type: application/json" \
@@ -361,38 +400,52 @@ for i in {1..5}; do
 done
 ```
 
-**Expected:** After 5 registrations in the same hour, you'll get:
+**Expected:** Step 1 already used one of the 5 registrations, so `user1`-`user4` succeed (201) and `user5` gets:
 ```json
 {
   "error": "Rate limit exceeded",
   "message": "5 per 1 hour",
-  "retry_after": "Check the Retry-After header"
+  "retry_after_seconds": 3599
 }
 ```
 
 **HTTP Status:** `429 Too Many Requests`
 
+`retry_after_seconds` (and the `Retry-After` header) is the number of seconds until the one-hour window resets: about 3600 right after Step 1, and lower the longer you wait.
+
 ### Task 3.3: Inspect Rate Limit Headers
 
-Every response includes rate limit information in the headers.
+Every rate-limited response includes the limit information in its headers (the app enables them with `headers_enabled=True`). Exempt endpoints such as `/health` don't have a limit, so they don't send these headers.
 
-**Make a request:**
+You need an access token for `/api/data`: run **Task 3.4 Step 1** first, then come back here.
+
+**Make a request to a limited endpoint:**
 ```bash
-curl -i http://127.0.0.1:5000/health
+curl -i http://127.0.0.1:5000/api/data -H "Authorization: Bearer YOUR_TOKEN"
 ```
+
+Windows PowerShell (5.1 and 7), with `$TOKEN` set in Task 3.4 Step 1:
+```powershell
+$r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5000/api/data" -Headers @{ Authorization = "Bearer $TOKEN" }
+$r.StatusCode
+'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'Retry-After' |
+  ForEach-Object { "${_}: $($r.Headers[$_])" }
+```
+> You can also use `curl.exe -i ...` (not `curl`: in PowerShell 5.1, `curl` is an alias of `Invoke-WebRequest`).
 
 **Look for these headers:**
 ```
-X-RateLimit-Limit: 200
-X-RateLimit-Remaining: 199
+X-RateLimit-Limit: 20
+X-RateLimit-Remaining: 19
 X-RateLimit-Reset: 1704672000
+Retry-After: 60
 ```
 
 **Header meanings:**
 - `X-RateLimit-Limit`: Total requests allowed in the window
 - `X-RateLimit-Remaining`: Requests left before hitting the limit
 - `X-RateLimit-Reset`: Unix timestamp when the limit resets
-- `Retry-After`: Seconds to wait before retrying (only on 429 responses)
+- `Retry-After`: Seconds until the window resets — on a `429` this is how long the client must wait
 
 **Clients should use these headers to:**
 1. Display remaining quota to users
@@ -410,17 +463,33 @@ curl -X POST http://127.0.0.1:5000/login \
 
 Save the `access_token` from the response.
 
-**Step 2: Simulate brute force attack (11 rapid login attempts):**
-```bash
-# Windows PowerShell:
-for ($i=1; $i -le 11; $i++) {
-  Write-Host "Attempt $i"
-  curl -X POST http://127.0.0.1:5000/login `
-    -H "Content-Type: application/json" `
-    -d '{"username":"alice","password":"wrongpassword"}'
-}
+Windows PowerShell (5.1 and 7) — this saves the token in `$TOKEN` for the next tasks:
+```powershell
+$body = @{ username = "alice"; password = "password123" } | ConvertTo-Json
+$TOKEN = (Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/login" -ContentType "application/json" -Body $body).access_token
+$TOKEN
+```
 
-# Mac/Linux:
+**Step 2: Simulate brute force attack (11 rapid login attempts):**
+
+Windows PowerShell (5.1 and 7):
+```powershell
+$body = @{ username = "alice"; password = "wrongpassword" } | ConvertTo-Json
+for ($i = 1; $i -le 11; $i++) {
+  try {
+    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:5000/login" `
+      -ContentType "application/json" -Body $body
+    Write-Host "Attempt $i -> $($r.StatusCode)"
+  } catch {
+    $resp = $_.Exception.Response
+    if (-not $resp) { throw }
+    Write-Host "Attempt $i -> $($resp.StatusCode.value__)  X-RateLimit-Remaining: $($resp.Headers.GetValues('X-RateLimit-Remaining'))  Retry-After: $($resp.Headers.GetValues('Retry-After'))"
+  }
+}
+```
+
+Mac/Linux:
+```bash
 for i in {1..11}; do
   echo "Attempt $i"
   curl -X POST http://127.0.0.1:5000/login \
@@ -430,34 +499,48 @@ for i in {1..11}; do
 done
 ```
 
-**Expected:** Attempts 1-10 return 401 (Unauthorized), attempt 11 returns 429 (Rate limit exceeded).
+**Expected:** Every request to `/login` counts towards the 10 per minute, successful or not, and the Step 1 login already used one. So attempts 1-9 return 401 (Unauthorized) and attempts 10-11 return 429 (Rate limit exceeded).
+
+> If more than a minute passed between Step 1 and Step 2, the window has already reset: attempts 1-10 return 401 and attempt 11 returns 429.
 
 **Security benefit:** An attacker can only try 10 passwords per minute, making brute force impractical.
 
 ### Task 3.5: Test Authenticated Endpoints
 
-**Step 1: Login and get a valid token:**
+**Step 1: Get a valid token:**
+
+Reuse the token from Task 3.4 Step 1 (it is valid for 1 hour). If you need a new one, **wait one minute first**: Task 3.4 used up this minute's logins, so logging in right now returns 429.
 ```bash
 curl -X POST http://127.0.0.1:5000/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password123"}'
 ```
 
-Copy the `access_token`.
+Copy the `access_token`. (In PowerShell, run the Task 3.4 Step 1 commands again to refresh `$TOKEN`.)
 
 **Step 2: Test the `/api/data` endpoint (limit: 20 per minute):**
+
+Windows PowerShell (5.1 and 7):
+```powershell
+# Only if $TOKEN is not set yet in this window:
+# $TOKEN = "YOUR_TOKEN_HERE"
+
+for ($i = 1; $i -le 21; $i++) {
+  try {
+    $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5000/api/data" `
+      -Headers @{ Authorization = "Bearer $TOKEN" }
+    Write-Host "Request $i -> $($r.StatusCode)  X-RateLimit-Remaining: $($r.Headers['X-RateLimit-Remaining'])"
+  } catch {
+    $resp = $_.Exception.Response
+    if (-not $resp) { throw }
+    Write-Host "Request $i -> $($resp.StatusCode.value__)  Retry-After: $($resp.Headers.GetValues('Retry-After'))"
+  }
+}
+```
+
+Mac/Linux:
 ```bash
 # Replace YOUR_TOKEN_HERE with your actual token
-TOKEN="YOUR_TOKEN_HERE"
-
-# Windows PowerShell:
-for ($i=1; $i -le 21; $i++) {
-  Write-Host "Request $i"
-  curl http://127.0.0.1:5000/api/data `
-    -H "Authorization: Bearer $TOKEN"
-}
-
-# Mac/Linux:
 TOKEN="YOUR_TOKEN_HERE"
 for i in {1..21}; do
   echo "Request $i"
@@ -469,20 +552,30 @@ done
 
 **Expected:** Requests 1-20 succeed, request 21 returns 429.
 
+> If you called `/api/data` in Task 3.3 less than a minute ago, that request counts too, so the 429 arrives one request earlier.
+
 ### Task 3.6: Test Expensive Search Endpoint
 
 **Test the strict limit on search (5 per minute):**
+
+Windows PowerShell (5.1 and 7):
+```powershell
+for ($i = 1; $i -le 6; $i++) {
+  try {
+    $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5000/api/search?q=test" `
+      -Headers @{ Authorization = "Bearer $TOKEN" }
+    Write-Host "Search $i -> $($r.StatusCode)  X-RateLimit-Remaining: $($r.Headers['X-RateLimit-Remaining'])"
+  } catch {
+    $resp = $_.Exception.Response
+    if (-not $resp) { throw }
+    Write-Host "Search $i -> $($resp.StatusCode.value__)  Retry-After: $($resp.Headers.GetValues('Retry-After'))"
+  }
+}
+```
+
+Mac/Linux:
 ```bash
 TOKEN="YOUR_TOKEN_HERE"
-
-# Windows PowerShell:
-for ($i=1; $i -le 6; $i++) {
-  Write-Host "Search $i"
-  curl "http://127.0.0.1:5000/api/search?q=test" `
-    -H "Authorization: Bearer $TOKEN"
-}
-
-# Mac/Linux:
 for i in {1..6}; do
   echo "Search $i"
   curl "http://127.0.0.1:5000/api/search?q=test" \
@@ -498,17 +591,23 @@ done
 ### Task 3.7: Test Exempt Endpoint
 
 **Test the unlimited endpoint:**
+
+Make 100 requests rapidly - all should succeed.
+
+Windows PowerShell (5.1 and 7):
+```powershell
+$ok = 0
+for ($i = 1; $i -le 100; $i++) {
+  $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5000/api/unlimited" `
+    -Headers @{ Authorization = "Bearer $TOKEN" }
+  if ($r.StatusCode -eq 200) { $ok++ }
+}
+Write-Host "$ok of 100 requests returned 200"
+```
+
+Mac/Linux:
 ```bash
 TOKEN="YOUR_TOKEN_HERE"
-
-# Make 100 requests rapidly - all should succeed
-# Windows PowerShell:
-for ($i=1; $i -le 100; $i++) {
-  curl http://127.0.0.1:5000/api/unlimited `
-    -H "Authorization: Bearer $TOKEN"
-}
-
-# Mac/Linux:
 for i in {1..100}; do
   curl http://127.0.0.1:5000/api/unlimited \
     -H "Authorization: Bearer $TOKEN" -s | head -n 1
@@ -639,10 +738,13 @@ def get_data():
 
 ### Best Practice 2: Always Include Rate Limit Headers
 
-Clients need to know their quota! Flask-Limiter automatically includes:
+Clients need to know their quota! Flask-Limiter sends these headers **only when `headers_enabled=True`** (already set in `app.py`):
 - `X-RateLimit-Limit`
 - `X-RateLimit-Remaining`
 - `X-RateLimit-Reset`
+- `Retry-After`
+
+> The IETF is standardising `RateLimit` / `RateLimit-Policy` headers to replace the `X-RateLimit-*` de facto ones.
 
 **Best practice for clients:**
 ```python
@@ -667,10 +769,12 @@ Don't just return "429 Too Many Requests" - explain what happened!
 ```python
 @app.errorhandler(429)
 def ratelimit_handler(e):
+    current = limiter.current_limit
+    retry_after = max(int(current.reset_at - time.time()), 1) if current else None
     return jsonify({
         'error': 'Rate limit exceeded',
         'message': str(e.description),  # e.g., "5 per 1 hour"
-        'retry_after': 'Check the Retry-After header'
+        'retry_after_seconds': retry_after  # same value as the Retry-After header
     }), 429
 ```
 
@@ -679,7 +783,7 @@ def ratelimit_handler(e):
 {
   "error": "Rate limit exceeded",
   "message": "5 per 1 hour",
-  "retry_after": "Check the Retry-After header"
+  "retry_after_seconds": 3540
 }
 ```
 
@@ -795,13 +899,14 @@ def ratelimit_handler(e):
 **Possible causes:**
 1. **Decorator order matters:**
    ```python
-   # WRONG - limiter runs before JWT, so unauthenticated requests pass
+   # WRONG - the outer decorator runs first: JWT rejects requests with a missing
+   # or invalid token BEFORE the limiter counts them, so token brute-force is never limited
    @jwt_required()
    @limiter.limit("5 per minute")
    def endpoint():
        pass
 
-   # CORRECT - limiter runs first
+   # CORRECT - the limiter runs first and counts every request, valid token or not
    @limiter.limit("5 per minute")
    @jwt_required()
    def endpoint():
@@ -834,9 +939,10 @@ def ratelimit_handler(e):
 
 **Symptom:** No `X-RateLimit-*` headers in responses.
 
-**Cause:** Flask-Limiter automatically adds headers, but they may not show in all clients.
-
-**Solution:** Use `curl -i` or check browser DevTools Network tab to see headers.
+**Causes:**
+1. Flask-Limiter only sends them when `headers_enabled=True` is passed to `Limiter(...)` (it is off by default).
+2. The endpoint is exempt (e.g. `/health`): no limit, so no headers.
+3. Your client hides headers: use `curl -i` (`curl.exe -i` in PowerShell) or the browser DevTools Network tab.
 
 ### Issue 5: "429 Too Many Requests" for Health Checks
 

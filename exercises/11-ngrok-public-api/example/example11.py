@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -33,7 +34,9 @@ def info():
         'host': request.host,
         'path': request.path,
         'method': request.method,
-        'headers': dict(request.headers)
+        # Never echo credentials back: this endpoint is public once ngrok is running
+        'headers': {k: v for k, v in request.headers.items()
+                    if k.lower() not in ('authorization', 'cookie', 'x-api-key')}
     }), 200
 
 
@@ -265,4 +268,4 @@ if __name__ == '__main__':
     print("\nFor detailed instructions, see readme11.md")
     print("="*70 + "\n")
 
-    app.run(debug=True, port=5000)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1", port=5000)

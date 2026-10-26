@@ -1,3 +1,5 @@
+import os
+import secrets
 from flask import Flask, jsonify, request
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -6,7 +8,7 @@ import requests
 app = Flask(__name__)
 
 # JWT Configuration
-app.config['JWT_SECRET_KEY'] = 'super_secret_jwt_key_change_in_production'
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
 
 jwt = JWTManager(app)
 
@@ -17,7 +19,7 @@ users = {
 
 # OpenWeatherMap Configuration
 # Get your free API key from https://openweathermap.org/api
-OPENWEATHER_API_KEY = 'YOUR_API_KEY_HERE'  # Replace with your actual API key
+OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', 'YOUR_API_KEY_HERE')  # set it as an environment variable, never in the code
 GEOCODING_API_URL = 'https://api.openweathermap.org/geo/1.0/direct'
 WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather'
 
@@ -127,7 +129,7 @@ def weather():
     if OPENWEATHER_API_KEY == 'YOUR_API_KEY_HERE':
         return jsonify({
             'error': 'OpenWeatherMap API key not configured',
-            'message': 'Please set OPENWEATHER_API_KEY in app.py',
+            'message': 'Please set the OPENWEATHER_API_KEY environment variable',
             'help': 'Get a free API key at https://openweathermap.org/api'
         }), 500
 
@@ -139,13 +141,15 @@ def weather():
     # Format: "CityName,CountryCode" (country code is optional but recommended)
     query = f"{city},{country_code}" if country_code else city
 
-    # Build the geocoding API URL with query and API key
-    geocoding_url = f'{GEOCODING_API_URL}?q={query}&appid={OPENWEATHER_API_KEY}&limit=1'
+    # Build the geocoding query parameters as a dict.
+    # requests URL-encodes every value, so "New York" or "Paris&limit=50" stay ONE parameter
+    # (an f-string URL would let the user inject extra parameters).
+    geo_params = {'q': query, 'appid': OPENWEATHER_API_KEY, 'limit': 1}
 
     # Make request to Geocoding API
     try:
-        # Make GET request to geocoding API
-        geo_response = requests.get(geocoding_url)
+        # Make GET request to geocoding API (always set a timeout for outbound calls)
+        geo_response = requests.get(GEOCODING_API_URL, params=geo_params, timeout=10)
 
         # Check if the request was successful
         if geo_response.status_code != 200:
@@ -175,27 +179,37 @@ def weather():
         country = geo_data[0].get('country', 'Unknown')
         state = geo_data[0].get('state', '')  # Some locations have state info
 
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException:
+        # Never return str(e) to the client: it can contain the full URL, including the appid (API key).
+        # Log the details server-side and send a generic message.
+        app.logger.exception('Geocoding API request failed')
         return jsonify({
             'error': 'Network error',
-            'message': f'Could not connect to Geocoding API: {str(e)}'
+            'message': 'Could not connect to Geocoding API'
         }), 502
-    except (KeyError, IndexError, ValueError) as e:
+    except (KeyError, IndexError, ValueError):
+        app.logger.exception('Invalid response from Geocoding API')
         return jsonify({
             'error': 'Invalid response from Geocoding API',
-            'message': str(e)
+            'message': 'Unexpected response format from the upstream API'
         }), 502
 
     # ========================================================================
     # STEP 2: Get weather data using coordinates
     # ========================================================================
 
-    # Build the weather API URL with coordinates and API key
-    weather_url = f'{WEATHER_API_URL}?lat={latitude}&lon={longitude}&appid={OPENWEATHER_API_KEY}&units=metric&lang=en'
+    # Build the weather query parameters (coordinates and API key)
+    weather_params = {
+        'lat': latitude,
+        'lon': longitude,
+        'appid': OPENWEATHER_API_KEY,
+        'units': 'metric',
+        'lang': 'en',
+    }
 
     try:
         # Make GET request to weather API
-        weather_response = requests.get(weather_url)
+        weather_response = requests.get(WEATHER_API_URL, params=weather_params, timeout=10)
 
         if weather_response.status_code != 200:
             return jsonify({
@@ -236,15 +250,18 @@ def weather():
 
         return jsonify(weather_info), 200
 
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException:
+        # Same rule as above: log server-side, never leak str(e) (it may contain the appid)
+        app.logger.exception('Weather API request failed')
         return jsonify({
             'error': 'Network error',
-            'message': f'Could not connect to Weather API: {str(e)}'
+            'message': 'Could not connect to Weather API'
         }), 502
-    except (KeyError, ValueError) as e:
+    except (KeyError, ValueError):
+        app.logger.exception('Invalid response from Weather API')
         return jsonify({
             'error': 'Invalid response from Weather API',
-            'message': str(e)
+            'message': 'Unexpected response format from the upstream API'
         }), 502
 
 
@@ -267,7 +284,7 @@ if __name__ == '__main__':
     print("="*70)
     print("\n⚠️  IMPORTANT: Configure your OpenWeatherMap API key first!")
     print("   1. Get free API key: https://openweathermap.org/api")
-    print("   2. Replace OPENWEATHER_API_KEY in example07.py")
+    print("   2. Set the OPENWEATHER_API_KEY environment variable")
     print("\nAuthentication endpoints:")
     print("  POST /register  - Register a new user")
     print("  POST /login     - Login and get JWT token")
@@ -275,10 +292,10 @@ if __name__ == '__main__':
     print("\nWeather endpoint (public - no auth required):")
     print("  GET  /weather?city=CityName&country=CountryCode")
     print("\nExamples:")
-    print("  curl http://127.0.0.1:5000/weather?city=Madrid")
-    print("  curl http://127.0.0.1:5000/weather?city=Paris&country=FR")
-    print("  curl http://127.0.0.1:5000/weather?city=London&country=GB")
+    print('  curl "http://127.0.0.1:5000/weather?city=Madrid"')
+    print('  curl "http://127.0.0.1:5000/weather?city=Paris&country=FR"')
+    print('  curl "http://127.0.0.1:5000/weather?city=London&country=GB"')
     print("\nServer running at: http://127.0.0.1:5000")
     print("="*70 + "\n")
 
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

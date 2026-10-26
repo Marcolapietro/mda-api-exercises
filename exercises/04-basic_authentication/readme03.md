@@ -12,7 +12,7 @@ In this exercise, you will develop a simple REST API that manages "user" resourc
 cd exercises/04-basic_authentication
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install Flask Flask-HTTPAuth Werkzeug
+pip install -r requirements.txt
 python app.py
 ```
 
@@ -43,11 +43,10 @@ Once corrected, run the script and perform tests from Postman.
 
 1. **Initialize the Project:**
    ```bash
-   mkdir api-basic-authentication
-   cd api-basic-authentication
-   python3 -m venv venv
+   cd exercises/04-basic_authentication
+   python -m venv venv
    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   pip install Flask Flask-HTTPAuth Werkzeug
+   pip install -r requirements.txt
    ```
 
 2. **Create the API:**
@@ -80,9 +79,11 @@ Once corrected, run the script and perform tests from Postman.
 
 3. **Get List of Users (Without Authentication):**
    ```bash
-   curl http://127.0.0.1:5000/users
+   curl -i http://127.0.0.1:5000/users
    ```
-   This should return a 401 Unauthorized error.
+   This should return `401 Unauthorized` with the header `WWW-Authenticate: Basic realm="Authentication Required"`: that is how the server tells the client which kind of authentication it expects.
+
+> **Windows:** in PowerShell use `curl.exe` instead of `curl`. In CMD single quotes don't work; ready-made commands are in `example/commands_cmd.txt` and `example/commands_powershell.txt`.
 
 ## Points to Consider
 

@@ -6,7 +6,7 @@
 cd exercises/10-roles-permissions
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install Flask Flask-JWT-Extended Flask-Principal Werkzeug
+pip install -r requirements.txt
 python app.py
 ```
 
@@ -28,7 +28,7 @@ python app.py
 
    You can install them with:
    ```bash
-   pip install Flask Flask-JWT-Extended Flask-Principal Werkzeug
+   pip install -r requirements.txt
    ```
 
 2. **Clone the Project:**
@@ -45,10 +45,17 @@ python app.py
 ## Features
 
 ### **User Registration**
-Allows registering new users by assigning them a default or custom role.
+New users are **always** registered as `student`. The role is never read from the request body: accepting it would let anyone register as admin (a *mass assignment* vulnerability). Only an admin can change a user's role, with `PUT /users/<username>`.
+
+### **Admin Account**
+At start-up the app creates one `admin` user. Its password is taken from the `ADMIN_PASSWORD` environment variable; if it is not set, a random password is generated and printed in the console:
+
+```
+Admin user created -> username: admin  password: Xy3...
+```
 
 ### **Login**
-Authenticates users and provides them with a JWT token that will be required to access protected routes.
+Authenticates users and provides them with a JWT token that will be required to access protected routes. The token includes the user's role as a claim. On every request the identity is rebuilt from the token (`Principal(app, use_sessions=False)`), so permissions never depend on a session cookie.
 
 ### **Available Roles**
 1. **Admin:**
@@ -70,7 +77,7 @@ Access to routes is restricted based on the user's role. This is managed through
 1. **User Registration**
    - **Method:** `POST`
    - **Route:** `/register`
-   - **Description:** Registers a new user with a specific role.
+   - **Description:** Registers a new user (always with the `student` role).
 
 2. **Login**
    - **Method:** `POST`
@@ -119,8 +126,12 @@ Access to routes is restricted based on the user's role. This is managed through
 - Generate a valid token and try to access specific routes based on the user's role.
 
 ### **Role Tests**
-1. Create users with different roles.
-2. Try to access restricted routes with each role and verify that restrictions are applied correctly.
+1. Log in as `admin` (password printed at start-up) and as a student you registered.
+2. Try to access restricted routes with each token and verify that restrictions are applied correctly (`/admin/dashboard` must return `403` for a student).
+3. Try to register a user sending `"role": "admin"` in the body: it must still be created as `student`.
+4. As admin, promote that user with `PUT /users/<username>` and `{"role": "admin"}` and check the new access with the token they already have: no need to log in again, because the role is read from the server on every request (the `role` claim inside the token is only informative).
+
+Ready-made commands: `example/commands_cmd.txt` and `example/commands_powershell.txt`.
 
 ### **Common Errors**
 - **Invalid Token:** Make sure to include the JWT token in the `Authorization` header with the format `Bearer <token>`.

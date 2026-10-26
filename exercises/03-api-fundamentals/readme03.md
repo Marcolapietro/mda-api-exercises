@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This exercise introduces core HTTP + JSON API fundamentals using a small Notes API built with Flask. It fits between 02 (Postman) and 03 (Basic Auth) and focuses on clean request/response design and basic validation — no authentication yet.
+This exercise introduces core HTTP + JSON API fundamentals using a small Notes API built with Flask. It fits between 02 (Postman) and 04 (Basic Auth) and focuses on clean request/response design and basic validation — no authentication yet.
 
 ## Learning Objectives
 
@@ -26,7 +26,7 @@ This exercise introduces core HTTP + JSON API fundamentals using a small Notes A
   - Requires `Content-Type: application/json`
   - Body: `{ "title": str, "content": str }`
   - Response: `201` with created note
-  - Errors: `415` (not JSON), `400` (validation errors)
+  - Errors: `415` (not JSON), `400` (malformed JSON or validation errors)
 
 - `GET /notes/<id>`
   - Returns a single note by id
@@ -36,7 +36,8 @@ This exercise introduces core HTTP + JSON API fundamentals using a small Notes A
 
 - Use an in-memory store (Python dict) — no database
 - Validate requests:
-  - Reject non-JSON with `415` and `{ error, message }`
+  - Reject non-JSON with `415` and `{ error, message }` (`application/json; charset=utf-8` is still JSON)
+  - Reject a body that is not valid JSON with `400` and `{ error, message }`
   - Validate required fields with `400` and `{ error, details }`
 - Add simple error handlers for `404`, `405` (consistent shape)
 
@@ -87,17 +88,20 @@ curl -i -X POST http://127.0.0.1:5000/notes \
   -H "Content-Type: application/json" \
   -d '{"title": "First note", "content": "Hello world"}'
 
-# Create note (wrong content-type)
+# Create note (wrong content-type) -> 415
 curl -i -X POST http://127.0.0.1:5000/notes -d 'title=bad'
+
+# Create note (malformed JSON) -> 400
+curl -i -X POST http://127.0.0.1:5000/notes -H "Content-Type: application/json" -d '{"title": '
 
 # List notes
 curl -i http://127.0.0.1:5000/notes
 
-```
-
 # Get note by id
 curl -i http://127.0.0.1:5000/notes/1
 ```
+
+> **Windows:** in PowerShell use `curl.exe` (in PowerShell 5.1 `curl` is an alias of `Invoke-WebRequest`). In CMD, single quotes don't work: use double quotes and escape the inner ones, e.g. `-d "{\"title\": \"First note\", \"content\": \"Hello world\"}"`.
 
 ## Acceptance Criteria
 

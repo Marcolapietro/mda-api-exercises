@@ -193,6 +193,14 @@ Antes de comenzar este ejercicio, completa:
    Authorization callback URL: http://127.0.0.1:5000/callback
    ```
 
+   > **Usa `127.0.0.1` en todas partes, no `localhost`.** La app construye su `redirect_uri` a partir
+   > del host que escribiste en el navegador (`url_for('callback', _external=True)`). Si abres
+   > `http://localhost:5000/login/github`, la app envía `redirect_uri=http://localhost:5000/callback`,
+   > y GitHub la compara **carácter a carácter** con la callback URL registrada, así que la rechaza
+   > ("redirect_uri MUST match"). Además, el navegador trata `localhost` y `127.0.0.1` como sitios
+   > distintos, así que la cookie de sesión que guarda el `state` de OAuth no se enviaría al otro.
+   > Empieza siempre el flujo en **http://127.0.0.1:5000/login/github**.
+
 3. **Registra la app:**
    - Haz clic en **"Register application"**
    - Verás:
@@ -206,40 +214,43 @@ Antes de comenzar este ejercicio, completa:
 
 ### Parte 2: Configurar Tu App
 
-Abre `app.py` y actualiza estas líneas:
+La app lee las credenciales **solo de variables de entorno** (`GITHUB_CLIENT_ID` y
+`GITHUB_CLIENT_SECRET`). **No** las pegues en `app.py`: todo lo que está en el código acaba en Git.
+Si falta alguna de las dos, la app se detiene al arrancar con un mensaje `Missing GITHUB_CLIENT_ID ...`.
 
-```python
-github = oauth.register(
-    name='github',  # TODO: Completar esto
-    client_id='TU_CLIENT_ID_AQUI',  # TODO: Pegar tu Client ID
-    client_secret='TU_CLIENT_SECRET_AQUI',  # TODO: Pegar tu Client Secret
-    # ... resto de la configuración
-)
-```
+Defínelas **en la misma terminal** donde vas a ejecutar `python app.py` (solo duran esa sesión de terminal):
 
-**Mejor Práctica de Seguridad:**
-
-En producción, usa **variables de entorno**:
-
-```python
-import os
-
-client_id=os.getenv('GITHUB_CLIENT_ID'),
-client_secret=os.getenv('GITHUB_CLIENT_SECRET'),
-```
-
-Luego ejecuta:
 ```bash
-export GITHUB_CLIENT_ID="Iv1.abc123..."  # Linux/Mac
+# Linux / macOS (bash, zsh)
+export GITHUB_CLIENT_ID="Iv1.abc123..."
 export GITHUB_CLIENT_SECRET="1a2b3c4d..."
+```
 
-# Windows CMD
-set GITHUB_CLIENT_ID=Iv1.abc123...
-set GITHUB_CLIENT_SECRET=1a2b3c4d...
-
+```powershell
 # Windows PowerShell
 $env:GITHUB_CLIENT_ID="Iv1.abc123..."
 $env:GITHUB_CLIENT_SECRET="1a2b3c4d..."
+```
+
+```bat
+:: Windows CMD (sin comillas, sin espacios alrededor del =)
+set GITHUB_CLIENT_ID=Iv1.abc123...
+set GITHUB_CLIENT_SECRET=1a2b3c4d...
+```
+
+Después arranca la app y abre **http://127.0.0.1:5000/login/github** en el navegador.
+
+El fichero `.env.example` de la raíz del repo lista todas las variables que usan los ejercicios
+(`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` y, opcionalmente, `FLASK_SECRET_KEY` y `JWT_SECRET_KEY`).
+Es solo una referencia: la app **no** lo carga automáticamente, así que igualmente tienes que definir
+las variables con los comandos de arriba. Si `FLASK_SECRET_KEY` / `JWT_SECRET_KEY` no están definidas,
+la app genera unas aleatorias al arrancar (los tokens dejan de funcionar al reiniciarla).
+
+Así es como la app las usa:
+
+```python
+client_id=os.environ['GITHUB_CLIENT_ID'],
+client_secret=os.environ['GITHUB_CLIENT_SECRET'],
 ```
 
 ---
@@ -268,19 +279,21 @@ $env:GITHUB_CLIENT_SECRET="1a2b3c4d..."
 
 ### TODOs en app.py
 
-Necesitas completar **7 espacios estratégicos**:
+Necesitas completar **8 huecos** (`_____`). Los secretos (`app.secret_key`, `client_id`,
+`client_secret`) **no** son huecos: se leen de variables de entorno (ver Parte 2).
 
-1. **Línea 12**: Establecer `app.secret_key` para gestión de sesiones
-2. **Línea 21**: Establecer nombre del proveedor OAuth (`'github'`)
-3. **Línea 22**: Establecer tu `client_id` de GitHub
-4. **Línea 23**: Establecer tu `client_secret` de GitHub
-5. **Línea 53**: Generar URL de callback con `url_for()`
-6. **Línea 56**: Llamar `github.authorize_redirect()`
-7. **Línea 76**: Intercambiar código por token con `authorize_access_token()`
-8. **Línea 79**: Obtener perfil de usuario de la API de GitHub
-9. **Línea 101**: Crear token JWT con `create_access_token()`
-10. **Línea 114**: Establecer método HTTP para endpoint `/profile`
-11. **Línea 129**: Obtener usuario actual del JWT con `get_jwt_identity()`
+| # | Dónde (función / sección) | Qué escribir |
+|---|---------------------------|--------------|
+| 1 | `oauth.register(...)` (línea 32) | Nombre del proveedor: `'github'` |
+| 2 | `login_github()` (línea 86) | Endpoint de la URL de callback: `url_for('callback', _external=True)` |
+| 3 | `login_github()` (línea 90) | Redirigir a GitHub: `github.authorize_redirect(redirect_uri)` |
+| 4 | `callback()` (línea 112) | Intercambiar el código por un token: `github.authorize_access_token()` |
+| 5 | `callback()` (línea 116) | Endpoint de la API de GitHub para el perfil: `github.get('user')` |
+| 6 | `callback()` (línea 138) | Crear nuestro JWT: `create_access_token(identity=username)` |
+| 7 | `@app.route('/profile', ...)` (línea 159) | Método HTTP: `'GET'` |
+| 8 | `profile()` (línea 175) | Leer el usuario del JWT: `get_jwt_identity()` |
+
+(Los números de línea se refieren al `app.py` original; busca `_____` si se han desplazado.)
 
 ### Conceptos Clave a Implementar
 
@@ -397,6 +410,13 @@ Perfil de usuario           Auth sin estado
     ↓                           ↓
 Crear JWT        ─────────► Usar token JWT
 ```
+
+**Sesión vs JWT:**
+- **Sesión**: Temporal, solo para el flujo OAuth. La sesión por defecto de Flask es una **cookie firmada
+  guardada en el navegador** (lado del cliente): `secret_key` impide que se manipule, pero su contenido solo
+  está codificado en base64, no cifrado, así que nunca guardes secretos en ella.
+- **JWT**: De corta duración (la solución usa `JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)`), lo envía el
+  cliente en la cabecera `Authorization`, autenticación de la API
 
 ---
 

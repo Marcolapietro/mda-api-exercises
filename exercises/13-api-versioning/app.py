@@ -3,15 +3,18 @@ Exercise 13: API Versioning
 Learn to manage API versions and breaking changes
 """
 
+import os
+import secrets
 from flask import Flask, jsonify, request, make_response
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
+from email.utils import format_datetime
 
 app = Flask(__name__)
 
 # JWT Configuration
-app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-in-production'
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 jwt = JWTManager(app)
 
@@ -24,15 +27,29 @@ note_id_counter = 1
 API_VERSIONS = {
     'v1': {
         'status': 'deprecated',
-        'sunset_date': '2025-06-01',
+        'deprecation_date': '2026-01-01',  # when v1 was marked as deprecated
+        'sunset_date': '2027-06-30',       # after this date v1 will be retired (410 Gone)
+        'successor': '/api/v2',
         'deprecation_notice': 'API v1 is deprecated. Please migrate to v2.'
     },
     'v2': {
         'status': 'current',
+        'deprecation_date': None,
         'sunset_date': None,
+        'successor': None,
         'deprecation_notice': None
     }
 }
+
+
+def to_epoch(iso_date):
+    """'2026-01-01' -> 1767225600 (seconds since 1970, UTC)"""
+    return int(datetime.fromisoformat(iso_date).replace(tzinfo=timezone.utc).timestamp())
+
+
+def to_http_date(iso_date):
+    """'2027-06-30' -> 'Wed, 30 Jun 2027 00:00:00 GMT' (the date format HTTP headers use)"""
+    return format_datetime(datetime.fromisoformat(iso_date).replace(tzinfo=timezone.utc), usegmt=True)
 
 
 # ==================== Helper Functions ====================
@@ -47,17 +64,17 @@ def add_version_headers(response, version):
     response.headers['API-Version'] = _____
 
     if API_VERSIONS[version]['status'] == 'deprecated':
-        # TODO: Add Deprecation header (value should be "true")
-        # Hint: response.headers['Deprecation'] = "true"
+        # TODO: Add Deprecation header (RFC 9745): "@" + when it was deprecated, as a Unix timestamp
+        # Hint: response.headers['Deprecation'] = f"@{to_epoch(API_VERSIONS[version]['deprecation_date'])}"
         response.headers['Deprecation'] = _____
 
-        # TODO: Add Sunset header with the deprecation date
-        # Hint: response.headers['Sunset'] = API_VERSIONS[version]['sunset_date']
+        # TODO: Add Sunset header (RFC 8594): when the version will stop working, as an HTTP date
+        # Hint: response.headers['Sunset'] = to_http_date(API_VERSIONS[version]['sunset_date'])
         response.headers['Sunset'] = _____
 
-        # TODO: Add Warning header with deprecation notice
-        # Hint: response.headers['Warning'] = f'299 - "{API_VERSIONS[version]["deprecation_notice"]}"'
-        response.headers['Warning'] = _____
+        # TODO: Add Link header pointing clients to the version that replaces this one
+        # Hint: response.headers['Link'] = f'<{API_VERSIONS[version]["successor"]}>; rel="successor-version"'
+        response.headers['Link'] = _____
 
     return response
 
@@ -372,6 +389,17 @@ def health():
     return jsonify({'status': 'ok'}), 200
 
 
+# ==================== Error Handlers ====================
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not Found'}), 404
+
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    return jsonify({'error': 'Method Not Allowed'}), 405
+
 if __name__ == '__main__':
     print("\n" + "="*60)
     print("Exercise 13: API Versioning")
@@ -380,7 +408,7 @@ if __name__ == '__main__':
     print("  POST   /auth/register        - Register user")
     print("  POST   /auth/login           - Login user")
     print("")
-    print("  V1 (Deprecated - Sunset: 2025-06-01):")
+    print("  V1 (Deprecated - Sunset: 2027-06-30):")
     print("  GET    /api/v1/notes         - List notes (simple array)")
     print("  POST   /api/v1/notes         - Create note (simple)")
     print("  GET    /api/v1/notes/<id>    - Get note")
@@ -395,4 +423,4 @@ if __name__ == '__main__':
     print("  GET    /health               - Health check")
     print("="*60 + "\n")
 
-    app.run(debug=True, port=5000)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1", port=5000)
