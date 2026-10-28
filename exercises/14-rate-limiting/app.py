@@ -1,0 +1,245 @@
+"""
+Exercise 14: Rate Limiting and API Security
+Learn to protect your API from abuse using Flask-Limiter
+"""
+
+import os
+import time
+import secrets
+from flask import Flask, jsonify, request
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import timedelta
+
+app = Flask(__name__)
+
+# JWT Configuration
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+jwt = JWTManager(app)
+
+# TODO: Initialize Flask-Limiter
+# Hint: limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
+limiter = Limiter(
+    app=app,
+    key_func=_____,  # TODO: What function determines who is making the request?
+    default_limits=_____,  # TODO: Set default limits (e.g., ["200 per day", "50 per hour"])
+    headers_enabled=True,  # send X-RateLimit-* and Retry-After headers
+    storage_uri="memory://"  # in-memory storage (use Redis in production)
+)
+
+# In-memory data storage
+users = {}
+api_calls = {}  # Track API usage per user
+
+
+# ==================== Helper Functions ====================
+
+def get_user_from_jwt():
+    """Get the current user's username from JWT token"""
+    try:
+        return get_jwt_identity()
+    except:
+        return None
+
+
+# ==================== Routes ====================
+
+@app.route('/health', methods=['GET'])
+@limiter.exempt  # Health checks should not be rate limited
+def health():
+    """Health check endpoint - no rate limiting"""
+    return jsonify({'status': 'ok', 'message': 'API is running'}), 200
+
+
+@app.route('/register', methods=['POST'])
+# TODO: Add rate limit to prevent spam registrations
+# Hint: @limiter.limit("5 per hour")
+@limiter.limit(_____)
+def register():
+    """
+    Register a new user
+    Rate limited to prevent automated account creation
+    """
+    data = request.get_json()
+
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({'error': 'Missing username or password'}), 400
+
+    username = data['username']
+    password = data['password']
+    role = 'user'  # never taken from the request body (prevents self-registering as admin)
+
+    if username in users:
+        return jsonify({'error': 'User already exists'}), 409
+
+    # Store user with hashed password
+    users[username] = {
+        'password': generate_password_hash(password),
+        'role': role
+    }
+
+    return jsonify({'message': f'User {username} registered successfully'}), 201
+
+
+@app.route('/login', methods=['POST'])
+# TODO: Add rate limit to prevent brute force attacks
+# Hint: @limiter.limit("10 per minute")
+@limiter.limit(_____)
+def login():
+    """
+    Login endpoint with rate limiting to prevent brute force attacks
+    Limited to 10 attempts per minute per IP address
+    """
+    data = request.get_json()
+
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({'error': 'Missing username or password'}), 400
+
+    username = data['username']
+    password = data['password']
+
+    if username not in users:
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    if not check_password_hash(users[username]['password'], password):
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    # Create JWT token with user identity and role
+    additional_claims = {'role': users[username]['role']}
+    access_token = create_access_token(identity=username, additional_claims=additional_claims)
+
+    return jsonify({
+        'access_token': access_token,
+        'username': username,
+        'role': users[username]['role']
+    }), 200
+
+
+@app.route('/api/data', methods=['GET'])
+# TODO: Add rate limit for general API usage
+# Hint: @limiter.limit("20 per minute")
+@limiter.limit(_____)
+@jwt_required()  # after the limiter: requests with invalid tokens also count
+def get_data():
+    """
+    General data endpoint
+    Rate limited to 20 requests per minute per client IP
+    """
+    current_user = get_jwt_identity()
+
+    # Track API usage
+    if current_user not in api_calls:
+        api_calls[current_user] = 0
+    api_calls[current_user] += 1
+
+    return jsonify({
+        'message': 'Here is your data',
+        'user': current_user,
+        'total_api_calls': api_calls[current_user],
+        'data': [
+            {'id': 1, 'name': 'Item 1'},
+            {'id': 2, 'name': 'Item 2'},
+            {'id': 3, 'name': 'Item 3'}
+        ]
+    }), 200
+
+
+@app.route('/api/search', methods=['GET'])
+# TODO: Add strict rate limit for expensive operations
+# Hint: @limiter.limit("5 per minute")
+@limiter.limit(_____)
+@jwt_required()  # after the limiter: requests with invalid tokens also count
+def search():
+    """
+    Expensive search endpoint
+    Strictly rate limited to 5 requests per minute
+    This simulates a resource-intensive operation (database query, external API call, etc.)
+    """
+    query = request.args.get('q', '')
+    current_user = get_jwt_identity()
+
+    if not query:
+        return jsonify({'error': 'Missing search query parameter'}), 400
+
+    # Simulate expensive search operation
+    results = [
+        {'id': i, 'title': f'Result {i} for "{query}"'}
+        for i in range(1, 6)
+    ]
+
+    return jsonify({
+        'query': query,
+        'results': results,
+        'user': current_user,
+        'note': 'This endpoint is rate limited to 5 requests per minute'
+    }), 200
+
+
+@app.route('/api/unlimited', methods=['GET'])
+@jwt_required()
+# TODO: Exempt this endpoint from rate limiting by adding @limiter.exempt decorator above this line
+def unlimited():
+    """
+    Unlimited endpoint - no rate limiting
+    Use this pattern for critical endpoints that should never be rate limited
+    """
+    current_user = get_jwt_identity()
+
+    return jsonify({
+        'message': 'This endpoint has no rate limit',
+        'user': current_user,
+        'note': 'Use exempt endpoints carefully - only for critical operations'
+    }), 200
+
+
+@app.route('/api/stats', methods=['GET'])
+@limiter.limit("10 per minute")
+@jwt_required()  # after the limiter: requests with invalid tokens also count
+def get_stats():
+    """Get API usage statistics for current user"""
+    current_user = get_jwt_identity()
+
+    return jsonify({
+        'user': current_user,
+        'total_api_calls': api_calls.get(current_user, 0),
+        'registered_users': len(users)
+    }), 200
+
+
+# ==================== Error Handlers ====================
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    """
+    Custom handler for rate limit exceeded errors
+    Returns a JSON response instead of plain text
+    """
+    current = limiter.current_limit
+    retry_after = max(int(current.reset_at - time.time()), 1) if current else None
+    return jsonify({
+        'error': 'Rate limit exceeded',
+        'message': str(e.description),
+        'retry_after_seconds': retry_after  # same value as the Retry-After header
+    }), 429
+
+
+if __name__ == '__main__':
+    print("\n" + "="*60)
+    print("Exercise 14: Rate Limiting and API Security")
+    print("="*60)
+    print("\nEndpoints:")
+    print("  POST   /register          - Register new user (5 per hour)")
+    print("  POST   /login             - Login (10 per minute)")
+    print("  GET    /api/data          - Get data (20 per minute)")
+    print("  GET    /api/search?q=...  - Search (5 per minute)")
+    print("  GET    /api/unlimited     - No rate limit")
+    print("  GET    /api/stats         - Get stats (10 per minute)")
+    print("  GET    /health            - Health check (no limit)")
+    print("\nDefault limits: 200 per day, 50 per hour")
+    print("Rate limit info included in response headers")
+    print("="*60 + "\n")
+
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1", port=5000)

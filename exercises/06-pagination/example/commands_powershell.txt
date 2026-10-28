@@ -1,0 +1,105 @@
+# Exercise 6: Pagination - Notes API (Windows PowerShell 5.1)
+# Start the API first: python app.py   (it starts with 95 seed notes: ids 1..95, newest first)
+# Paste the blocks in order. Step 0 defines a helper used by the other steps.
+
+# 0. Base URL + helper that prints status code, Link header and body.
+#    Windows PowerShell 5.1 THROWS on 4xx/5xx, so the helper uses try/catch to show them too.
+$baseUrl = "http://127.0.0.1:5000"
+
+function Show-Http {
+    param(
+        [string]$Method,
+        [string]$Uri,
+        [string]$Body,
+        [string]$ContentType = "application/json"
+    )
+    Write-Host ("=" * 70)
+    Write-Host "$Method $Uri"
+    $params = @{ Method = $Method; Uri = $Uri; UseBasicParsing = $true }
+    if ($Body) { $params.Body = $Body; $params.ContentType = $ContentType }
+    try {
+        $r = Invoke-WebRequest @params
+        Write-Host ("Status: {0}" -f [int]$r.StatusCode)
+        foreach ($h in "Content-Type", "Location", "Link") {
+            if ($r.Headers[$h]) { Write-Host ("{0}: {1}" -f $h, $r.Headers[$h]) }
+        }
+        if ($r.Content) { Write-Host $r.Content } else { Write-Host "(empty body)" }
+    } catch {
+        $resp = $_.Exception.Response
+        if ($resp -eq $null) { throw }
+        Write-Host ("Status: {0}" -f [int]$resp.StatusCode)
+        Write-Host ("Content-Type: {0}" -f $resp.ContentType)
+        Write-Host $_.ErrorDetails.Message
+    }
+}
+
+# --- Offset pagination: ?offset=N&limit=M ---
+
+# 1. First page of 5 -> 200, notes 95..91, page.total = 95, Link: rel="next"
+Show-Http -Method Get -Uri "$baseUrl/notes?offset=0&limit=5"
+
+# 2. A page in the middle (the slide's example) -> notes 55..36, Link with rel="next" and rel="prev"
+$p = Invoke-RestMethod -Method Get -Uri "$baseUrl/notes?offset=40&limit=20"
+Write-Host ("ids:   " + ($p.data.id -join ", "))
+Write-Host ("total: " + $p.page.total)
+Write-Host ("next:  " + $p.page.next)
+Write-Host ("prev:  " + $p.page.prev)
+
+# 3. Last page -> notes 5..1, page.next = null, only rel="prev"
+Show-Http -Method Get -Uri "$baseUrl/notes?offset=90&limit=5"
+
+# --- Cursor pagination: ?cursor=<opaque>&limit=M ---
+
+# 4. First page (no cursor) -> notes 95..91, page.next_cursor = "OTE" (base64 of "91")
+$c1 = Invoke-RestMethod -Method Get -Uri "$baseUrl/notes?limit=5"
+Write-Host ("ids: " + ($c1.data.id -join ", ") + "   next_cursor: " + $c1.page.next_cursor)
+
+# 5. Next page using that cursor -> notes 90..86
+$c2 = Invoke-RestMethod -Method Get -Uri "$baseUrl/notes?cursor=$($c1.page.next_cursor)&limit=5"
+Write-Host ("ids: " + ($c2.data.id -join ", ") + "   next_cursor: " + $c2.page.next_cursor)
+
+# 6. Walk ALL the pages by following page.next until it is null
+$url = "$baseUrl/notes?limit=20"
+$pages = 0
+while ($url) {
+    $resp = Invoke-RestMethod -Method Get -Uri $url
+    $pages++
+    Write-Host ("page {0}: {1} notes, ids {2}..{3}" -f $pages, $resp.data.Count, $resp.data[0].id, $resp.data[-1].id)
+    $url = $resp.page.next
+}
+
+# 7. Default page size (20) and maximum (100: limit=500 is clamped to 100)
+Write-Host ("default limit: " + (Invoke-RestMethod "$baseUrl/notes").page.limit)
+Write-Host ("limit=500 ->   " + (Invoke-RestMethod "$baseUrl/notes?limit=500").page.limit)
+
+# --- Errors (application/problem+json) ---
+
+# 8. Mixing offset and cursor -> 400
+Show-Http -Method Get -Uri "$baseUrl/notes?offset=0&cursor=OTE"
+
+# 9. Invalid cursor -> 400
+Show-Http -Method Get -Uri "$baseUrl/notes?cursor=not-a-real-cursor"
+
+# 10. Invalid limit -> 400
+Show-Http -Method Get -Uri "$baseUrl/notes?limit=0"
+
+# --- Experiment: insert a note while you paginate ---
+
+# 11. OFFSET: read page 1, insert a note, read page 2 -> one note appears TWICE
+$o1 = Invoke-RestMethod -Method Get -Uri "$baseUrl/notes?offset=0&limit=5"
+$body = @{ title = "Inserted while paginating" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "$baseUrl/notes" -ContentType "application/json" -Body $body | Out-Null
+$o2 = Invoke-RestMethod -Method Get -Uri "$baseUrl/notes?offset=5&limit=5"
+Write-Host ("offset page 1: " + ($o1.data.id -join ", "))
+Write-Host ("offset page 2: " + ($o2.data.id -join ", "))
+Write-Host ("duplicated:    " + (($o1.data.id | Where-Object { $o2.data.id -contains $_ }) -join ", "))
+
+# 12. CURSOR: read page 1, insert a note, read page 2 with next_cursor -> no duplicates
+$k1 = Invoke-RestMethod -Method Get -Uri "$baseUrl/notes?limit=5"
+$body = @{ title = "Inserted while paginating (cursor)" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "$baseUrl/notes" -ContentType "application/json" -Body $body | Out-Null
+$k2 = Invoke-RestMethod -Method Get -Uri "$baseUrl/notes?cursor=$($k1.page.next_cursor)&limit=5"
+Write-Host ("cursor page 1: " + ($k1.data.id -join ", "))
+Write-Host ("cursor page 2: " + ($k2.data.id -join ", "))
+$dup = @($k1.data.id | Where-Object { $k2.data.id -contains $_ })
+if ($dup.Count -eq 0) { Write-Host "duplicated:    (none)" } else { Write-Host ("duplicated:    " + ($dup -join ", ")) }

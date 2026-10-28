@@ -1,0 +1,51 @@
+REM Exercise 5: CRUD Endpoints - Notes API (Windows CMD)
+REM Start the API first: python app.py   (it starts with 3 seed notes: ids 1, 2, 3)
+REM -i shows the status line and the headers (Location, Content-Type...)
+REM CMD needs double quotes around the JSON and \" for the quotes inside it.
+
+REM 1. List notes (newest first) -> 200
+curl -i "http://127.0.0.1:5000/notes"
+
+REM 2. List with a page size -> 200 (default 20, values above 100 are clamped to 100)
+curl -i "http://127.0.0.1:5000/notes?limit=10"
+
+REM 3. Get one note -> 200
+curl -i http://127.0.0.1:5000/notes/1
+
+REM 4. Create a note -> 201 Created + Location: http://127.0.0.1:5000/notes/4
+curl -i -X POST -H "Content-Type: application/json" -d "{\"title\":\"My first note\",\"content\":\"Created from CMD\"}" http://127.0.0.1:5000/notes
+
+REM 5. Replace the whole note with PUT (title AND content) -> 200
+curl -i -X PUT -H "Content-Type: application/json" -d "{\"title\":\"Replaced title\",\"content\":\"Replaced content\"}" http://127.0.0.1:5000/notes/4
+
+REM 6. PUT with only the title -> 422 (PUT needs the complete resource)
+curl -i -X PUT -H "Content-Type: application/json" -d "{\"title\":\"Only the title\"}" http://127.0.0.1:5000/notes/4
+
+REM 7. Partial update with PATCH (only content) -> 200, the title stays the same
+curl -i -X PATCH -H "Content-Type: application/json" -d "{\"content\":\"Only the content changed\"}" http://127.0.0.1:5000/notes/4
+
+REM 8. Delete the note -> 204 No Content (no body)
+curl -i -X DELETE http://127.0.0.1:5000/notes/4
+
+REM 9. Get the deleted note -> 404 (application/problem+json)
+curl -i http://127.0.0.1:5000/notes/4
+
+REM --- Errors (all of them are application/problem+json) ---
+
+REM 10. Wrong Content-Type (form data, not JSON) -> 415
+curl -i -X POST -d "title=bad" http://127.0.0.1:5000/notes
+
+REM 11. Malformed JSON -> 400
+curl -i -X POST -H "Content-Type: application/json" -d "{\"title\": " http://127.0.0.1:5000/notes
+
+REM 12. Valid JSON, invalid data (empty title, content is a number) -> 422 with an "errors" list
+curl -i -X POST -H "Content-Type: application/json" -d "{\"title\":\"\",\"content\":42}" http://127.0.0.1:5000/notes
+
+REM 13. Valid JSON that is not an object -> 422
+curl -i -X POST -H "Content-Type: application/json" -d "[1,2]" http://127.0.0.1:5000/notes
+
+REM 14. Method not allowed -> 405 (look at the Allow header)
+curl -i -X DELETE http://127.0.0.1:5000/notes
+
+REM 15. Invalid limit -> 400
+curl -i "http://127.0.0.1:5000/notes?limit=0"
