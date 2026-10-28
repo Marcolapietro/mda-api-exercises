@@ -27,6 +27,7 @@ In this exercise, you will research the concept of API (Application Programming 
      - **Brief Description**: What it does and what it is used for.
      - **Common Use**: Examples of applications or services that use it.
      - **Link to official documentation** (if publicly available).
+   - **Try one of them in Postman** (as in exercise 01): send one real request and add to your document the method and URL, the status code you got, and a short piece of the response. Pick an API that works without a key, such as the [GitHub REST API](https://docs.github.com/en/rest) (`GET https://api.github.com/users/<username>`), [PokéAPI](https://pokeapi.co/) or [Open-Meteo](https://open-meteo.com/).
 
 4. **Submission Format:**
    - Create a Markdown document (`introduction.md`) containing all the requested information.
@@ -50,6 +51,7 @@ In this exercise, you will research the concept of API (Application Programming 
      - **Twitter API**
      - **Stripe API**
    - Research each one to see what they are used for.
+   - Open Postman and call one of your three APIs: reading its documentation to build that first request is part of the exercise.
 
 5. **Mention frameworks used for API development.**
    - Conduct a search about different API development frameworks.

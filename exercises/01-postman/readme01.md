@@ -1,5 +1,5 @@
 
-# Exercise: Exploring a Public API with Postman
+# Exercise 1: Exploring a Public API with Postman
 
 ## Quick Start
 
@@ -102,3 +102,5 @@
 
 ## **Conclusion**
 This exercise introduces basic concepts on how to use Postman to interact with a public API. You can experiment with other HTTP methods and endpoints to gain more familiarity with API capabilities.
+
+Keep Postman open: in exercise 02 you will research three real APIs and call one of them from Postman, the same way you called JSONPlaceholder here.

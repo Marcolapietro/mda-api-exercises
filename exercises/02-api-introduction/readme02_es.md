@@ -23,6 +23,7 @@ En este ejercicio, investigarás el concepto de API (Interfaz de Programación d
      - **Descripción breve**: Qué hace y para qué se utiliza.
      - **Uso común**: Ejemplos de aplicaciones o servicios que la utilizan.
      - **Enlace a la documentación oficial** (si está disponible públicamente).
+   - **Prueba una de ellas en Postman** (como en el ejercicio 01): envía una petición real y añade a tu documento el método y la URL, el código de estado que recibiste y un fragmento corto de la respuesta. Elige una API que funcione sin key, como la [API REST de GitHub](https://docs.github.com/en/rest) (`GET https://api.github.com/users/<usuario>`), [PokéAPI](https://pokeapi.co/) u [Open-Meteo](https://open-meteo.com/).
 
 4. **Formato de Entrega:**
    - Crea un documento en Markdown (`introduccion.md`) que contenga toda la información solicitada.
@@ -46,6 +47,7 @@ En este ejercicio, investigarás el concepto de API (Interfaz de Programación d
      - **Twitter API**
      - **Stripe API**
    - Investiga cada una para ver para que sirven.
+   - Abre Postman y llama a una de tus tres APIs: leer su documentación para montar esa primera petición es parte del ejercicio.
 
 5. **Menciona frameworks que se utilicen para el desarrollo de API.**
    - Realiza una busqueda sobre diferentes frameworks de desarrollo de APIs.
