@@ -2,8 +2,7 @@
 Weather API (Starter)
 
 Run it with:  fastapi dev app.py
-Fill the blanks (_____) from top to bottom. The app starts once two of them are complete:
-the decorator of /login and the Depends(...) of /weather.
+Fill the blanks (_____) from top to bottom. The app starts once the decorator of /login is complete.
 The other blanks only matter when a request reaches them, so you will notice them while testing.
 """
 
@@ -130,7 +129,7 @@ def login(data: Credentials) -> dict[str, str]:
     # TODO: Create the JWT access token
     # Hint: create_access_token(data.username) is defined above
     access_token = _____(data.username)
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"message": "Login successful", "access_token": access_token, "token_type": "bearer"}
 
 
 @app.get("/profile")
@@ -145,14 +144,11 @@ def profile(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
 
 @app.get("/weather")
 def weather(
-    # TODO: Require a valid JWT: get_current_user (above) reads and checks the token
-    # Hint: Depends(get_current_user)
-    user: Annotated[str, Depends(_____)],
     city: Annotated[str, Query()] = "Madrid",
     country: Annotated[str, Query()] = "",
 ) -> dict[str, Any]:
     """
-    Get weather information for a city - Protected endpoint (requires JWT)
+    Get weather information for a city - Public endpoint
 
     This endpoint demonstrates consuming MULTIPLE external APIs:
     1. OpenWeatherMap Geocoding API: Convert city name to coordinates
@@ -161,6 +157,9 @@ def weather(
     Query Parameters:
         city (str): City name (default: 'Madrid')
         country (str): Optional ISO 3166 country code (e.g., 'ES', 'US')
+
+    Note: this endpoint is PUBLIC (no JWT required) because the focus
+    is on learning to consume external APIs, not authentication.
     """
     # Validate API key is configured
     if not OPENWEATHER_API_KEY:

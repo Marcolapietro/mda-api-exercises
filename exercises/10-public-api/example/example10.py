@@ -115,7 +115,7 @@ def login(data: Credentials) -> dict[str, str]:
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return {"access_token": create_access_token(data.username), "token_type": "bearer"}
+    return {"message": "Login successful", "access_token": create_access_token(data.username), "token_type": "bearer"}
 
 
 @app.get("/profile")
@@ -130,12 +130,11 @@ def profile(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
 
 @app.get("/weather")
 def weather(
-    user: Annotated[str, Depends(get_current_user)],
     city: Annotated[str, Query()] = "Madrid",
     country: Annotated[str, Query()] = "",
 ) -> dict[str, Any]:
     """
-    Get weather information for a city - Protected endpoint (requires JWT)
+    Get weather information for a city - Public endpoint
 
     This endpoint demonstrates consuming MULTIPLE external APIs:
     1. OpenWeatherMap Geocoding API: Convert city name to coordinates
@@ -144,6 +143,9 @@ def weather(
     Query Parameters:
         city (str): City name (default: 'Madrid')
         country (str): Optional ISO 3166 country code (e.g., 'ES', 'US')
+
+    Note: this endpoint is PUBLIC (no JWT required) because the focus
+    is on learning to consume external APIs, not authentication.
     """
     # Validate API key is configured
     if not OPENWEATHER_API_KEY:
