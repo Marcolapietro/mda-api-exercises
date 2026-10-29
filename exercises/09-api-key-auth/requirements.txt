@@ -1,12 +1,2 @@
-# Exercise 09: API Key Authentication - Python Dependencies
-
-# Core Flask framework
-Flask==3.0.0
-
-# Password hashing utilities
-Werkzeug==3.0.1
-
-# HTTP Basic authentication support
-Flask-HTTPAuth==4.8.0
-
-# Note: secrets, hashlib and hmac are part of Python standard library, no installation needed
+fastapi[standard]==0.162.0
+bcrypt==5.0.0

@@ -5,82 +5,78 @@ REM PUBLIC ENDPOINTS (No Authentication Required)
 REM ============================================================================
 
 REM 1. Register a new user and receive API key
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"alice\",\"password\":\"secret123\"}" http://127.0.0.1:5000/register
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"alice\",\"password\":\"secret123\"}" http://127.0.0.1:8000/register
 
 REM Expected response (201):
 REM {
-REM   "message": "User registered successfully",
+REM   "message": "User registered successfully. Store this API key now: it will not be shown again.",
 REM   "username": "alice",
-REM   "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA",
-REM   "warning": "Store this API key now. It will not be shown again."
+REM   "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA"
 REM }
 REM IMPORTANT: Save the API key from the response! The server only stores its hash
 REM and cannot show it again.
 
 REM Tip: keep the key in an environment variable instead of pasting it everywhere
 REM set API_KEY=sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA
-REM curl -H "X-API-Key: %API_KEY%" http://127.0.0.1:5000/users
+REM curl -H "X-API-Key: %API_KEY%" http://127.0.0.1:8000/users
 
 REM ============================================================================
 REM API KEY PROTECTED ENDPOINTS
 REM ============================================================================
 
 REM 2. Get list of users using API key (replace YOUR_API_KEY with actual key from step 1)
-curl -H "X-API-Key: YOUR_API_KEY" http://127.0.0.1:5000/users
+curl -H "X-API-Key: YOUR_API_KEY" http://127.0.0.1:8000/users
 
 REM Example with actual API key:
-REM curl -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" http://127.0.0.1:5000/users
+REM curl -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" http://127.0.0.1:8000/users
+
+REM Expected response (200):
+REM {"users":["alice"],"count":1}
 
 REM ============================================================================
-REM BASIC AUTH PROTECTED ENDPOINTS (Key Rotation and Revocation)
+REM KEY ROTATION AND REVOCATION (also protected by the API key: no body needed)
 REM ============================================================================
 
-REM 3. Rotate your API key (lost it, leaked it, or routine rotation)
+REM 3. Rotate your API key (it may have leaked, or routine rotation)
 REM    Returns a NEW key; the old key stops working immediately
-curl -X POST -u alice:secret123 http://127.0.0.1:5000/api-key/rotate
+curl -X POST -H "X-API-Key: YOUR_API_KEY" http://127.0.0.1:8000/api-key/rotate
 
 REM 4. Check: the OLD key now fails (401) and the NEW key works (200)
-curl -H "X-API-Key: YOUR_OLD_API_KEY" http://127.0.0.1:5000/users
-curl -H "X-API-Key: YOUR_NEW_API_KEY" http://127.0.0.1:5000/users
+curl -H "X-API-Key: YOUR_OLD_API_KEY" http://127.0.0.1:8000/users
+curl -H "X-API-Key: YOUR_NEW_API_KEY" http://127.0.0.1:8000/users
 
-REM 5. Revoke your API key (no key until you rotate again)
-curl -X DELETE -u alice:secret123 http://127.0.0.1:5000/api-key
+REM 5. Revoke your API key (it stops working and there is no replacement)
+curl -X DELETE -H "X-API-Key: YOUR_NEW_API_KEY" http://127.0.0.1:8000/api-key
 
 REM ============================================================================
 REM ERROR TESTING
 REM ============================================================================
 
 REM 6. Test with missing API key (should fail with 401)
-curl http://127.0.0.1:5000/users
+curl http://127.0.0.1:8000/users
 
 REM Expected error:
-REM {
-REM   "error": "API key missing",
-REM   "message": "Include X-API-Key header"
-REM }
+REM {"detail":"API key missing: include the X-API-Key header"}
 
 REM 7. Test with invalid API key (should fail with 401)
-curl -H "X-API-Key: sk_invalid-key-12345" http://127.0.0.1:5000/users
+curl -H "X-API-Key: sk_invalid-key-12345" http://127.0.0.1:8000/users
 
 REM Expected error:
-REM {
-REM   "error": "Invalid API key",
-REM   "message": "API key not recognized"
-REM }
+REM {"detail":"Invalid API key"}
 
-REM 8. Rotate with a wrong password (should fail with 401)
-curl -X POST -u alice:wrongpassword http://127.0.0.1:5000/api-key/rotate
+REM 8. Rotate without a key (should fail with 401)
+curl -X POST http://127.0.0.1:8000/api-key/rotate
 
-REM 9. Use -i to also see the HTTP status line (e.g. HTTP/1.1 401 UNAUTHORIZED)
-curl -i http://127.0.0.1:5000/users
+REM 9. Use -i to also see the status line and the WWW-Authenticate: ApiKey header
+curl -i http://127.0.0.1:8000/users
 
 REM ============================================================================
 REM NOTES
 REM ============================================================================
 
 REM Note 1: API keys are generated with secrets.token_urlsafe(32) and the prefix sk_
-REM Note 2: The server stores only SHA-256(key); it cannot recover a lost key, only rotate it
+REM Note 2: The server stores only SHA-256(key); it cannot recover a lost key
 REM Note 3: Send keys in a header, never in the URL (URLs end up in logs and history)
 REM Note 4: Header names are case-insensitive: X-API-Key and x-api-key are the same header
 REM Note 5: Keep keys in environment variables or a secrets manager, never in code or Git
-REM Note 6: /users uses the API key ONLY; /api-key endpoints use Basic Auth ONLY
+REM Note 6: /users, /api-key/rotate and /api-key use the API key ONLY

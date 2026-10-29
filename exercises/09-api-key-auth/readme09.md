@@ -2,7 +2,7 @@
 
 ## Objective
 
-Learn how to implement **API key authentication** in a Flask REST API the way real providers do it: random keys sent in a header, stored only as a hash, shown once, and rotated or revoked when needed.
+Learn how to implement **API key authentication** in a FastAPI REST API the way real providers do it: random keys sent in a header, stored only as a hash, shown once, and rotated or revoked when needed.
 
 ## Quick Start
 
@@ -12,8 +12,10 @@ python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
-python app.py
+fastapi dev app.py
 ```
+
+Fill the blanks (`_____`) from top to bottom; the app starts once the `auto_error` of `APIKeyHeader`, the decorator of `/api-key/rotate` and the `Depends(...)` of `get_users` are complete. The other blanks (header name, `401`, `token_urlsafe`, `sha256`, `compare_digest`) are only used when a request reaches them, so you will notice them while testing.
 
 ---
 
@@ -24,8 +26,8 @@ This exercise builds on Exercise 08 (Basic Authentication) and introduces:
 1. **Secure API Key Generation** with `secrets.token_urlsafe()`
 2. **Storing only a hash** of the key (SHA-256), never the key itself
 3. **Constant-time comparison** with `hmac.compare_digest()`
-4. **Custom Decorators** for API key validation
-5. **Header-based Authentication** with `X-API-Key`
+4. **A reusable dependency** (`Depends(get_current_user)`) that protects any route
+5. **Header-based Authentication** with `APIKeyHeader` and `X-API-Key`
 6. **Key Rotation and Revocation** (instead of "recovering" a lost key)
 
 ---
@@ -45,7 +47,7 @@ This exercise builds on Exercise 08 (Basic Authentication) and introduces:
 
 | Feature | Basic Auth | API Key |
 |---------|------------|---------|
-| **Sends credentials** | Every request (username:password) | Password only at registration and rotation |
+| **Sends credentials** | Every request (username:password) | Password only at registration; afterwards, the key |
 | **Token format** | Base64 encoded `user:pass` | Long random string (e.g. `sk_...`) |
 | **Expires** | Never (unless password changes) | Can be rotated/revoked at any time |
 | **Storage (client)** | Client stores password | Client stores API key (env var, secrets manager) |
@@ -62,18 +64,13 @@ This exercise builds on Exercise 08 (Basic Authentication) and introduces:
 |--------|----------|-------------|
 | POST | `/register` | Register new user, receive API key (shown **once**) |
 
-### Basic Auth Protected
-
-| Method | Endpoint | Auth Required | Description |
-|--------|----------|---------------|-------------|
-| POST | `/api-key/rotate` | Basic Auth | Issue a new API key; the old one stops working |
-| DELETE | `/api-key` | Basic Auth | Revoke your API key (e.g. it leaked) |
-
 ### API Key Protected
 
 | Method | Endpoint | Auth Required | Description |
 |--------|----------|---------------|-------------|
 | GET | `/users` | API Key | List all users |
+| POST | `/api-key/rotate` | API Key | Issue a new API key; the old one stops working (no body: the key identifies you) |
+| DELETE | `/api-key` | API Key | Revoke the key you are using (e.g. it leaked) |
 
 ---
 
@@ -88,7 +85,7 @@ Client                          Server
   |  {username, password}         |
   | ----------------------------> |
   |                               | Generate random API key
-  |                               | Hash password (werkzeug)
+  |                               | Hash password (bcrypt)
   |                               | Hash API key (SHA-256)
   |                               | Store both HASHES
   |  {api_key: "sk_..."}          |
@@ -102,18 +99,19 @@ Client                          Server
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"username":"alice","password":"secret123"}' \
-     http://127.0.0.1:5000/register
+     http://127.0.0.1:8000/register
 ```
 
 **Response:**
 ```json
 {
-  "message": "User registered successfully",
+  "message": "User registered successfully. Store this API key now: it will not be shown again.",
   "username": "alice",
-  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA",
-  "warning": "Store this API key now. It will not be shown again."
+  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA"
 }
 ```
+
+The password is hashed with `bcrypt` and validated like in Exercise 08 (8 to 72 characters), but in this exercise the API key, not the password, authenticates the requests.
 
 **Client saves this API key** in an environment variable or a secrets manager. Never commit it to Git.
 
@@ -135,7 +133,7 @@ Client                          Server
 **Example:**
 ```bash
 curl -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" \
-     http://127.0.0.1:5000/users
+     http://127.0.0.1:8000/users
 ```
 
 **Response:**
@@ -150,27 +148,27 @@ curl -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" \
 
 ### Pattern 3: Rotate or Revoke a Key
 
-The server **cannot recover** a lost key: it only stores the hash. If you lose the key, or it leaks, you get a **new** one with your username/password. The old key stops working immediately.
+The server **cannot recover** a key: it only stores the hash. The key itself identifies you, so rotating and revoking use **the key you already hold** in the `X-API-Key` header, with no request body. If a key may have leaked (or as routine rotation), rotate it: you get a **new** one and the old one stops working immediately.
 
 ```bash
 # Rotate: new key, old key invalidated
-curl -X POST -u alice:secret123 http://127.0.0.1:5000/api-key/rotate
+curl -X POST -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" http://127.0.0.1:8000/api-key/rotate
 ```
 
 **Response:**
 ```json
 {
-  "message": "API key rotated. The previous key no longer works.",
-  "username": "alice",
-  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b",
-  "warning": "Store this API key now. It will not be shown again."
+  "message": "API key rotated. The previous key no longer works. Store the new key now: it will not be shown again.",
+  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b"
 }
 ```
 
 ```bash
-# Revoke: no key at all until you rotate again
-curl -X DELETE -u alice:secret123 http://127.0.0.1:5000/api-key
+# Revoke: the key stops working and no new one is issued
+curl -X DELETE -H "X-API-Key: sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b" http://127.0.0.1:8000/api-key
 ```
+
+Real providers also let you log in to a dashboard with your password to issue a new key when you have lost the only one. This API has no such route: if you lose your key while practising, restart the server (users live in memory) and register again.
 
 ---
 
@@ -180,14 +178,14 @@ curl -X DELETE -u alice:secret123 http://127.0.0.1:5000/api-key
 
 You need to fill in **8 strategic blanks** (search for `_____`):
 
-1. **`generate_api_key()`**: Generate the random part with `secrets.token_urlsafe(32)`
-2. **`hash_api_key()`**: Hash the key with `hashlib.sha256(...)`
-3. **`find_user_by_api_key()`**: Compare hashes with `hmac.compare_digest()`
-4. **`api_key_required`**: Read the `X-API-Key` header
-5. **`register()`**: Store the **hash** of the key, not the key
-6. **`rotate_api_key()`**: Set the HTTP method of the rotation endpoint
-7. **`rotate_api_key()`**: Overwrite the stored hash with the hash of the new key
-8. **`get_users()`**: Apply the `@api_key_required` decorator
+1. **`api_key_header`**: The header name, `X-API-Key`
+2. **`api_key_header`**: `auto_error=False`, so a missing header gives `None` instead of an automatic `403`
+3. **`generate_api_key()`**: Generate the random part with `secrets.token_urlsafe(32)`
+4. **`hash_api_key()`**: Hash the key with `hashlib.sha256(...)`
+5. **`find_user_by_api_key()`**: Compare hashes with `hmac.compare_digest()`
+6. **`get_current_user()`**: The status code of a missing key, `401`
+7. **`@app.post("/api-key/rotate")`**: Set the HTTP method of the rotation endpoint
+8. **`get_users()`**: Protect the route with `Depends(get_current_user)`
 
 ### Key Concepts to Implement
 
@@ -196,9 +194,9 @@ You need to fill in **8 strategic blanks** (search for `_____`):
 ```python
 import secrets
 
-API_KEY_PREFIX = 'sk_'
+API_KEY_PREFIX = "sk_"
 
-def generate_api_key():
+def generate_api_key() -> str:
     return API_KEY_PREFIX + secrets.token_urlsafe(32)
 # Result: "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA"
 ```
@@ -220,18 +218,18 @@ The database never contains the key. If the database leaks, the attacker gets ha
 ```python
 import hashlib
 
-def hash_api_key(api_key):
-    return hashlib.sha256(api_key.encode('utf-8')).hexdigest()
+def hash_api_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
 
-users[username] = {
-    'password': generate_password_hash(password),  # slow, salted hash
-    'api_key_hash': hash_api_key(api_key)          # fast SHA-256
+users[data.username] = {
+    "password": hash_password(data.password),  # slow, salted hash (bcrypt)
+    "api_key_hash": hash_api_key(api_key),     # fast SHA-256
 }
 ```
 
 **Why is a fast hash (SHA-256) fine for API keys but NOT for passwords?**
 - An attacker who steals a hash tries to **guess** the input and hash each guess
-- A password is short and chosen by a human (`secret123`). With a fast hash, billions of guesses per second find it quickly. Passwords need a **slow, salted** hash: werkzeug's `generate_password_hash` (scrypt/pbkdf2) makes every guess expensive
+- A password is short and chosen by a human (`secret123`). With a fast hash, billions of guesses per second find it quickly. Passwords need a **slow, salted** hash: `bcrypt` makes every guess expensive
 - An API key has 256 random bits. There is nothing to guess: even at billions of guesses per second it would take far longer than the age of the universe. A slow hash adds nothing, and a fast one keeps every request fast (the key is checked on **every** request, the password only at login)
 
 This is also why the server **shows the key only once**: after registration it no longer has it.
@@ -241,11 +239,11 @@ This is also why the server **shows the key only once**: after registration it n
 ```python
 import hmac
 
-def find_user_by_api_key(api_key):
+def find_user_by_api_key(api_key: str) -> str | None:
     candidate_hash = hash_api_key(api_key)
 
     for username, user_data in users.items():
-        stored_hash = user_data.get('api_key_hash')
+        stored_hash = user_data["api_key_hash"]
         if stored_hash and hmac.compare_digest(stored_hash, candidate_hash):
             return username
 
@@ -256,71 +254,52 @@ def find_user_by_api_key(api_key):
 
 > In a real database you would put an index on `api_key_hash` and look it up directly (`WHERE api_key_hash = ?`). That is safe too: the attacker cannot choose the hash of their guess, so timing reveals nothing useful.
 
-#### 4. Creating Custom Decorators
+#### 4. A Dependency that Protects Routes
 
-**What is a decorator?**
-A decorator is a function that wraps another function to add extra behavior.
+Exercise 08 introduced `Depends` and `fastapi.security`; this exercise uses a second ready-made class, `APIKeyHeader`. It reads one header (here `X-API-Key`) and hands its value to your dependency. By default it answers **403** by itself when the header is missing; with `auto_error=False` it gives you `None` instead, so `get_current_user` can answer the **401** the course teaches (401 means "I do not know who you are", 403 means "I know you, but you may not") together with a `WWW-Authenticate` header.
 
-**Basic decorator pattern:**
 ```python
-from functools import wraps
+from typing import Annotated
+from fastapi import Depends, HTTPException
+from fastapi.security import APIKeyHeader
 
-def my_decorator(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        # Code before the function
-        print("Before function call")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-        # Call the original function
-        result = f(*args, **kwargs)
+def get_current_user(api_key: Annotated[str | None, Depends(api_key_header)]) -> str:
+    # 1. The header is missing
+    if api_key is None:
+        raise HTTPException(status_code=401, detail="API key missing: include the X-API-Key header",
+                            headers={"WWW-Authenticate": "ApiKey"})
 
-        # Code after the function
-        print("After function call")
+    # 2. Look it up by its hash
+    username = find_user_by_api_key(api_key)
+    if username is None:
+        raise HTTPException(status_code=401, detail="Invalid API key",
+                            headers={"WWW-Authenticate": "ApiKey"})
 
-        return result
-    return decorated_function
+    # 3. Valid: this is the value the route receives
+    return username
 
-@my_decorator
-def hello():
-    print("Hello!")
+
+@app.get("/users")
+def get_users(user: Annotated[str, Depends(get_current_user)]) -> dict[str, object]:
+    ...
 ```
 
-**For API key validation:**
-```python
-def api_key_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        # 1. Extract API key from headers
-        api_key = request.headers.get('X-API-Key')
+If `get_current_user` raises, the route never runs. Adding the `Depends(get_current_user)` parameter is all it takes to protect a route, and the same dependency protects `GET /users`, `POST /api-key/rotate` and `DELETE /api-key`. Swagger UI (`/docs`) shows an "Authorize" button where you paste the key once.
 
-        # 2. Validate it exists
-        if not api_key:
-            return jsonify({'error': 'API key missing'}), 401
+#### 5. Reading Headers in FastAPI
 
-        # 3. Look it up by hash
-        if find_user_by_api_key(api_key) is None:
-            return jsonify({'error': 'Invalid API key'}), 401
-
-        # 4. If valid, call the original function
-        return f(*args, **kwargs)
-
-    return decorated
-```
-
-#### 5. Reading Headers in Flask
+`APIKeyHeader` already reads the header for you. For any other header, declare a parameter with `Header()`:
 
 ```python
-from flask import request
+from typing import Annotated
+from fastapi import Header
 
-# Get a specific header (the lookup is case-insensitive)
-api_key = request.headers.get('X-API-Key')
-
-# Check if header exists
-if 'X-API-Key' in request.headers:
-    print("API key present")
-
-# Get all headers
-all_headers = request.headers
+@app.get("/whoami")
+def whoami(x_api_key: Annotated[str | None, Header()] = None):
+    # Header() turns x_api_key into the header X-API-Key (and header names are case-insensitive)
+    return {"has_key": x_api_key is not None}
 ```
 
 **Common API key header names:**
@@ -333,28 +312,26 @@ all_headers = request.headers
 #### 6. Rotating and Revoking Keys
 
 ```python
-@app.route('/api-key/rotate', methods=['POST'])
-@auth.login_required          # username + password (Basic Auth)
-def rotate_api_key():
-    current_user = auth.current_user()
+@app.post("/api-key/rotate")
+def rotate_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
     new_api_key = generate_api_key()
 
     # Overwriting the hash invalidates the old key immediately
-    users[current_user]['api_key_hash'] = hash_api_key(new_api_key)
+    users[user]["api_key_hash"] = hash_api_key(new_api_key)
 
-    return jsonify({'api_key': new_api_key}), 200   # shown once
+    return {"message": "API key rotated", "api_key": new_api_key}   # shown once
 
 
-@app.route('/api-key', methods=['DELETE'])
-@auth.login_required
-def revoke_api_key():
-    users[auth.current_user()]['api_key_hash'] = None
-    return jsonify({'message': 'API key revoked'}), 200
+@app.delete("/api-key")
+def revoke_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
+    users[user]["api_key_hash"] = None
+    return {"message": "API key revoked", "username": user}
 ```
 
 - **Rotate** regularly, and always when a key may have leaked or someone who knew it leaves the team
 - **Revoke** when a key leaked and you do not need a replacement yet
 - Rotation uses `POST` because it **creates** a new key on every call
+- The key identifies the user, so these routes need no request body
 
 ---
 
@@ -367,16 +344,15 @@ def revoke_api_key():
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"username":"alice","password":"secret123"}' \
-     http://127.0.0.1:5000/register
+     http://127.0.0.1:8000/register
 ```
 
 **Expected Response:**
 ```json
 {
-  "message": "User registered successfully",
+  "message": "User registered successfully. Store this API key now: it will not be shown again.",
   "username": "alice",
-  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA",
-  "warning": "Store this API key now. It will not be shown again."
+  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA"
 }
 ```
 
@@ -386,7 +362,7 @@ curl -X POST -H "Content-Type: application/json" \
 
 ```bash
 curl -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" \
-     http://127.0.0.1:5000/users
+     http://127.0.0.1:8000/users
 ```
 
 **Expected Response:**
@@ -401,44 +377,41 @@ curl -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" \
 
 ```bash
 curl -H "X-API-Key: sk_invalid-key-12345" \
-     http://127.0.0.1:5000/users
+     http://127.0.0.1:8000/users
 ```
 
 **Expected Response (401):**
 ```json
 {
-  "error": "Invalid API key",
-  "message": "API key not recognized"
+  "detail": "Invalid API key"
 }
 ```
 
 ### 4. Test with Missing API Key
 
 ```bash
-curl http://127.0.0.1:5000/users
+curl -i http://127.0.0.1:8000/users
 ```
 
-**Expected Response (401):**
+**Expected Response (401, with the header `WWW-Authenticate: ApiKey`):**
 ```json
 {
-  "error": "API key missing",
-  "message": "Include X-API-Key header"
+  "detail": "API key missing: include the X-API-Key header"
 }
 ```
 
 ### 5. Rotate Your API Key
 
 ```bash
-curl -X POST -u alice:secret123 http://127.0.0.1:5000/api-key/rotate
+curl -X POST -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" \
+     http://127.0.0.1:8000/api-key/rotate
 ```
 
 **Expected Response:**
 ```json
 {
-  "message": "API key rotated. The previous key no longer works.",
-  "username": "alice",
-  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b",
-  "warning": "Store this API key now. It will not be shown again."
+  "message": "API key rotated. The previous key no longer works. Store the new key now: it will not be shown again.",
+  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b"
 }
 ```
 
@@ -447,16 +420,19 @@ Now repeat step 2 with the **old** key (401) and with the **new** key (200).
 ### 6. Revoke Your API Key
 
 ```bash
-curl -X DELETE -u alice:secret123 http://127.0.0.1:5000/api-key
+curl -X DELETE -H "X-API-Key: sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b" \
+     http://127.0.0.1:8000/api-key
 ```
 
 **Expected Response:**
 ```json
 {
-  "message": "API key revoked. Use POST /api-key/rotate to get a new one.",
+  "message": "API key revoked",
   "username": "alice"
 }
 ```
+
+Repeat step 2 with that key: it now answers 401.
 
 ---
 
@@ -465,55 +441,42 @@ curl -X DELETE -u alice:secret123 http://127.0.0.1:5000/api-key
 ### Registration Flow
 
 ```python
-@app.route('/register', methods=['POST'])
-def register():
-    # 1. Get username and password from JSON body
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
+@app.post("/register", status_code=201)
+def register(data: UserCreate) -> dict[str, str]:
+    # 1. FastAPI has already validated the JSON body against UserCreate (422 if it does not fit)
 
-    # 2. Validate input
-    if not username or not password:
-        return jsonify({'error': 'Username and password required'}), 400
+    # 2. Check if user exists
+    if data.username in users:
+        raise HTTPException(status_code=409, detail="User already exists")
 
-    # 3. Check if user exists
-    if username in users:
-        return jsonify({'error': 'User already exists'}), 409
-
-    # 4. Generate a random API key
+    # 3. Generate a random API key
     api_key = generate_api_key()
 
-    # 5. Store the password hash and the API key HASH
-    users[username] = {
-        'password': generate_password_hash(password),
-        'api_key_hash': hash_api_key(api_key)
+    # 4. Store the password hash and the API key HASH
+    users[data.username] = {
+        "password": hash_password(data.password),
+        "api_key_hash": hash_api_key(api_key),
     }
 
-    # 6. Return the API key to the client (the only time)
-    return jsonify({'api_key': api_key}), 201
+    # 5. Return the API key to the client (the only time)
+    return {"message": "User registered successfully", "username": data.username, "api_key": api_key}
 ```
 
 ### API Key Validation Flow
 
-```python
-def api_key_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        # 1. Extract API key from headers
-        api_key = request.headers.get('X-API-Key')
-
-        # 2. Check if present
-        if not api_key:
-            return error_response('API key missing'), 401
-
-        # 3. Hash it and compare with the stored hashes (constant time)
-        if find_user_by_api_key(api_key) is None:
-            return error_response('Invalid API key'), 401
-
-        # 4. Valid! Call the protected function
-        return f(*args, **kwargs)
-
-    return decorated
+```
+GET /users  (header X-API-Key: sk_...)
+   |
+   v
+APIKeyHeader            reads the header, gives str or None (auto_error=False)
+   |
+   v
+get_current_user        None            -> 401 "API key missing"
+                        no hash matches -> 401 "Invalid API key"
+                        match           -> returns the username
+   |
+   v
+get_users(user)         runs only if the dependency did not raise
 ```
 
 ---
@@ -541,7 +504,7 @@ import secrets
 **Symptom:**
 ```json
 {
-  "error": "Invalid API key"
+  "detail": "Invalid API key"
 }
 ```
 
@@ -555,7 +518,7 @@ import secrets
 ```bash
 # Store API key in variable to avoid typos
 API_KEY="sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA"
-curl -H "X-API-Key: $API_KEY" http://127.0.0.1:5000/users
+curl -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/users
 ```
 
 ### Issue 3: API Key Missing Error
@@ -563,7 +526,7 @@ curl -H "X-API-Key: $API_KEY" http://127.0.0.1:5000/users
 **Symptom:**
 ```json
 {
-  "error": "API key missing"
+  "detail": "API key missing: include the X-API-Key header"
 }
 ```
 
@@ -571,38 +534,37 @@ curl -H "X-API-Key: $API_KEY" http://127.0.0.1:5000/users
 Make sure you're including the `-H` flag with curl:
 ```bash
 # Wrong (no header)
-curl http://127.0.0.1:5000/users
+curl http://127.0.0.1:8000/users
 
 # Wrong (key in the URL: ignored by the server, and it ends up in logs)
-curl "http://127.0.0.1:5000/users?api_key=YOUR_KEY"
+curl "http://127.0.0.1:8000/users?api_key=YOUR_KEY"
 
 # Right
-curl -H "X-API-Key: YOUR_KEY" http://127.0.0.1:5000/users
+curl -H "X-API-Key: YOUR_KEY" http://127.0.0.1:8000/users
 ```
 
-### Issue 4: Decorator Not Working
+### Issue 4: Protected Route Accessible Without a Key
 
 **Symptom:**
 Protected endpoint accessible without API key.
 
 **Solution:**
-Make sure decorator is applied:
+Make sure the route has the dependency parameter:
 ```python
 # Wrong
-@app.route('/users', methods=['GET'])
-def get_users():  # Missing @api_key_required
+@app.get("/users")
+def get_users():  # Missing the Depends(get_current_user) parameter
     ...
 
 # Right
-@app.route('/users', methods=['GET'])
-@api_key_required  # Decorator applied
-def get_users():
+@app.get("/users")
+def get_users(user: Annotated[str, Depends(get_current_user)]):
     ...
 ```
 
 ### Issue 5: "I lost my API key, how do I get it back?"
 
-You can't, and that is on purpose: the server only stores the hash. Call `POST /api-key/rotate` with your username and password to get a new one.
+You can't, and that is on purpose: the server only stores the hash. While you still hold a (possibly leaked) key, call `POST /api-key/rotate` to replace it. If the key is gone for good, there is nothing to authenticate with in this exercise: restart the server and register again (a real provider would let you log in with your password and issue a new key).
 
 ---
 
@@ -617,9 +579,10 @@ Your implementation should:
 - ✅ Compare hashes with `hmac.compare_digest()`
 - ✅ Reject requests with missing API keys (401)
 - ✅ Reject requests with invalid API keys (401)
-- ✅ Rotate keys with `POST /api-key/rotate` (Basic Auth); the old key stops working
-- ✅ Revoke keys with `DELETE /api-key` (Basic Auth)
-- ✅ Use custom decorator for API key protection
+- ✅ Rotate keys with `POST /api-key/rotate` (authenticated by the key); the old key stops working
+- ✅ Revoke keys with `DELETE /api-key` (authenticated by the key)
+- ✅ Protect routes with a `Depends(get_current_user)` dependency built on `APIKeyHeader`
+- ✅ Answer a missing or invalid key with 401 and `WWW-Authenticate`
 - ✅ Allow multiple users with unique API keys
 
 ---
@@ -635,9 +598,9 @@ Rotating a key breaks every client that still uses the old one. Keep the previou
 ```python
 from datetime import datetime, timedelta
 
-users[current_user]['previous_api_key_hash'] = users[current_user]['api_key_hash']
-users[current_user]['previous_valid_until'] = datetime.now() + timedelta(hours=24)
-users[current_user]['api_key_hash'] = hash_api_key(new_api_key)
+users[user]["previous_api_key_hash"] = users[user]["api_key_hash"]
+users[user]["previous_valid_until"] = datetime.now() + timedelta(hours=24)
+users[user]["api_key_hash"] = hash_api_key(new_api_key)
 ```
 
 Then accept either hash in `find_user_by_api_key()` while `previous_valid_until` has not passed.
@@ -650,54 +613,49 @@ Track when API keys were created and expire old ones:
 from datetime import datetime, timedelta
 
 # On registration and rotation
-users[username] = {
-    'password': hashed_password,
-    'api_key_hash': hash_api_key(api_key),
-    'key_created_at': datetime.now()
+users[data.username] = {
+    "password": hash_password(data.password),
+    "api_key_hash": hash_api_key(api_key),
+    "key_created_at": datetime.now(),
 }
 
-# In the decorator, after finding the user
-created = users[username]['key_created_at']
+# In get_current_user, after finding the user
+created = users[username]["key_created_at"]
 if datetime.now() - created > timedelta(days=90):
-    return jsonify({'error': 'API key expired', 'message': 'Rotate your key'}), 401
+    raise HTTPException(status_code=401, detail="API key expired: rotate your key",
+                        headers={"WWW-Authenticate": "ApiKey"})
 ```
 
 ### 3. Add Rate Limiting
 
-Track API calls per key and limit requests (Exercise 14 does this properly with Flask-Limiter):
+Track API calls per user and limit requests (Exercise 14 does this properly with `slowapi`). A second dependency can wrap the first one:
 
 ```python
 from collections import defaultdict
 from datetime import datetime, timedelta
 
 # Track requests per user (never use the plain key as a dictionary key)
-api_calls = defaultdict(list)  # {username: [timestamp1, timestamp2, ...]}
+api_calls: dict[str, list[datetime]] = defaultdict(list)
 
-def api_key_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        api_key = request.headers.get('X-API-Key')
-        username = find_user_by_api_key(api_key) if api_key else None
-        if username is None:
-            return jsonify({'error': 'Invalid API key'}), 401
+def rate_limited_user(user: Annotated[str, Depends(get_current_user)]) -> str:
+    # Rate limiting: max 10 requests per minute
+    now = datetime.now()
+    minute_ago = now - timedelta(minutes=1)
 
-        # Rate limiting: Max 10 requests per minute
-        now = datetime.now()
-        minute_ago = now - timedelta(minutes=1)
+    # Remove old calls
+    api_calls[user] = [t for t in api_calls[user] if t > minute_ago]
 
-        # Remove old calls
-        api_calls[username] = [t for t in api_calls[username] if t > minute_ago]
+    # Check limit
+    if len(api_calls[user]) >= 10:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-        # Check limit
-        if len(api_calls[username]) >= 10:
-            return jsonify({'error': 'Rate limit exceeded'}), 429
+    # Record this call
+    api_calls[user].append(now)
+    return user
 
-        # Record this call
-        api_calls[username].append(now)
-
-        return f(*args, **kwargs)
-
-    return decorated
+@app.get("/users")
+def get_users(user: Annotated[str, Depends(rate_limited_user)]):
+    ...
 ```
 
 ### 4. Add Multiple API Keys per User
@@ -723,44 +681,39 @@ Implement permissions for API keys:
 
 ```python
 users = {
-    'alice': {
-        'password': 'hashed',
-        'api_keys': {
-            'k_1a2b': {'hash': 'sha256...', 'scopes': ['read', 'write']},
-            'k_3c4d': {'hash': 'sha256...', 'scopes': ['read']}  # Read-only key
+    "alice": {
+        "password": "hashed",
+        "api_keys": {
+            "k_1a2b": {"hash": "sha256...", "scopes": ["read", "write"]},
+            "k_3c4d": {"hash": "sha256...", "scopes": ["read"]},  # Read-only key
         }
     }
 }
 
-def api_key_required(scopes=None):
-    def decorator(f):
-        @wraps(f)
-        def decorated(*args, **kwargs):
-            api_key = request.headers.get('X-API-Key', '')
-            candidate_hash = hash_api_key(api_key)
+def require_scope(scope: str):
+    """Dependency factory: returns a dependency that checks one scope."""
+    def check(api_key: Annotated[str | None, Depends(api_key_header)]) -> str:
+        candidate_hash = hash_api_key(api_key or "")
 
-            # Validate API key and check scopes
-            for username, user_data in users.items():
-                for key_id, key_info in user_data['api_keys'].items():
-                    if hmac.compare_digest(key_info['hash'], candidate_hash):
-                        if scopes and not set(scopes).issubset(key_info['scopes']):
-                            return jsonify({'error': 'Insufficient permissions'}), 403
-                        return f(*args, **kwargs)
+        # Validate API key and check scopes
+        for username, user_data in users.items():
+            for key_info in user_data["api_keys"].values():
+                if hmac.compare_digest(key_info["hash"], candidate_hash):
+                    if scope not in key_info["scopes"]:
+                        raise HTTPException(status_code=403, detail="Insufficient permissions")
+                    return username
 
-            return jsonify({'error': 'Invalid API key'}), 401
-
-        return decorated
-    return decorator
+        raise HTTPException(status_code=401, detail="Invalid API key",
+                            headers={"WWW-Authenticate": "ApiKey"})
+    return check
 
 # Usage
-@app.route('/users', methods=['GET'])
-@api_key_required(scopes=['read'])
-def get_users():
+@app.get("/users")
+def get_users(user: Annotated[str, Depends(require_scope("read"))]):
     ...
 
-@app.route('/users', methods=['POST'])
-@api_key_required(scopes=['write'])
-def create_user():
+@app.post("/users")
+def create_user(user: Annotated[str, Depends(require_scope("write"))]):
     ...
 ```
 
@@ -782,7 +735,6 @@ def create_user():
 ✅ Internal tools
 ✅ Temporary authentication
 ✅ Quick prototypes
-✅ Key management endpoints (rotate/revoke), as in this exercise
 
 ### Use JWT (Next Exercise) When:
 
@@ -817,7 +769,7 @@ def create_user():
 
 4. **Header-based Authentication**
    - Send keys in a header (`X-API-Key`), never in URLs
-   - Use `request.headers.get('X-API-Key')`
+   - Use `APIKeyHeader(name="X-API-Key", auto_error=False)` and answer 401 yourself
    - Headers are case-insensitive (`x-api-key` is the same header)
 
 5. **Security Best Practices**
