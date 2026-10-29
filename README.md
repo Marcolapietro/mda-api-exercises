@@ -8,13 +8,18 @@ Python 3.12 or newer. Inside the exercise folder you are working on:
 
 ```bash
 python -m venv venv
-venv\Scripts\activate          # Windows
-source venv/bin/activate        # macOS / Linux
 pip install -r requirements.txt
 fastapi dev app.py
 ```
 
-Then open http://127.0.0.1:8000/docs for the interactive documentation. Each exercise has its own `readme<NN>.md` with the instructions (some also have `readme<NN>_es.md` in Spanish) and a finished solution in `example/`.
+Activate the virtual environment after creating it and before `pip install`:
+
+- Windows: `venv\Scripts\activate`
+- macOS / Linux: `source venv/bin/activate`
+
+On Windows, keep the folder path short (for example `C:\edem`) when you create the venv, because pip can hit the long-path limit inside deep OneDrive folders.
+
+Then open http://127.0.0.1:8000/docs for the interactive documentation. Each exercise has its own `readme<NN>.md` with the instructions (some also have `readme<NN>_es.md` in Spanish) and a finished solution in `example/`. Exercises 07 and 17 name their own files in their README (07: `documented_api.py` and `undocumented_api.py` in `01-problem-and-solution`; 17: `notes_api.py`), and exercises 01, 02 and 18 have no code.
 
 ## Exercises
 
