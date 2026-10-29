@@ -150,9 +150,15 @@ def create_admin_user() -> None:
     The password comes from the ADMIN_PASSWORD environment variable; if it is not set,
     a random one is generated and printed once in the console.
     """
-    password = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(12)
+    password = os.environ.get("ADMIN_PASSWORD")
+    generated = not password
+    if generated:
+        password = secrets.token_urlsafe(12)
+        # `fastapi dev` loads this file twice: keeping the password in the environment makes
+        # the second load (the reload worker inherits it) reuse it instead of making a new one.
+        os.environ["ADMIN_PASSWORD"] = password
     users["admin"] = {"username": "admin", "password": hash_password(password), "role": "admin"}
-    if not os.environ.get("ADMIN_PASSWORD"):
+    if generated:
         print(f"Admin user created -> username: admin  password: {password}", file=sys.stderr)
 
 

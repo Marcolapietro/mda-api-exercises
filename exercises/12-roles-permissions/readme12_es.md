@@ -55,7 +55,7 @@ Al arrancar, la app crea un usuario `admin`. Su contraseña se toma de la variab
 Admin user created -> username: admin  password: Xy3...
 ```
 
-`fastapi dev` puede mostrar esta línea dos veces (el comando carga tu archivo una vez para encontrar la app y el servidor lo carga otra vez). Cada carga crea su propia contraseña aleatoria: usa la **última**. Para no tener dudas, define `ADMIN_PASSWORD` antes de arrancar el servidor.
+La línea se muestra una sola vez, aunque `fastapi dev` carga tu archivo dos veces (una para encontrar la app y otra en el proceso de recarga): la primera carga guarda la contraseña generada en la variable de entorno `ADMIN_PASSWORD` y la segunda la reutiliza. Para elegir tu propia contraseña, define `ADMIN_PASSWORD` antes de arrancar el servidor.
 
 ### **Inicio de Sesión**
 Autentica a los usuarios y les proporciona un token JWT que será necesario para acceder a las rutas protegidas. El token incluye el rol del usuario como *claim*, pero ese *claim* es solo informativo. En cada petición se vuelve a buscar al usuario a partir del *claim* `sub` del token, así que los permisos nunca dependen de una cookie de sesión ni de lo que diga el token.

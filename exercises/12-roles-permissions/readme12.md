@@ -55,7 +55,7 @@ At start-up the app creates one `admin` user. Its password is taken from the `AD
 Admin user created -> username: admin  password: Xy3...
 ```
 
-`fastapi dev` may print this line twice (the command loads your file once to find the app, and the server loads it again). Each load creates its own random password: use the **last** one. To avoid the doubt, set `ADMIN_PASSWORD` before starting the server.
+The line is printed once, even though `fastapi dev` loads your file twice (once to find the app, once in the reload worker): the first load keeps the generated password in the `ADMIN_PASSWORD` environment variable and the second load reuses it. To choose your own password, set `ADMIN_PASSWORD` before starting the server.
 
 ### **Login**
 Authenticates users and provides them with a JWT token that will be required to access protected routes. The token includes the user's role as a claim, but that claim is only informative. On every request the user is looked up again from the token's `sub` claim, so permissions never depend on a session cookie or on what the token says.
