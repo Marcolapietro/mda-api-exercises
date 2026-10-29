@@ -852,10 +852,10 @@ En el Ejercicio 15 (ProManage) trabajarás en equipos donde:
 
 Escenario de ejemplo:
 - Estudiante A: Servicio de autenticación de usuarios (puerto 8000)
-- Estudiante B: Servicio de gestión de proyectos (puerto 8001)
-- Estudiante C: Servicio de gestión de tareas (puerto 8002)
+- Estudiante B: Servicio de gestión de proyectos (puerto 8000)
+- Estudiante C: Servicio de gestión de tareas (puerto 8000)
 
-Cada uno ejecuta su servicio en local, lo expone con ngrok y comparte las URLs con el equipo.
+Cada estudiante ejecuta `fastapi dev app.py` en su propia máquina (puerto 8000), lo expone con su propio ngrok y comparte su propia URL con el equipo.
 
 ```bash
 # Servicio de autenticación del Estudiante A
@@ -863,7 +863,7 @@ ngrok http 8000
 # Compartir: https://student-a.ngrok-free.app
 
 # Servicio de proyectos del Estudiante B
-ngrok http 8001
+ngrok http 8000
 # Compartir: https://student-b.ngrok-free.app
 
 # El Estudiante C ya puede llamar a ambos servicios:

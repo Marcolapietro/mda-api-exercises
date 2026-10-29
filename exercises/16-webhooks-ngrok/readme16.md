@@ -852,10 +852,10 @@ In Exercise 15 (ProManage), you'll work in teams where:
 
 Example scenario:
 - Student A: User authentication service (port 8000)
-- Student B: Project management service (port 8001)
-- Student C: Task management service (port 8002)
+- Student B: Project management service (port 8000)
+- Student C: Task management service (port 8000)
 
-Each runs their service locally, exposes via ngrok, and shares URLs with the team.
+Each student runs `fastapi dev app.py` on their own machine (port 8000), exposes it with their own ngrok, and shares their own URL with the team.
 
 ```bash
 # Student A's auth service
@@ -863,7 +863,7 @@ ngrok http 8000
 # Share: https://student-a.ngrok-free.app
 
 # Student B's project service
-ngrok http 8001
+ngrok http 8000
 # Share: https://student-b.ngrok-free.app
 
 # Student C can now call both services:
