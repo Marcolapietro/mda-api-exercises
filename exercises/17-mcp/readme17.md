@@ -136,7 +136,8 @@ export NOTES_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(3
 $env:NOTES_API_KEY = python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 fastapi dev notes_api.py
-curl -i http://127.0.0.1:8000/notes      # 401 Unauthorized
+curl -i http://127.0.0.1:8000/notes      # 401 Unauthorized (Linux/macOS)
+curl.exe -i http://127.0.0.1:8000/notes    # 401 Unauthorized (Windows PowerShell)
 ```
 
 Run `python client.py` **in a terminal where `NOTES_API_KEY` is set to the same value**: it works, because `mcp_server.py` reads the key from its environment and adds the `X-API-Key` header. Look at `tools/list`: the key appears nowhere. The model can use your API, but it never sees your credentials.
