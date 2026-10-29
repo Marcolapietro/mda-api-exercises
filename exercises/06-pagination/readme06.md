@@ -13,7 +13,7 @@ fastapi dev app.py
 
 The API runs at `http://127.0.0.1:8000` (automatic documentation at `/docs`) and starts with **95 seed notes** (ids 1 to 95), so there is something to paginate.
 
-While the `GET` decorator is blank you get an `AttributeError` that points at `@app._____`. After you fix it, an unfinished `ge=`/`le=` shows up as `SchemaError ... 'le' must be coercible to an integer`: it also points at that decorator, because FastAPI reads the `Query(...)` rules when it registers the route. The other blanks sit inside functions, so they only fail when a request reaches them (a `500` or a wrong answer).
+While the `GET` decorator is blank you get an `AttributeError` that points at `@app._____`. After you fix it, an unfinished `ge=`/`le=` also stops the start-up, with an error that points at the `limit` line of `list_notes` (the exact message depends on your Python version), because FastAPI reads the `Query(...)` rules when it registers the route. The other blanks sit inside functions, so they only fail when a request reaches them (a `500` or a wrong answer).
 
 ## Objective
 
