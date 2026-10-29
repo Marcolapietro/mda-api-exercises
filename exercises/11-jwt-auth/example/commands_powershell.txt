@@ -2,12 +2,12 @@
 # These commands demonstrate the JWT flow with automatic token handling:
 # access token (15 min) + refresh token
 
-# 0. (Optional) Set the signing secret BEFORE starting the server in the same window,
+# 0. (Optional) Set the signing secret BEFORE running "fastapi dev app.py" in the same window,
 #    otherwise a random one is used and tokens die when the server restarts
 # $env:JWT_SECRET_KEY = python -c "import secrets; print(secrets.token_hex(32))"
 
 # 1. Set base URL and headers
-$baseUrl = "http://127.0.0.1:5000"
+$baseUrl = "http://127.0.0.1:8000"
 $headers = @{
     "Content-Type" = "application/json"
 }

@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Aprender a implementar **autenticación sin estado** (stateless) utilizando JSON Web Tokens (JWT) en una API REST con Flask. Comprender por qué JWT es el método de autenticación preferido para APIs modernas, cómo difiere de la autenticación básica, y cómo usarlo de forma segura: access tokens de vida corta, refresh tokens, y verificación completa de firma, `exp`, `iss` y `aud`.
+Aprender a implementar **autenticación sin estado** (stateless) utilizando JSON Web Tokens (JWT) en una API REST con FastAPI. Comprender por qué JWT es el método de autenticación preferido para APIs modernas, cómo difiere de la autenticación básica, y cómo usarlo de forma segura: access tokens de vida corta, refresh tokens, y verificación completa de firma, `exp`, `iss` y `aud`.
 
 ## Inicio Rápido
 
@@ -12,10 +12,12 @@ python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
-python app.py
+fastapi dev app.py
 ```
 
-Opcional, pero recomendado: define el secreto de firma en una variable de entorno **antes** de `python app.py`. Si no lo haces, el servidor genera uno aleatorio en cada arranque y tus tokens dejan de funcionar tras reiniciar.
+Rellena los huecos (`_____`) de arriba abajo; la app arranca cuando el decorador de `/refresh` y el `Depends(...)` de `/profile` están completos. Los demás huecos (los nombres de los claims, `HS256`, el nombre del header, `DUMMY_HASH`, las funciones que crean los tokens, el tipo de token y el conjunto `revoked`) solo se usan cuando una petición llega hasta ellos, así que los notarás al probar. La API corre en `http://127.0.0.1:8000`.
+
+Opcional, pero recomendado: define el secreto de firma en una variable de entorno **antes** de `fastapi dev app.py`. Si no lo haces, el servidor genera uno aleatorio en cada arranque y tus tokens dejan de funcionar tras reiniciar.
 
 ```bash
 # Windows PowerShell
@@ -178,136 +180,188 @@ Los access tokens cortos limitan el daño de un token robado; el refresh token e
 ```python
 import os
 import secrets
-from datetime import timedelta
-from flask_jwt_extended import JWTManager
+import uuid
+from datetime import datetime, timedelta, timezone
+
+import jwt  # PyJWT
 
 # El secreto viene del entorno, nunca del código.
 # Alternativa: un secreto aleatorio por ejecución (los tokens mueren al reiniciar el servidor).
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)
-
-# Access tokens de vida corta + refresh tokens de vida más larga
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=15)
-app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=1)
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)
+JWT_ALG = "HS256"
 
 # Emisor (iss) y audiencia (aud)
-JWT_ISSUER = 'mda-api-exercises'
-JWT_AUDIENCE = 'mda-api-clients'
-app.config['JWT_ENCODE_ISSUER'] = JWT_ISSUER      # se escribe en nuestros tokens
-app.config['JWT_DECODE_ISSUER'] = JWT_ISSUER      # se exige en los tokens recibidos
-app.config['JWT_ENCODE_AUDIENCE'] = JWT_AUDIENCE
-app.config['JWT_DECODE_AUDIENCE'] = JWT_AUDIENCE
+JWT_ISSUER = "notes-api"
+JWT_AUDIENCE = "notes-client"
 
-jwt = JWTManager(app)
+# Tokens revocados, por su id único (el claim jti)
+revoked: set[str] = set()
 ```
 
-**Nunca** escribas el secreto en el código (`JWT_SECRET_KEY = 'tu_clave_secreta'`): cualquiera que lea el repositorio podría falsificar tokens válidos para cualquier usuario.
+PyJWT es una librería pequeña y dos funciones hacen el trabajo de verdad. Estas son las tres líneas que debes recordar:
 
-**¿Qué son `iss` y `aud`?**
+```python
+token = jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALG)                                               # crear y firmar
+claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], issuer=JWT_ISSUER, audience=JWT_AUDIENCE)  # verificar y leer
+jwt.decode(token, options={"verify_signature": False})                                                  # solo para MIRAR dentro de un token
+```
+
+`jwt.decode` comprueba la firma y `exp` por ti, y `iss` y `aud` cuando le pasas `issuer=` y `audience=`. Fija siempre `algorithms=[...]`: nunca dejes que el token decida cómo se verifica.
+
+**Nunca** escribas el secreto en el código (`JWT_SECRET = "tu_clave_secreta"`): cualquiera que lea el repositorio podría falsificar tokens válidos para cualquier usuario.
+
+**Los claims que ponemos en cada token:**
+- `sub` (**subject**, sujeto): el usuario. `iat` / `exp`: emitido / expira. Los access tokens duran 15 minutos, los refresh tokens 1 día
 - `iss` (**issuer**, emisor): quién creó el token. Rechazamos tokens creados por otro, aunque usen el mismo secreto
 - `aud` (**audience**, audiencia): para quién es el token. Un token emitido para otra API (ej. la API de facturación) no debe aceptarse en esta
-- Los ajustes `ENCODE_*` añaden el claim a los tokens que creamos; los ajustes `DECODE_*` hacen que `@jwt_required()` **rechace** cualquier token cuyo claim falte o sea distinto
+- `jti` (**JWT ID**): un id único (`uuid4`) por token. La lista de bloqueo del logout guarda estos ids
+- `type`: `"access"` o `"refresh"`, para que un refresh token no sirva como access token, ni al revés
+
+Crear los dos tipos de token es una función pequeña:
+
+```python
+def create_token(username: str, token_type: str, lifetime: timedelta) -> str:
+    now = datetime.now(timezone.utc)
+    claims = {
+        "sub": username,
+        "iat": now,
+        "exp": now + lifetime,
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
+        "jti": str(uuid.uuid4()),
+        "type": token_type,
+    }
+    return jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALG)
+
+def create_access_token(username: str) -> str:
+    return create_token(username, "access", timedelta(minutes=15))
+
+def create_refresh_token(username: str) -> str:
+    return create_token(username, "refresh", timedelta(days=1))
+```
+
+Y **una** función comprueba todo a la entrada: firma, `exp`, `iss`, `aud`, `type` y revocación. `require` hace inválido un token al que le falten esos claims:
+
+```python
+def decode_token(token: str, expected_type: str | None) -> dict:
+    try:
+        claims = jwt.decode(
+            token, JWT_SECRET, algorithms=[JWT_ALG],
+            issuer=JWT_ISSUER, audience=JWT_AUDIENCE,
+            options={"require": ["sub", "exp", "iss", "aud", "jti", "type"]},
+        )
+    except jwt.ExpiredSignatureError:
+        raise unauthorized("Token has expired")
+    except jwt.InvalidTokenError:  # firma incorrecta, iss o aud distintos, malformado...
+        raise unauthorized("Invalid token")
+    if expected_type is not None and claims["type"] != expected_type:
+        raise unauthorized(f"Wrong token type: expected {expected_type}")
+    if claims["jti"] in revoked:
+        raise unauthorized("Token has been revoked")
+    return claims
+```
+
+`unauthorized(...)` construye `HTTPException(401, detail=..., headers={"WWW-Authenticate": "Bearer"})`. Con `expected_type=None` se acepta cualquiera de los dos tipos (solo lo usa `/logout`).
 
 ### 2. Registro de Usuario (Público)
 
 ```python
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-
-    # Almacenar usuario con contraseña hasheada
-    users[username] = {
-        'password': generate_password_hash(password)
-    }
-    return jsonify({'message': 'Usuario registrado'}), 201
+@app.post("/register", status_code=201)
+def register(data: UserCreate) -> dict[str, str]:
+    if data.username in users:
+        raise HTTPException(status_code=409, detail="User already exists")
+    # Almacenar el hash bcrypt, nunca la contraseña
+    users[data.username] = hash_password(data.password)
+    return {"message": "User registered successfully", "username": data.username}
 ```
+
+`UserCreate` es el modelo Pydantic del Ejercicio 08 (contraseña de 8 a 72 caracteres).
 
 ### 3. Endpoint de Login (Público)
 
 **¡Aquí es donde JWT difiere de Basic Auth!**
 
 ```python
-# Hash de una contraseña aleatoria, creado una vez al arrancar
-DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(16))
+class Credentials(BaseModel):
+    username: str
+    password: str
 
-@app.route('/login', methods=['POST'])
-def login():
-    # Obtener credenciales del CUERPO DE LA PETICIÓN, no del header Authorization
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-
+@app.post("/login")
+def login(data: Credentials) -> LoginResponse:
     # Comprobar siempre una contraseña, aunque el usuario no exista
-    user = users.get(username)
-    password_hash = user['password'] if user else DUMMY_PASSWORD_HASH
-    password_ok = check_password_hash(password_hash, password)
-
-    if not user or not password_ok:
-        return jsonify({'error': 'Invalid credentials'}), 401
+    password_ok = verify_password(data.password, users.get(data.username, DUMMY_HASH))
+    if data.username not in users or not password_ok:
+        raise unauthorized("Invalid credentials")
 
     # Generar ambos tokens con la identidad del usuario
-    access_token = create_access_token(identity=username)
-    refresh_token = create_refresh_token(identity=username)
-    return jsonify({'access_token': access_token,
-                    'refresh_token': refresh_token}), 200
+    return LoginResponse(
+        message="Login successful",
+        access_token=create_access_token(data.username),
+        refresh_token=create_refresh_token(data.username),
+        expires_in=15 * 60,
+    )
 ```
 
-**¿Por qué el hash ficticio?** `check_password_hash` es lento a propósito (unos 100 ms). Si un usuario desconocido respondiera al instante, un atacante podría medir el tiempo de respuesta y averiguar **qué usuarios existen** (enumeración de usuarios). Comprobar contra un hash ficticio hace que ambos fallos tarden lo mismo, y ambos devuelven el mismo mensaje.
+`LoginResponse` amplía `TokenPair(access_token, refresh_token, token_type="bearer")` con `message` y `expires_in`.
+
+> **Login con JSON, no con el formulario de contraseña.** El tutorial de FastAPI hace el login con `OAuth2PasswordRequestForm`, un formulario que implementa el **password grant** de OAuth. OAuth 2.1 eliminó ese grant (verás por qué en el Ejercicio 13), así que aquí `/login` recibe un cuerpo JSON normal y los tokens viajan con `HTTPBearer`. Swagger UI (`/docs`) sigue mostrando un botón "Authorize" para el token.
+
+**¿Por qué el hash ficticio?** `bcrypt.checkpw` es lento a propósito (unos 100 ms). Si un usuario desconocido respondiera al instante, un atacante podría medir el tiempo de respuesta y averiguar **qué usuarios existen** (enumeración de usuarios). Comprobar contra un hash ficticio hace que ambos fallos tarden lo mismo, y ambos devuelven el mismo mensaje. `Credentials` usa campos `str` simples (sin límites de longitud), así que unas credenciales incorrectas siempre responden `401`, nunca `422`.
 
 **Diferencias Clave con el Ejercicio 08:**
-- ❌ NO hay decorador `@auth.login_required`
+- ❌ NO hay dependencia `HTTPBasic`
 - ❌ NO hay header HTTP Basic Auth
 - ✅ Credenciales enviadas en el cuerpo JSON
 - ✅ Devuelve tokens JWT en lugar de sesión
 
 ### 4. Endpoints Protegidos (Requieren JWT)
 
+`HTTPBearer` lee `Authorization: Bearer <token>`. Con `auto_error=False`, si falta el header recibimos `None` y respondemos `401` nosotros (por defecto FastAPI respondería `403`). Dos dependencias pequeñas, una sobre otra, sustituyen a un decorador de "login requerido":
+
 ```python
-@app.route('/profile', methods=['GET'])
-@jwt_required()  # ← Valida el access token
-def profile():
-    # Extraer identidad del usuario del token
-    current_user = get_jwt_identity()
-    return jsonify({'username': current_user}), 200
+bearer = HTTPBearer(auto_error=False)
+
+def get_token(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> str:
+    if creds is None:
+        raise unauthorized("Missing or invalid token")
+    return creds.credentials
+
+def get_current_user(token: Annotated[str, Depends(get_token)]) -> str:
+    return decode_token(token, "access")["sub"]
+
+@app.get("/profile")
+def profile(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:  # ← valida el access token
+    return {"username": user, "profile": f"Profile information for {user}", "account_created": "2025-01-01"}
 ```
 
-**Cómo funciona `@jwt_required()`:**
-1. Extrae el token del header `Authorization: Bearer <token>`
-2. Verifica la firma del token usando `JWT_SECRET_KEY`
+**Cómo funciona `get_current_user`** (toda ruta que la lista en sus parámetros queda protegida):
+1. Extrae el token del header `Authorization: Bearer <token>` (sin header: `401`)
+2. Verifica la firma usando `JWT_SECRET`
 3. Comprueba que el token no ha expirado (`exp`)
 4. Comprueba el emisor (`iss`) y la audiencia (`aud`)
 5. Comprueba que es un token de **acceso** (los refresh tokens se rechazan aquí)
 6. Comprueba que no está en la lista de bloqueo (logout)
-7. Hace disponible la identidad del usuario vía `get_jwt_identity()`
+7. Devuelve el usuario (`sub`) a la ruta
 
 ### 5. Endpoint de Refresh
 
 ```python
-@app.route('/refresh', methods=['POST'])
-@jwt_required(refresh=True)  # ← SOLO se aceptan refresh tokens
-def refresh():
-    current_user = get_jwt_identity()
-    access_token = create_access_token(identity=current_user)
-    return jsonify({'access_token': access_token}), 200
+@app.post("/refresh")
+def refresh(token: Annotated[str, Depends(get_token)]) -> dict[str, str | int]:
+    claims = decode_token(token, "refresh")  # ← SOLO se aceptan refresh tokens
+    return {"access_token": create_access_token(claims["sub"]), "token_type": "bearer", "expires_in": 900}
 ```
 
 ### 6. Logout (Revocación de Tokens)
 
-Los JWT no tienen estado, así que el servidor no puede "borrar" uno. Para revocar un token antes de que expire, guardamos una **lista de bloqueo** con los ids de los tokens revocados (el claim `jti`) y la comprobamos en cada petición:
+Los JWT no tienen estado, así que el servidor no puede "borrar" uno. Para revocar un token antes de que expire, guardamos una **lista de bloqueo** con los ids de los tokens revocados (el claim `jti`) y `decode_token` la comprueba en cada petición (el conjunto `revoked` del paso 1):
 
 ```python
-revoked_tokens = set()  # en memoria: se pierde al reiniciar (usa Redis o una BD en producción)
-
-@jwt.token_in_blocklist_loader
-def is_token_revoked(jwt_header, jwt_payload):
-    return jwt_payload['jti'] in revoked_tokens
-
-@app.route('/logout', methods=['POST'])
-@jwt_required(verify_type=False)  # acepta access O refresh tokens
-def logout():
-    revoked_tokens.add(get_jwt()['jti'])
-    return jsonify({'message': 'Token revocado'}), 200
+@app.post("/logout")
+def logout(token: Annotated[str, Depends(get_token)]) -> dict[str, str]:
+    claims = decode_token(token, None)  # acepta access O refresh tokens
+    revoked.add(claims["jti"])
+    return {"message": f"{claims['type'].capitalize()} token revoked"}
 ```
 
 Llama a `/logout` una vez con el access token y otra con el refresh token para cerrar la sesión por completo.
@@ -321,7 +375,7 @@ Llama a `/logout` una vez con el access token y otra con el refresh token para c
 ### 1. Registrar un Usuario
 
 ```bash
-curl -X POST http://127.0.0.1:5000/register \
+curl -X POST http://127.0.0.1:8000/register \
   -H "Content-Type: application/json" \
   -d '{"username": "alice", "password": "secret123"}'
 ```
@@ -337,7 +391,7 @@ curl -X POST http://127.0.0.1:5000/register \
 ### 2. Iniciar Sesión y Obtener Tokens JWT
 
 ```bash
-curl -X POST http://127.0.0.1:5000/login \
+curl -X POST http://127.0.0.1:8000/login \
   -H "Content-Type: application/json" \
   -d '{"username": "alice", "password": "secret123"}'
 ```
@@ -345,10 +399,10 @@ curl -X POST http://127.0.0.1:5000/login \
 **Respuesta Esperada:**
 ```json
 {
-  "message": "Login successful",
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "Bearer",
+  "token_type": "bearer",
+  "message": "Login successful",
   "expires_in": 900
 }
 ```
@@ -360,7 +414,7 @@ curl -X POST http://127.0.0.1:5000/login \
 Reemplaza `<TU_TOKEN>` con el `access_token` del paso 2:
 
 ```bash
-curl -X GET http://127.0.0.1:5000/profile \
+curl -X GET http://127.0.0.1:8000/profile \
   -H "Authorization: Bearer <TU_TOKEN>"
 ```
 
@@ -376,27 +430,27 @@ curl -X GET http://127.0.0.1:5000/profile \
 ### 4. Intentar SIN Token (Debe Fallar)
 
 ```bash
-curl -X GET http://127.0.0.1:5000/profile
+curl -X GET http://127.0.0.1:8000/profile
 ```
 
-**Respuesta Esperada (401):**
+**Respuesta Esperada (401, con el header `WWW-Authenticate: Bearer`):**
 ```json
 {
-  "msg": "Missing Authorization Header"
+  "detail": "Missing or invalid token"
 }
 ```
 
 ### 5. Obtener Todos los Usuarios (Protegido)
 
 ```bash
-curl -X GET http://127.0.0.1:5000/users \
+curl -X GET http://127.0.0.1:8000/users \
   -H "Authorization: Bearer <TU_TOKEN>"
 ```
 
 ### 6. Obtener un Access Token Nuevo con el Refresh Token
 
 ```bash
-curl -X POST http://127.0.0.1:5000/refresh \
+curl -X POST http://127.0.0.1:8000/refresh \
   -H "Authorization: Bearer <TU_REFRESH_TOKEN>"
 ```
 
@@ -404,17 +458,17 @@ curl -X POST http://127.0.0.1:5000/refresh \
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "Bearer",
+  "token_type": "bearer",
   "expires_in": 900
 }
 ```
 
-Prueba con el **access** token en su lugar: obtienes `422 {"msg": "Only refresh tokens are allowed"}`.
+Prueba con el **access** token en su lugar: obtienes `401 {"detail": "Wrong token type: expected refresh"}`.
 
 ### 7. Logout
 
 ```bash
-curl -X POST http://127.0.0.1:5000/logout \
+curl -X POST http://127.0.0.1:8000/logout \
   -H "Authorization: Bearer <TU_TOKEN>"
 ```
 
@@ -425,7 +479,7 @@ curl -X POST http://127.0.0.1:5000/logout \
 }
 ```
 
-Usar ese token otra vez devuelve `401 {"msg": "Token has been revoked"}`.
+Usar ese token otra vez devuelve `401 {"detail": "Token has been revoked"}`.
 
 ---
 
@@ -445,7 +499,7 @@ payload += '=' * (-len(payload) % 4)  # restaurar el relleno Base64
 print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
 ```
 
-**Opción 2: PyJWT (ya instalado con Flask-JWT-Extended)**
+**Opción 2: PyJWT (ya instalado con `requirements.txt`)**
 ```python
 import jwt
 print(jwt.decode("eyJ...", options={"verify_signature": False}))
@@ -457,28 +511,24 @@ Verás algo como:
 
 ```json
 {
-  "fresh": false,
-  "iat": 1793034905,
-  "jti": "54acfacf-b34e-4c02-8440-6868bc0de9f6",
-  "type": "access",
   "sub": "alice",
-  "nbf": 1793034905,
-  "csrf": "4ba7fa40-ec45-41a1-aa21-f921784e12d3",
-  "aud": "mda-api-clients",
-  "iss": "mda-api-exercises",
-  "exp": 1793035805
+  "iat": 1793281345,
+  "exp": 1793282245,
+  "iss": "notes-api",
+  "aud": "notes-client",
+  "jti": "72526770-fdda-4e67-ada3-0f9d265c83be",
+  "type": "access"
 }
 ```
 
 | Claim | Significado |
 |-------|-------------|
 | `sub` | Sujeto: la identidad del usuario |
-| `iat` / `nbf` / `exp` | Emitido / no válido antes de / expira (timestamps Unix). `exp - iat` = 900 s = 15 min |
+| `iat` / `exp` | Emitido / expira (timestamps Unix). `exp - iat` = 900 s = 15 min |
 | `iss` | Emisor: quién creó el token |
 | `aud` | Audiencia: para quién es el token |
 | `jti` | Id único del token (lo usa la lista de bloqueo del logout) |
 | `type` | `access` o `refresh` |
-| `fresh`, `csrf` | Internos de Flask-JWT-Extended (`csrf` solo importa cuando los tokens van en cookies) |
 
 Los decodificadores online como jwt.io valen para **tokens desechables** que creas para una demo, nunca para tokens reales.
 
@@ -527,7 +577,7 @@ Los decodificadores online como jwt.io valen para **tokens desechables** que cre
 1. **Usar HTTPS en producción** - Los tokens pueden ser interceptados en HTTP
 2. **Access tokens de vida corta** - 15 minutos, como en este ejercicio
 3. **Usar refresh tokens** - Para sesiones largas sin re-login, y revocarlos en el logout
-4. **Verificarlo todo** - Firma, `exp`, `iss` y `aud` (Flask-JWT-Extended lo hace con la configuración de arriba)
+4. **Verificarlo todo** - Firma, `exp`, `iss` y `aud` (`jwt.decode` con `issuer=` y `audience=`, como arriba)
 5. **Almacenar tokens de forma segura**:
    - Web: Cookies `httpOnly` (previene XSS)
    - Móvil: Almacenamiento seguro (Keychain, KeyStore)
@@ -549,10 +599,12 @@ Los decodificadores online como jwt.io valen para **tokens desechables** que cre
 
 ## Errores Comunes y Soluciones
 
+Todo fallo de autenticación responde `401` con un header `WWW-Authenticate: Bearer` y un mensaje en `detail`. Al cliente solo le hace falta saber "consigue un token válido", así que una firma incorrecta, un emisor equivocado y un token malformado comparten el mismo mensaje.
+
 ### 1. Falta el Header de Autorización (401)
 
 ```json
-{"msg": "Missing Authorization Header"}
+{"detail": "Missing or invalid token"}
 ```
 
 **Solución:** Añadir header a la petición:
@@ -560,10 +612,10 @@ Los decodificadores online como jwt.io valen para **tokens desechables** que cre
 -H "Authorization: Bearer <token>"
 ```
 
-### 2. Token Inválido (422)
+### 2. Token Inválido (401)
 
 ```json
-{"msg": "Signature verification failed"}
+{"detail": "Invalid token"}
 ```
 
 **Causas:**
@@ -571,28 +623,26 @@ Los decodificadores online como jwt.io valen para **tokens desechables** que cre
 - `JWT_SECRET_KEY` incorrecta
 - El token fue generado por otro servidor, **o por el mismo servidor antes de un reinicio** (si `JWT_SECRET_KEY` no está definida, el secreto es aleatorio en cada ejecución)
 
-### 3. Emisor o Audiencia Incorrectos (422)
+### 3. Emisor o Audiencia Incorrectos (401)
 
 ```json
-{"msg": "Invalid issuer"}
-{"msg": "Audience doesn't match"}
+{"detail": "Invalid token"}
 ```
 
-**Causa:** El token no lo creó esta API, o se creó para otra distinta.
+**Causa:** El token no lo creó esta API (`iss`), o se creó para otra distinta (`aud`). PyJWT lanza `InvalidIssuerError` o `InvalidAudienceError`; nuestro `except jwt.InvalidTokenError` captura ambas.
 
 ### 4. Token Expirado (401)
 
 ```json
-{"msg": "Token has expired"}
+{"detail": "Token has expired"}
 ```
 
 **Solución:** Llama a `POST /refresh` con tu refresh token. Si el refresh token también ha expirado, inicia sesión de nuevo.
 
-### 5. Tipo de Token Incorrecto (422)
+### 5. Tipo de Token Incorrecto (401)
 
 ```json
-{"msg": "Only refresh tokens are allowed"}
-{"msg": "Only non-refresh tokens are allowed"}
+{"detail": "Wrong token type: expected refresh"}
 ```
 
 **Causa:** Enviaste el access token a `/refresh`, o el refresh token a un endpoint protegido.
@@ -600,15 +650,15 @@ Los decodificadores online como jwt.io valen para **tokens desechables** que cre
 ### 6. Token Revocado (401)
 
 ```json
-{"msg": "Token has been revoked"}
+{"detail": "Token has been revoked"}
 ```
 
 **Causa:** Llamaste a `/logout` con ese token. Inicia sesión de nuevo.
 
-### 7. Token Malformado (422)
+### 7. Token Malformado (401)
 
 ```json
-{"msg": "Not enough segments"}
+{"detail": "Invalid token"}
 ```
 
 **Causa:** El token está incompleto o tiene caracteres de más (normalmente un problema al copiar/pegar)
@@ -617,7 +667,7 @@ Los decodificadores online como jwt.io valen para **tokens desechables** que cre
 ### 8. Falta "Bearer" (401)
 
 ```json
-{"msg": "Missing 'Bearer' type in 'Authorization' header. Expected 'Authorization: Bearer <JWT>'"}
+{"detail": "Missing or invalid token"}
 ```
 
 **Solución:** Asegúrate de que el formato es `Bearer <token>`, no solo `<token>`
@@ -632,13 +682,13 @@ Tu implementación debería:
 - ✅ Aceptar credenciales de login en cuerpo JSON (no en header Authorization)
 - ✅ Devolver un `access_token` (15 minutos) **y** un `refresh_token` en login exitoso
 - ✅ Leer `JWT_SECRET_KEY` del entorno (con alternativa aleatoria)
-- ✅ Establecer y verificar `iss` y `aud` en cada token
-- ✅ Emitir access tokens nuevos vía POST `/refresh` con `@jwt_required(refresh=True)`
-- ✅ Revocar tokens vía POST `/logout` (lista de bloqueo)
-- ✅ Proteger rutas con el decorador `@jwt_required()`
-- ✅ Extraer identidad del usuario con `get_jwt_identity()`
-- ✅ Devolver 401 para credenciales inválidas, con el mismo tiempo para usuarios desconocidos y contraseñas incorrectas
-- ✅ Devolver 401 para tokens JWT faltantes/expirados/revocados
+- ✅ Poner `iss`, `aud`, `jti` y `type` en cada token, y verificar `iss`, `aud` y `type` en cada petición
+- ✅ Emitir access tokens nuevos vía POST `/refresh`, aceptando solo refresh tokens
+- ✅ Revocar tokens vía POST `/logout` (lista de bloqueo de `jti`)
+- ✅ Proteger rutas con `Depends(get_current_user)`
+- ✅ Obtener la identidad del usuario del claim `sub`
+- ✅ Devolver 401 (con `WWW-Authenticate: Bearer`) para credenciales inválidas, con el mismo tiempo para usuarios desconocidos y contraseñas incorrectas
+- ✅ Devolver 401 para tokens JWT faltantes/expirados/revocados/de tipo incorrecto
 - ✅ Hashear contraseñas antes de almacenar
 - ✅ Usar formato de respuesta de error consistente
 
@@ -651,28 +701,26 @@ Una vez completes la implementación básica:
 1. **Rotación de Refresh Tokens**
    Devuelve un refresh token **nuevo** desde `/refresh` y revoca el anterior, para que un refresh token robado solo pueda usarse una vez:
    ```python
-   @app.route('/refresh', methods=['POST'])
-   @jwt_required(refresh=True)
-   def refresh():
-       revoked_tokens.add(get_jwt()['jti'])
-       current_user = get_jwt_identity()
-       return jsonify({
-           'access_token': create_access_token(identity=current_user),
-           'refresh_token': create_refresh_token(identity=current_user)
-       }), 200
+   @app.post("/refresh")
+   def refresh(token: Annotated[str, Depends(get_token)]) -> dict[str, str]:
+       claims = decode_token(token, "refresh")
+       revoked.add(claims["jti"])
+       return {
+           "access_token": create_access_token(claims["sub"]),
+           "refresh_token": create_refresh_token(claims["sub"]),
+       }
    ```
 
 2. **Lista de Bloqueo Persistente**
    Guarda los `jti` revocados en Redis con una expiración igual a la vida restante del token, para que la lista sobreviva a reinicios y no crezca sin límite.
 
 3. **Tokens Fresh para Acciones Sensibles**
-   Marca los tokens del login como fresh (`create_access_token(identity=..., fresh=True)`) y protege los endpoints sensibles con `@jwt_required(fresh=True)`, para que los tokens obtenidos vía `/refresh` no sirvan para ellos.
+   Añade un claim `"fresh": True` al access token creado en el login (y `False` a los creados por `/refresh`), y escribe una segunda dependencia que rechace los tokens que no sean fresh. Úsala en los endpoints sensibles, para que los tokens obtenidos vía `/refresh` no sirvan para ellos.
 
 4. **Añadir Actualización de Perfil de Usuario**
    ```python
-   @app.route('/profile', methods=['PUT'])
-   @jwt_required()
-   def update_profile():
+   @app.put("/profile")
+   def update_profile(user: Annotated[str, Depends(get_current_user)]):
        # Actualizar datos del usuario
    ```
 
@@ -696,9 +744,9 @@ Una vez completes la implementación básica:
 
 ## Recursos Adicionales
 
-- [Documentación Flask-JWT-Extended](https://flask-jwt-extended.readthedocs.io/)
-- [Flask-JWT-Extended: Refresh Tokens](https://flask-jwt-extended.readthedocs.io/en/stable/refreshing_tokens.html)
-- [Flask-JWT-Extended: Lista de Bloqueo y Revocación](https://flask-jwt-extended.readthedocs.io/en/stable/blocklist_and_token_revoking.html)
+- [Documentación PyJWT](https://pyjwt.readthedocs.io/)
+- [FastAPI: Seguridad](https://fastapi.tiangolo.com/tutorial/security/)
+- [FastAPI: Dependencias](https://fastapi.tiangolo.com/tutorial/dependencies/)
 - [RFC 7519 - Especificación JWT](https://tools.ietf.org/html/rfc7519)
 - [OWASP JWT Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
 
@@ -724,7 +772,7 @@ Una vez completes la implementación básica:
    - Enviar el access token en header Authorization: `Bearer <token>`
    - Cuando expire, POST /refresh con el refresh token
    - POST /logout para revocar tokens
-   - Todas las rutas protegidas usan `@jwt_required()`
+   - Todas las rutas protegidas usan `Depends(get_current_user)`
 
 4. **Seguridad**
    - Usar HTTPS en producción

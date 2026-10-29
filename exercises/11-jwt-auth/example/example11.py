@@ -1,92 +1,165 @@
 import os
 import secrets
-from datetime import timedelta
-from flask import Flask, jsonify, request
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import (
-    JWTManager, create_access_token, create_refresh_token,
-    jwt_required, get_jwt_identity, get_jwt
-)
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Annotated
 
-app = Flask(__name__)
+import bcrypt
+import jwt
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field, field_validator
+
+app = FastAPI(title="JWT Authentication API")
 
 # JWT Configuration
 # The secret comes from the environment. If it is not set, a random one is
 # generated on every start (tokens stop working after a restart).
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)  # from env; random per run if unset
+JWT_ALG = "HS256"
 
 # Short-lived access tokens + longer-lived refresh tokens
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=15)
-app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=1)
+ACCESS_TOKEN_MINUTES = 15
+REFRESH_TOKEN_DAYS = 1
 
 # Issuer (iss = who created the token) and audience (aud = who the token is for)
-# ENCODE: written into every token we create
-# DECODE: required on every token we receive (otherwise 422 "Invalid ...")
-JWT_ISSUER = 'mda-api-exercises'
-JWT_AUDIENCE = 'mda-api-clients'
-app.config['JWT_ENCODE_ISSUER'] = JWT_ISSUER
-app.config['JWT_DECODE_ISSUER'] = JWT_ISSUER
-app.config['JWT_ENCODE_AUDIENCE'] = JWT_AUDIENCE
-app.config['JWT_DECODE_AUDIENCE'] = JWT_AUDIENCE
+# We write both into every token we create and REQUIRE both on every token we receive
+JWT_ISSUER = "notes-api"
+JWT_AUDIENCE = "notes-client"
 
-# Initialize JWT Manager
-jwt = JWTManager(app)
+# HTTPBearer reads "Authorization: Bearer <token>" and hands us the token.
+# auto_error=False: if the header is missing we get None and answer 401 ourselves
+# (by default FastAPI would answer 403).
+bearer = HTTPBearer(auto_error=False)
 
-# Simulated database to store users
-users = {
-    # 'username': {'password': 'hashed_password'}
-}
+# In-memory database: {username: bcrypt hash}
+users: dict[str, str] = {}
 
 # Revoked tokens (by their unique id, the "jti" claim).
 # In memory for this exercise: it is lost on restart. Use Redis or a DB in production.
-revoked_tokens = set()
-
-# Hash used when the username does not exist, so that a login attempt with an
-# unknown user takes as long as one with a wrong password (no user enumeration)
-DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(16))
+revoked: set[str] = set()
 
 
-@jwt.token_in_blocklist_loader
-def is_token_revoked(jwt_header, jwt_payload):
-    """Called by @jwt_required() on every request: True means 'reject this token'"""
-    return jwt_payload['jti'] in revoked_tokens
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except ValueError:  # bcrypt only accepts passwords of up to 72 bytes
+        return False
+
+
+# Compared against when the user does not exist, so both failures take the same time
+DUMMY_HASH = hash_password("not-a-real-password")
+
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, pw: str) -> str:
+        if len(pw.encode()) > 72:  # bcrypt counts bytes, not characters
+            raise ValueError("password must be at most 72 bytes")
+        return pw
+
+
+class Credentials(BaseModel):
+    # Plain str: wrong credentials must answer 401, never 422
+    username: str
+    password: str
+
+
+class TokenPair(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class LoginResponse(TokenPair):
+    message: str
+    expires_in: int
+
+
+def unauthorized(detail: str) -> HTTPException:
+    return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
+
+
+def create_token(username: str, token_type: str, lifetime: timedelta) -> str:
+    now = datetime.now(timezone.utc)
+    claims = {
+        "sub": username,
+        "iat": now,
+        "exp": now + lifetime,
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
+        "jti": str(uuid.uuid4()),  # unique id of this token, used to revoke it
+        "type": token_type,
+    }
+    return jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALG)
+
+
+def create_access_token(username: str) -> str:
+    return create_token(username, "access", timedelta(minutes=ACCESS_TOKEN_MINUTES))
+
+
+def create_refresh_token(username: str) -> str:
+    return create_token(username, "refresh", timedelta(days=REFRESH_TOKEN_DAYS))
+
+
+def decode_token(token: str, expected_type: str | None) -> dict:
+    """Check signature, exp, iss, aud, type and revocation. expected_type None accepts any type."""
+    try:
+        claims = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALG],
+            issuer=JWT_ISSUER,
+            audience=JWT_AUDIENCE,
+            options={"require": ["sub", "exp", "iss", "aud", "jti", "type"]},
+        )
+    except jwt.ExpiredSignatureError:
+        raise unauthorized("Token has expired")
+    except jwt.InvalidTokenError:  # bad signature, wrong iss or aud, malformed...
+        raise unauthorized("Invalid token")
+    if expected_type is not None and claims["type"] != expected_type:
+        raise unauthorized(f"Wrong token type: expected {expected_type}")
+    if claims["jti"] in revoked:
+        raise unauthorized("Token has been revoked")
+    return claims
+
+
+def get_token(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> str:
+    """Dependency: returns the raw token, or answers 401 if there is no Bearer header."""
+    if creds is None:
+        raise unauthorized("Missing or invalid token")
+    return creds.credentials
+
+
+def get_current_user(token: Annotated[str, Depends(get_token)]) -> str:
+    """Dependency: returns the username from an ACCESS token (refresh tokens are rejected)."""
+    return decode_token(token, "access")["sub"]
 
 
 # ============================================================================
 # PUBLIC ENDPOINTS (No authentication required)
 # ============================================================================
 
-@app.route('/register', methods=['POST'])
-def register():
+@app.post("/register", status_code=201)
+def register(data: UserCreate) -> dict[str, str]:
     """Register a new user - Public endpoint"""
-    data = request.get_json()
-
-    if not data:
-        return jsonify({'error': 'Request body must be JSON'}), 400
-
-    username = data.get('username')
-    password = data.get('password')
-
-    # Validate input
-    if not username or not password:
-        return jsonify({'error': 'Username and password are required'}), 400
-
-    if username in users:
-        return jsonify({'error': 'User already exists'}), 409
-
+    if data.username in users:
+        raise HTTPException(status_code=409, detail="User already exists")
     # Hash the password before storing it
-    users[username] = {
-        'password': generate_password_hash(password)
-    }
-
-    return jsonify({
-        'message': 'User registered successfully',
-        'username': username
-    }), 201
+    users[data.username] = hash_password(data.password)
+    return {"message": "User registered successfully", "username": data.username}
 
 
-@app.route('/login', methods=['POST'])
-def login():
+@app.post("/login")
+def login(data: Credentials) -> LoginResponse:
     """
     Authenticate user and return JWT tokens - Public endpoint
 
@@ -96,169 +169,89 @@ def login():
     - Client sends the access token with every request (valid 15 minutes)
     - When it expires, the client uses the refresh token on POST /refresh
     """
-    data = request.get_json()
-
-    if not data:
-        return jsonify({'error': 'Request body must be JSON'}), 400
-
-    username = data.get('username')
-    password = data.get('password')
-
-    # Validate input
-    if not username or not password:
-        return jsonify({'error': 'Username and password are required'}), 400
-
-    # Always run a password check, even for unknown users, so both failure
-    # cases take the same time and an attacker cannot tell which usernames exist
-    user = users.get(username)
-    password_hash = user['password'] if user else DUMMY_PASSWORD_HASH
-    password_ok = check_password_hash(password_hash, password)
-
-    if not user or not password_ok:
-        return jsonify({'error': 'Invalid credentials'}), 401
-
-    # Create JWT tokens with user identity
-    access_token = create_access_token(identity=username)
-    refresh_token = create_refresh_token(identity=username)
-
-    return jsonify({
-        'message': 'Login successful',
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'token_type': 'Bearer',
-        'expires_in': int(app.config['JWT_ACCESS_TOKEN_EXPIRES'].total_seconds())
-    }), 200
+    # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
+    password_ok = verify_password(data.password, users.get(data.username, DUMMY_HASH))
+    if data.username not in users or not password_ok:
+        raise unauthorized("Invalid credentials")
+    return LoginResponse(
+        message="Login successful",
+        access_token=create_access_token(data.username),
+        refresh_token=create_refresh_token(data.username),
+        expires_in=ACCESS_TOKEN_MINUTES * 60,
+    )
 
 
 # ============================================================================
 # TOKEN MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@app.route('/refresh', methods=['POST'])
-@jwt_required(refresh=True)
-def refresh():
+@app.post("/refresh")
+def refresh(token: Annotated[str, Depends(get_token)]) -> dict[str, str | int]:
     """
     Get a new access token - Requires a REFRESH token
 
     Authorization: Bearer <refresh_token>
     An access token is rejected here, and a refresh token is rejected everywhere else.
     """
-    current_user = get_jwt_identity()
-    access_token = create_access_token(identity=current_user)
-
-    return jsonify({
-        'access_token': access_token,
-        'token_type': 'Bearer',
-        'expires_in': int(app.config['JWT_ACCESS_TOKEN_EXPIRES'].total_seconds())
-    }), 200
+    claims = decode_token(token, "refresh")
+    return {
+        "access_token": create_access_token(claims["sub"]),
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_MINUTES * 60,
+    }
 
 
-@app.route('/logout', methods=['POST'])
-@jwt_required(verify_type=False)
-def logout():
+@app.post("/logout")
+def logout(token: Annotated[str, Depends(get_token)]) -> dict[str, str]:
     """
-    Revoke the token sent in the Authorization header - Requires any JWT
+    Revoke the token sent in the Authorization header - Requires any valid token
 
     Call it once with the access token and once with the refresh token
     to fully log out.
     """
-    token = get_jwt()
-    revoked_tokens.add(token['jti'])
-
-    return jsonify({
-        'message': f"{token['type'].capitalize()} token revoked"
-    }), 200
+    claims = decode_token(token, None)  # None: access OR refresh
+    revoked.add(claims["jti"])
+    return {"message": f"{claims['type'].capitalize()} token revoked"}
 
 
 # ============================================================================
-# PROTECTED ENDPOINTS (JWT authentication required)
+# PROTECTED ENDPOINTS (access token required)
 # ============================================================================
 
-@app.route('/profile', methods=['GET'])
-@jwt_required()
-def profile():
+@app.get("/profile")
+def profile(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
     """
     Get current user's profile - Protected endpoint
 
-    This endpoint requires a valid JWT token in the Authorization header:
+    This endpoint requires a valid access token in the Authorization header:
     Authorization: Bearer <token>
     """
-    # Extract the user identity from the JWT token
-    current_user = get_jwt_identity()
-
     # In a real application, you would fetch user data from a database
-    user_info = {
-        'username': current_user,
-        'profile': f'Profile information for {current_user}',
-        'account_created': '2025-01-01'  # Example data
+    return {
+        "username": user,
+        "profile": f"Profile information for {user}",
+        "account_created": "2025-01-01",  # Example data
     }
 
-    return jsonify(user_info), 200
 
-
-@app.route('/users', methods=['GET'])
-@jwt_required()
-def get_users():
+@app.get("/users")
+def get_users(user: Annotated[str, Depends(get_current_user)]) -> dict[str, object]:
     """
     Get list of all users - Protected endpoint
 
-    Requires valid JWT token to access this resource.
+    Requires a valid access token to access this resource.
     """
-    current_user = get_jwt_identity()
-
-    return jsonify({
-        'users': list(users.keys()),
-        'requested_by': current_user
-    }), 200
+    return {"users": list(users), "requested_by": user}
 
 
-@app.route('/protected', methods=['GET'])
-@jwt_required()
-def protected():
+@app.get("/protected")
+def protected(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
     """
     Example protected endpoint - Requires JWT
 
-    This demonstrates that ANY endpoint can be protected with @jwt_required()
+    This demonstrates that ANY endpoint can be protected with Depends(get_current_user)
     """
-    current_user = get_jwt_identity()
-
-    return jsonify({
-        'message': f'Hello {current_user}, you have access to this protected resource!',
-        'tip': 'This endpoint can only be accessed with a valid JWT token'
-    }), 200
-
-
-# ============================================================================
-# ERROR HANDLERS
-# ============================================================================
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Resource not found'}), 404
-
-@app.errorhandler(405)
-def method_not_allowed(error):
-    return jsonify({'error': 'Method not allowed'}), 405
-
-
-if __name__ == '__main__':
-    print("\n" + "="*70)
-    print("JWT Authentication API Server")
-    print("="*70)
-    if not os.environ.get('JWT_SECRET_KEY'):
-        print("\nNOTE: JWT_SECRET_KEY not set, using a random secret.")
-        print("      Tokens will stop working when the server restarts.")
-    print("\nPublic endpoints (no auth required):")
-    print("  POST /register  - Register a new user")
-    print("  POST /login     - Login and get access + refresh tokens")
-    print("\nToken management:")
-    print("  POST /refresh   - New access token (requires REFRESH token)")
-    print("  POST /logout    - Revoke the token you send")
-    print("\nProtected endpoints (access token required):")
-    print("  GET  /profile   - Get user profile")
-    print("  GET  /users     - Get all users")
-    print("  GET  /protected - Example protected resource")
-    print("\nServer running at: http://127.0.0.1:5000")
-    print("="*70 + "\n")
-
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1")
+    return {
+        "message": f"Hello {user}, you have access to this protected resource!",
+        "tip": "This endpoint can only be accessed with a valid JWT token",
+    }

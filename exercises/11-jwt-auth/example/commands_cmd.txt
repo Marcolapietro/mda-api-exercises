@@ -1,55 +1,55 @@
 REM Exercise 11: JWT Authentication Testing Commands (Windows CMD)
 REM These commands demonstrate the JWT flow: access token (15 min) + refresh token
 
-REM 0. (Optional) Set the signing secret BEFORE starting the server in this window,
+REM 0. (Optional) Set the signing secret BEFORE running "fastapi dev app.py" in this window,
 REM    otherwise a random one is used and tokens die when the server restarts
 REM python -c "import secrets; print(secrets.token_hex(32))"
 REM set JWT_SECRET_KEY=<paste the value>
 
 REM 1. Register a new user
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"alice\",\"password\":\"secret123\"}" http://127.0.0.1:5000/register
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"alice\",\"password\":\"secret123\"}" http://127.0.0.1:8000/register
 
 REM 2. Login with credentials in JSON body (NOT Basic Auth) to get access_token AND refresh_token
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"alice\",\"password\":\"secret123\"}" http://127.0.0.1:5000/login
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"alice\",\"password\":\"secret123\"}" http://127.0.0.1:8000/login
 
 REM Tip: keep the tokens in variables instead of pasting them everywhere
 REM set TOKEN=eyJ...access_token...
 REM set REFRESH=eyJ...refresh_token...
-REM curl -H "Authorization: Bearer %TOKEN%" http://127.0.0.1:5000/profile
+REM curl -H "Authorization: Bearer %TOKEN%" http://127.0.0.1:8000/profile
 
 REM 3. Access user profile with the ACCESS token (replace YOUR_TOKEN with the access_token from step 2)
-curl -X GET -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:5000/profile
+curl -X GET -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:8000/profile
 
 REM 4. Get all users with the access token
-curl -X GET -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:5000/users
+curl -X GET -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:8000/users
 
 REM 5. Access protected resource with the access token
-curl -X GET -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:5000/protected
+curl -X GET -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:8000/protected
 
 REM 6. Get a new access token with the REFRESH token (replace YOUR_REFRESH_TOKEN)
-curl -X POST -H "Authorization: Bearer YOUR_REFRESH_TOKEN" http://127.0.0.1:5000/refresh
+curl -X POST -H "Authorization: Bearer YOUR_REFRESH_TOKEN" http://127.0.0.1:8000/refresh
 
-REM 7. Try /refresh with the ACCESS token (should fail with 422 "Only refresh tokens are allowed")
-curl -i -X POST -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:5000/refresh
+REM 7. Try /refresh with the ACCESS token (should fail with 401 "Wrong token type")
+curl -i -X POST -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:8000/refresh
 
 REM 8. Logout: revoke the access token, then the refresh token
-curl -X POST -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:5000/logout
-curl -X POST -H "Authorization: Bearer YOUR_REFRESH_TOKEN" http://127.0.0.1:5000/logout
+curl -X POST -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:8000/logout
+curl -X POST -H "Authorization: Bearer YOUR_REFRESH_TOKEN" http://127.0.0.1:8000/logout
 
 REM 9. Use the revoked access token (should fail with 401 "Token has been revoked")
-curl -i -X GET -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:5000/profile
+curl -i -X GET -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:8000/profile
 
 REM 10. Try to access protected endpoint WITHOUT token (should fail with 401)
-curl -i -X GET http://127.0.0.1:5000/profile
+curl -i -X GET http://127.0.0.1:8000/profile
 
 REM 11. Try to login with invalid credentials (should fail with 401)
-curl -i -X POST -H "Content-Type: application/json" -d "{\"username\":\"alice\",\"password\":\"wrongpassword\"}" http://127.0.0.1:5000/login
+curl -i -X POST -H "Content-Type: application/json" -d "{\"username\":\"alice\",\"password\":\"wrongpassword\"}" http://127.0.0.1:8000/login
 
 REM 12. Unknown user gets the SAME answer (and takes the same time) as a wrong password
-curl -i -X POST -H "Content-Type: application/json" -d "{\"username\":\"nobody\",\"password\":\"wrongpassword\"}" http://127.0.0.1:5000/login
+curl -i -X POST -H "Content-Type: application/json" -d "{\"username\":\"nobody\",\"password\":\"wrongpassword\"}" http://127.0.0.1:8000/login
 
 REM 13. Inspect your token LOCALLY (never paste real tokens into websites)
 python -c "import jwt; print(jwt.decode('YOUR_TOKEN', options={'verify_signature': False}))"
 
-REM Note: -i shows the HTTP status line (e.g. HTTP/1.1 401 UNAUTHORIZED)
+REM Note: -i shows the HTTP status line (e.g. HTTP/1.1 401 Unauthorized)
 REM Note: In PowerShell, use commands_powershell.txt instead for better token handling

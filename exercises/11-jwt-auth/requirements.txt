@@ -1,13 +1,10 @@
 # Exercise 11: JWT Authentication - Python Dependencies
 
-# Core Flask framework
-Flask==3.0.0
+# Web framework (includes the "fastapi" command and the dev server)
+fastapi[standard]==0.162.0
 
-# Password hashing utilities
-Werkzeug==3.0.1
+# Password hashing
+bcrypt==5.0.0
 
-# JWT authentication library
-Flask-JWT-Extended==4.6.0
-
-# Optional: For better date/time handling with JWT expiration
-python-dateutil==2.8.2
+# JWT encoding and decoding
+PyJWT==2.15.1
