@@ -208,7 +208,7 @@ Fill in the blank with: `"5/hour"`
 for i in {1..6}; do
   curl -X POST http://127.0.0.1:8000/register \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"user$i\",\"password\":\"pass123\"}"
+    -d "{\"username\":\"user$i\",\"password\":\"pass1234\"}"
   echo ""
 done
 ```
@@ -403,7 +403,7 @@ Mac/Linux:
 for i in {1..5}; do
   curl -X POST http://127.0.0.1:8000/register \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"user$i\",\"password\":\"pass123\"}"
+    -d "{\"username\":\"user$i\",\"password\":\"pass1234\"}"
   echo ""
 done
 ```
@@ -445,14 +445,14 @@ $r.StatusCode
 ```
 X-RateLimit-Limit: 20
 X-RateLimit-Remaining: 19
-X-RateLimit-Reset: 1704672000
+X-RateLimit-Reset: 1704672000.51
 Retry-After: 60
 ```
 
 **Header meanings:**
 - `X-RateLimit-Limit`: Total requests allowed in the window
 - `X-RateLimit-Remaining`: Requests left before hitting the limit
-- `X-RateLimit-Reset`: Unix timestamp when the limit resets
+- `X-RateLimit-Reset`: Unix timestamp when the limit resets (slowapi may include decimals)
 - `Retry-After`: Seconds until the window resets - on a `429` this is how long the client must wait
 
 **Clients should use these headers to:**

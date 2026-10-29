@@ -208,7 +208,7 @@ Completa el espacio en blanco con: `"5/hour"`
 for i in {1..6}; do
   curl -X POST http://127.0.0.1:8000/register \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"user$i\",\"password\":\"pass123\"}"
+    -d "{\"username\":\"user$i\",\"password\":\"pass1234\"}"
   echo ""
 done
 ```
@@ -403,7 +403,7 @@ Mac/Linux:
 for i in {1..5}; do
   curl -X POST http://127.0.0.1:8000/register \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"user$i\",\"password\":\"pass123\"}"
+    -d "{\"username\":\"user$i\",\"password\":\"pass1234\"}"
   echo ""
 done
 ```
@@ -445,14 +445,14 @@ $r.StatusCode
 ```
 X-RateLimit-Limit: 20
 X-RateLimit-Remaining: 19
-X-RateLimit-Reset: 1704672000
+X-RateLimit-Reset: 1704672000.51
 Retry-After: 60
 ```
 
 **Significado de las cabeceras:**
 - `X-RateLimit-Limit`: Total de solicitudes permitidas en la ventana
 - `X-RateLimit-Remaining`: Solicitudes restantes antes de alcanzar el límite
-- `X-RateLimit-Reset`: Timestamp Unix cuando se reinicia el límite
+- `X-RateLimit-Reset`: Timestamp Unix cuando se reinicia el límite (slowapi puede incluir decimales)
 - `Retry-After`: Segundos hasta que se reinicia la ventana - en un `429` es lo que el cliente debe esperar
 
 **Los clientes deberían usar estas cabeceras para:**
