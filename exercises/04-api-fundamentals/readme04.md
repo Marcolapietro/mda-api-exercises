@@ -57,7 +57,7 @@ This exercise introduces core HTTP + JSON API fundamentals using a small Notes A
   }
   ```
 
-- Two exception handlers produce these responses: one for `HTTPException` (your `404`s, and also the `404` and `405` that the router raises by itself;) and one for `RequestValidationError` (the `422`s)
+- Two exception handlers produce these responses: one for `HTTPException` (your `404`s, and also the `404` and `405` that the router raises by itself) and one for `RequestValidationError` (the `422`s)
 
 ## How FastAPI answers invalid input
 
@@ -112,7 +112,9 @@ To add a header to the response, declare a parameter of type `Response`; FastAPI
 curl -i http://127.0.0.1:8000/health
 
 # Create note (success) -> 201 + Location: http://127.0.0.1:8000/notes/1
-curl -i -X POST http://127.0.0.1:8000/notes \n  -H "Content-Type: application/json" \n  -d '{"title": "First note", "content": "Hello world"}'
+curl -i -X POST http://127.0.0.1:8000/notes \
+  -H "Content-Type: application/json" \
+  -d '{"title": "First note", "content": "Hello world"}'
 
 # Create note (malformed JSON) -> 422 problem+json
 curl -i -X POST http://127.0.0.1:8000/notes -H "Content-Type: application/json" -d '{"title": '
