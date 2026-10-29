@@ -15,7 +15,7 @@ pip install -r requirements.txt
 fastapi dev app.py
 ```
 
-Fill the blanks (`_____`) from top to bottom; the app starts once the `auto_error` of `APIKeyHeader`, the decorator of `/api-key/rotate` and the `Depends(...)` of `get_users` are complete. The other blanks (header name, `401`, `token_urlsafe`, `sha256`, `compare_digest`) are only used when a request reaches them, so you will notice them while testing.
+Fill the blanks (`_____`) from top to bottom; the app starts once the `auto_error` of `APIKeyHeader`, the decorator of `/api-key/rotate` and the `Depends(...)` of `get_users` are complete. The other blanks (the header names, `401`, `token_urlsafe`, `sha256`, `compare_digest`) are only used when a request reaches them, so you will notice them while testing.
 
 ---
 
@@ -28,7 +28,7 @@ This exercise builds on Exercise 08 (Basic Authentication) and introduces:
 3. **Constant-time comparison** with `hmac.compare_digest()`
 4. **A reusable dependency** (`Depends(get_current_user)`) that protects any route
 5. **Header-based Authentication** with `APIKeyHeader` and `X-API-Key`
-6. **Key Rotation and Revocation** (instead of "recovering" a lost key)
+6. **Key Rotation and Revocation** with Basic Auth (instead of "recovering" a lost key)
 
 ---
 
@@ -47,7 +47,7 @@ This exercise builds on Exercise 08 (Basic Authentication) and introduces:
 
 | Feature | Basic Auth | API Key |
 |---------|------------|---------|
-| **Sends credentials** | Every request (username:password) | Password only at registration; afterwards, the key |
+| **Sends credentials** | Every request (username:password) | Password only at registration and rotation |
 | **Token format** | Base64 encoded `user:pass` | Long random string (e.g. `sk_...`) |
 | **Expires** | Never (unless password changes) | Can be rotated/revoked at any time |
 | **Storage (client)** | Client stores password | Client stores API key (env var, secrets manager) |
@@ -64,13 +64,18 @@ This exercise builds on Exercise 08 (Basic Authentication) and introduces:
 |--------|----------|-------------|
 | POST | `/register` | Register new user, receive API key (shown **once**) |
 
+### Basic Auth Protected
+
+| Method | Endpoint | Auth Required | Description |
+|--------|----------|---------------|-------------|
+| POST | `/api-key/rotate` | Basic Auth | Issue a new API key; the old one stops working |
+| DELETE | `/api-key` | Basic Auth | Revoke your API key (e.g. it leaked) |
+
 ### API Key Protected
 
 | Method | Endpoint | Auth Required | Description |
 |--------|----------|---------------|-------------|
 | GET | `/users` | API Key | List all users |
-| POST | `/api-key/rotate` | API Key | Issue a new API key; the old one stops working (no body: the key identifies you) |
-| DELETE | `/api-key` | API Key | Revoke the key you are using (e.g. it leaked) |
 
 ---
 
@@ -105,13 +110,14 @@ curl -X POST -H "Content-Type: application/json" \
 **Response:**
 ```json
 {
-  "message": "User registered successfully. Store this API key now: it will not be shown again.",
+  "message": "User registered successfully",
   "username": "alice",
-  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA"
+  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA",
+  "warning": "Store this API key now. It will not be shown again."
 }
 ```
 
-The password is hashed with `bcrypt` and validated like in Exercise 08 (8 to 72 characters), but in this exercise the API key, not the password, authenticates the requests.
+The password is hashed with `bcrypt` and validated like in Exercise 08 (8 to 72 characters). Normal requests use the API key; the password is kept to rotate or revoke the key.
 
 **Client saves this API key** in an environment variable or a secrets manager. Never commit it to Git.
 
@@ -148,27 +154,27 @@ curl -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" \
 
 ### Pattern 3: Rotate or Revoke a Key
 
-The server **cannot recover** a key: it only stores the hash. The key itself identifies you, so rotating and revoking use **the key you already hold** in the `X-API-Key` header, with no request body. If a key may have leaked (or as routine rotation), rotate it: you get a **new** one and the old one stops working immediately.
+The server **cannot recover** a lost key: it only stores the hash. If you lose the key, or it leaks, you get a **new** one with your username/password (Basic Auth, as in Exercise 08). The old key stops working immediately.
 
 ```bash
 # Rotate: new key, old key invalidated
-curl -X POST -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" http://127.0.0.1:8000/api-key/rotate
+curl -X POST -u alice:secret123 http://127.0.0.1:8000/api-key/rotate
 ```
 
 **Response:**
 ```json
 {
-  "message": "API key rotated. The previous key no longer works. Store the new key now: it will not be shown again.",
-  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b"
+  "message": "API key rotated. The previous key no longer works.",
+  "username": "alice",
+  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b",
+  "warning": "Store this API key now. It will not be shown again."
 }
 ```
 
 ```bash
-# Revoke: the key stops working and no new one is issued
-curl -X DELETE -H "X-API-Key: sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b" http://127.0.0.1:8000/api-key
+# Revoke: no key at all until you rotate again
+curl -X DELETE -u alice:secret123 http://127.0.0.1:8000/api-key
 ```
-
-Real providers also let you log in to a dashboard with your password to issue a new key when you have lost the only one. This API has no such route: if you lose your key while practising, restart the server (users live in memory) and register again.
 
 ---
 
@@ -176,7 +182,7 @@ Real providers also let you log in to a dashboard with your password to issue a 
 
 ### TODOs in app.py
 
-You need to fill in **8 strategic blanks** (search for `_____`):
+You need to fill in **9 strategic blanks** (search for `_____`):
 
 1. **`api_key_header`**: The header name, `X-API-Key`
 2. **`api_key_header`**: `auto_error=False`, so a missing header gives `None` instead of an automatic `403`
@@ -184,8 +190,11 @@ You need to fill in **8 strategic blanks** (search for `_____`):
 4. **`hash_api_key()`**: Hash the key with `hashlib.sha256(...)`
 5. **`find_user_by_api_key()`**: Compare hashes with `hmac.compare_digest()`
 6. **`get_current_user()`**: The status code of a missing key, `401`
-7. **`@app.post("/api-key/rotate")`**: Set the HTTP method of the rotation endpoint
-8. **`get_users()`**: Protect the route with `Depends(get_current_user)`
+7. **`get_basic_user()`**: The header that tells the client which authentication is expected, `WWW-Authenticate`
+8. **`@app.post("/api-key/rotate")`**: Set the HTTP method of the rotation endpoint
+9. **`get_users()`**: Protect the route with `Depends(get_current_user)`
+
+The password hashing and the Basic Auth check (`hash_password`, `verify_password`, `get_basic_user`) are the ones from Exercise 08 and are already written for you.
 
 ### Key Concepts to Implement
 
@@ -286,7 +295,7 @@ def get_users(user: Annotated[str, Depends(get_current_user)]) -> dict[str, obje
     ...
 ```
 
-If `get_current_user` raises, the route never runs. Adding the `Depends(get_current_user)` parameter is all it takes to protect a route, and the same dependency protects `GET /users`, `POST /api-key/rotate` and `DELETE /api-key`. Swagger UI (`/docs`) shows an "Authorize" button where you paste the key once.
+If `get_current_user` raises, the route never runs. Adding the `Depends(get_current_user)` parameter is all it takes to protect a route, and that is how `GET /users` is protected. Swagger UI (`/docs`) shows an "Authorize" button where you paste the key once.
 
 #### 5. Reading Headers in FastAPI
 
@@ -311,19 +320,21 @@ def whoami(x_api_key: Annotated[str | None, Header()] = None):
 
 #### 6. Rotating and Revoking Keys
 
+Rotating and revoking are protected with **Basic Auth** (the `HTTPBasic` dependency of Exercise 08, wrapped in `get_basic_user`): you prove who you are with your password, which is what lets you get a new key even if you lost the old one.
+
 ```python
 @app.post("/api-key/rotate")
-def rotate_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
+def rotate_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, str]:
     new_api_key = generate_api_key()
 
     # Overwriting the hash invalidates the old key immediately
     users[user]["api_key_hash"] = hash_api_key(new_api_key)
 
-    return {"message": "API key rotated", "api_key": new_api_key}   # shown once
+    return {"message": "API key rotated", "username": user, "api_key": new_api_key}   # shown once
 
 
 @app.delete("/api-key")
-def revoke_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
+def revoke_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, str]:
     users[user]["api_key_hash"] = None
     return {"message": "API key revoked", "username": user}
 ```
@@ -331,7 +342,7 @@ def revoke_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str,
 - **Rotate** regularly, and always when a key may have leaked or someone who knew it leaves the team
 - **Revoke** when a key leaked and you do not need a replacement yet
 - Rotation uses `POST` because it **creates** a new key on every call
-- The key identifies the user, so these routes need no request body
+- An API key alone cannot rotate or revoke itself: `get_basic_user` answers `401` with `WWW-Authenticate: Basic realm="Authentication Required"` unless username and password match
 
 ---
 
@@ -350,9 +361,10 @@ curl -X POST -H "Content-Type: application/json" \
 **Expected Response:**
 ```json
 {
-  "message": "User registered successfully. Store this API key now: it will not be shown again.",
+  "message": "User registered successfully",
   "username": "alice",
-  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA"
+  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA",
+  "warning": "Store this API key now. It will not be shown again."
 }
 ```
 
@@ -403,15 +415,16 @@ curl -i http://127.0.0.1:8000/users
 ### 5. Rotate Your API Key
 
 ```bash
-curl -X POST -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" \
-     http://127.0.0.1:8000/api-key/rotate
+curl -X POST -u alice:secret123 http://127.0.0.1:8000/api-key/rotate
 ```
 
 **Expected Response:**
 ```json
 {
-  "message": "API key rotated. The previous key no longer works. Store the new key now: it will not be shown again.",
-  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b"
+  "message": "API key rotated. The previous key no longer works.",
+  "username": "alice",
+  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b",
+  "warning": "Store this API key now. It will not be shown again."
 }
 ```
 
@@ -420,19 +433,18 @@ Now repeat step 2 with the **old** key (401) and with the **new** key (200).
 ### 6. Revoke Your API Key
 
 ```bash
-curl -X DELETE -H "X-API-Key: sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b" \
-     http://127.0.0.1:8000/api-key
+curl -X DELETE -u alice:secret123 http://127.0.0.1:8000/api-key
 ```
 
 **Expected Response:**
 ```json
 {
-  "message": "API key revoked",
+  "message": "API key revoked. Use POST /api-key/rotate to get a new one.",
   "username": "alice"
 }
 ```
 
-Repeat step 2 with that key: it now answers 401.
+Repeat step 2 with that key: it now answers 401. Rotate again (step 5) to get a working key.
 
 ---
 
@@ -459,7 +471,8 @@ def register(data: UserCreate) -> dict[str, str]:
     }
 
     # 5. Return the API key to the client (the only time)
-    return {"message": "User registered successfully", "username": data.username, "api_key": api_key}
+    return {"message": "User registered successfully", "username": data.username,
+            "api_key": api_key, "warning": "Store this API key now. It will not be shown again."}
 ```
 
 ### API Key Validation Flow
@@ -564,7 +577,7 @@ def get_users(user: Annotated[str, Depends(get_current_user)]):
 
 ### Issue 5: "I lost my API key, how do I get it back?"
 
-You can't, and that is on purpose: the server only stores the hash. While you still hold a (possibly leaked) key, call `POST /api-key/rotate` to replace it. If the key is gone for good, there is nothing to authenticate with in this exercise: restart the server and register again (a real provider would let you log in with your password and issue a new key).
+You can't, and that is on purpose: the server only stores the hash. Call `POST /api-key/rotate` with your username and password to get a new one.
 
 ---
 
@@ -579,8 +592,8 @@ Your implementation should:
 - ✅ Compare hashes with `hmac.compare_digest()`
 - ✅ Reject requests with missing API keys (401)
 - ✅ Reject requests with invalid API keys (401)
-- ✅ Rotate keys with `POST /api-key/rotate` (authenticated by the key); the old key stops working
-- ✅ Revoke keys with `DELETE /api-key` (authenticated by the key)
+- ✅ Rotate keys with `POST /api-key/rotate` (Basic Auth); the old key stops working
+- ✅ Revoke keys with `DELETE /api-key` (Basic Auth)
 - ✅ Protect routes with a `Depends(get_current_user)` dependency built on `APIKeyHeader`
 - ✅ Answer a missing or invalid key with 401 and `WWW-Authenticate`
 - ✅ Allow multiple users with unique API keys
@@ -735,6 +748,7 @@ def create_user(user: Annotated[str, Depends(require_scope("write"))]):
 ✅ Internal tools
 ✅ Temporary authentication
 ✅ Quick prototypes
+✅ Key management endpoints (rotate/revoke), as in this exercise
 
 ### Use JWT (Next Exercise) When:
 

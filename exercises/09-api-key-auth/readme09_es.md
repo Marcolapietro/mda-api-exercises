@@ -15,7 +15,7 @@ pip install -r requirements.txt
 fastapi dev app.py
 ```
 
-Completa los huecos (`_____`) de arriba abajo; la app arranca cuando están completos el `auto_error` de `APIKeyHeader`, el decorador de `/api-key/rotate` y el `Depends(...)` de `get_users`. Los demás huecos (nombre de la cabecera, `401`, `token_urlsafe`, `sha256`, `compare_digest`) solo se usan cuando una petición llega hasta ellos, así que los notarás al probar.
+Completa los huecos (`_____`) de arriba abajo; la app arranca cuando están completos el `auto_error` de `APIKeyHeader`, el decorador de `/api-key/rotate` y el `Depends(...)` de `get_users`. Los demás huecos (los nombres de cabecera, `401`, `token_urlsafe`, `sha256`, `compare_digest`) solo se usan cuando una petición llega hasta ellos, así que los notarás al probar.
 
 ---
 
@@ -28,7 +28,7 @@ Este ejercicio se basa en el Ejercicio 08 (Autenticación Básica) e introduce:
 3. **Comparación en tiempo constante** con `hmac.compare_digest()`
 4. **Una dependencia reutilizable** (`Depends(get_current_user)`) que protege cualquier ruta
 5. **Autenticación Basada en Cabeceras** con `APIKeyHeader` y `X-API-Key`
-6. **Rotación y Revocación de Claves** (en lugar de "recuperar" una clave perdida)
+6. **Rotación y Revocación de Claves** con Autenticación Básica (en lugar de "recuperar" una clave perdida)
 
 ---
 
@@ -47,7 +47,7 @@ Las **claves API** son secretos aleatorios y largos utilizados para autenticar p
 
 | Característica | Auth Básica | Clave API |
 |----------------|-------------|-----------|
-| **Envía credenciales** | Cada petición (usuario:contraseña) | Contraseña solo en el registro; después, la clave |
+| **Envía credenciales** | Cada petición (usuario:contraseña) | Contraseña solo en registro y rotación |
 | **Formato del token** | Base64 codificado `user:pass` | Cadena aleatoria larga (ej. `sk_...`) |
 | **Expira** | Nunca (a menos que cambie contraseña) | Puede rotarse/revocarse en cualquier momento |
 | **Almacenamiento (cliente)** | Cliente almacena contraseña | Cliente almacena clave API (variable de entorno, gestor de secretos) |
@@ -64,13 +64,18 @@ Las **claves API** son secretos aleatorios y largos utilizados para autenticar p
 |--------|----------|-------------|
 | POST | `/register` | Registrar nuevo usuario, recibir clave API (se muestra **una vez**) |
 
+### Protegidos por Autenticación Básica
+
+| Método | Endpoint | Auth Requerida | Descripción |
+|--------|----------|----------------|-------------|
+| POST | `/api-key/rotate` | Auth Básica | Emitir una clave API nueva; la anterior deja de funcionar |
+| DELETE | `/api-key` | Auth Básica | Revocar tu clave API (ej. se ha filtrado) |
+
 ### Protegidos por Clave API
 
 | Método | Endpoint | Auth Requerida | Descripción |
 |--------|----------|----------------|-------------|
 | GET | `/users` | Clave API | Listar todos los usuarios |
-| POST | `/api-key/rotate` | Clave API | Emitir una clave API nueva; la anterior deja de funcionar (sin cuerpo: la clave te identifica) |
-| DELETE | `/api-key` | Clave API | Revocar la clave que estás usando (ej. se ha filtrado) |
 
 ---
 
@@ -106,13 +111,14 @@ curl -X POST -H "Content-Type: application/json" \
 **Respuesta:**
 ```json
 {
-  "message": "User registered successfully. Store this API key now: it will not be shown again.",
+  "message": "User registered successfully",
   "username": "alice",
-  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA"
+  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA",
+  "warning": "Store this API key now. It will not be shown again."
 }
 ```
 
-La contraseña se hashea con `bcrypt` y se valida como en el Ejercicio 08 (de 8 a 72 caracteres), pero en este ejercicio quien autentica las peticiones es la clave API, no la contraseña.
+La contraseña se hashea con `bcrypt` y se valida como en el Ejercicio 08 (de 8 a 72 caracteres). Las peticiones normales usan la clave API; la contraseña se conserva para rotar o revocar la clave.
 
 **El cliente guarda esta clave API** en una variable de entorno o un gestor de secretos. Nunca la subas a Git.
 
@@ -149,27 +155,27 @@ curl -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" \
 
 ### Patrón 3: Rotar o Revocar una Clave
 
-El servidor **no puede recuperar** una clave: solo guarda el hash. La propia clave te identifica, así que rotar y revocar usan **la clave que ya tienes** en la cabecera `X-API-Key`, sin cuerpo en la petición. Si una clave puede haberse filtrado (o como rotación rutinaria), rótala: obtienes una **nueva** y la anterior deja de funcionar inmediatamente.
+El servidor **no puede recuperar** una clave perdida: solo guarda el hash. Si pierdes la clave, o se filtra, obtienes una **nueva** con tu usuario/contraseña (Autenticación Básica, como en el Ejercicio 08). La clave anterior deja de funcionar inmediatamente.
 
 ```bash
 # Rotar: clave nueva, la anterior queda invalidada
-curl -X POST -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" http://127.0.0.1:8000/api-key/rotate
+curl -X POST -u alice:secret123 http://127.0.0.1:8000/api-key/rotate
 ```
 
 **Respuesta:**
 ```json
 {
-  "message": "API key rotated. The previous key no longer works. Store the new key now: it will not be shown again.",
-  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b"
+  "message": "API key rotated. The previous key no longer works.",
+  "username": "alice",
+  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b",
+  "warning": "Store this API key now. It will not be shown again."
 }
 ```
 
 ```bash
-# Revocar: la clave deja de funcionar y no se emite otra
-curl -X DELETE -H "X-API-Key: sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b" http://127.0.0.1:8000/api-key
+# Revocar: sin clave hasta que vuelvas a rotar
+curl -X DELETE -u alice:secret123 http://127.0.0.1:8000/api-key
 ```
-
-Los proveedores reales también te dejan entrar en un panel con tu contraseña para emitir una clave nueva cuando has perdido la única. Esta API no tiene esa ruta: si pierdes tu clave mientras practicas, reinicia el servidor (los usuarios viven en memoria) y vuelve a registrarte.
 
 ---
 
@@ -177,7 +183,7 @@ Los proveedores reales también te dejan entrar en un panel con tu contraseña p
 
 ### TODOs en app.py
 
-Necesitas completar **8 espacios estratégicos** (busca `_____`):
+Necesitas completar **9 espacios estratégicos** (busca `_____`):
 
 1. **`api_key_header`**: El nombre de la cabecera, `X-API-Key`
 2. **`api_key_header`**: `auto_error=False`, para que una cabecera ausente dé `None` en lugar de un `403` automático
@@ -185,8 +191,11 @@ Necesitas completar **8 espacios estratégicos** (busca `_____`):
 4. **`hash_api_key()`**: Hashear la clave con `hashlib.sha256(...)`
 5. **`find_user_by_api_key()`**: Comparar hashes con `hmac.compare_digest()`
 6. **`get_current_user()`**: El código de estado de una clave ausente, `401`
-7. **`@app.post("/api-key/rotate")`**: Establecer el método HTTP del endpoint de rotación
-8. **`get_users()`**: Proteger la ruta con `Depends(get_current_user)`
+7. **`get_basic_user()`**: La cabecera que dice al cliente qué autenticación se espera, `WWW-Authenticate`
+8. **`@app.post("/api-key/rotate")`**: Establecer el método HTTP del endpoint de rotación
+9. **`get_users()`**: Proteger la ruta con `Depends(get_current_user)`
+
+El hasheo de contraseñas y la comprobación de Auth Básica (`hash_password`, `verify_password`, `get_basic_user`) son los del Ejercicio 08 y ya vienen escritos.
 
 ### Conceptos Clave a Implementar
 
@@ -287,7 +296,7 @@ def get_users(user: Annotated[str, Depends(get_current_user)]) -> dict[str, obje
     ...
 ```
 
-Si `get_current_user` lanza el error, la ruta nunca se ejecuta. Añadir el parámetro `Depends(get_current_user)` es todo lo que hace falta para proteger una ruta, y la misma dependencia protege `GET /users`, `POST /api-key/rotate` y `DELETE /api-key`. Swagger UI (`/docs`) muestra un botón "Authorize" donde pegas la clave una vez.
+Si `get_current_user` lanza el error, la ruta nunca se ejecuta. Añadir el parámetro `Depends(get_current_user)` es todo lo que hace falta para proteger una ruta, y así se protege `GET /users`. Swagger UI (`/docs`) muestra un botón "Authorize" donde pegas la clave una vez.
 
 #### 5. Leer Cabeceras en FastAPI
 
@@ -312,19 +321,21 @@ def whoami(x_api_key: Annotated[str | None, Header()] = None):
 
 #### 6. Rotar y Revocar Claves
 
+Rotar y revocar se protegen con **Autenticación Básica** (la dependencia `HTTPBasic` del Ejercicio 08, envuelta en `get_basic_user`): demuestras quién eres con tu contraseña, y eso es lo que te permite obtener una clave nueva aunque hayas perdido la anterior.
+
 ```python
 @app.post("/api-key/rotate")
-def rotate_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
+def rotate_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, str]:
     new_api_key = generate_api_key()
 
     # Sobrescribir el hash invalida la clave anterior inmediatamente
     users[user]["api_key_hash"] = hash_api_key(new_api_key)
 
-    return {"message": "API key rotated", "api_key": new_api_key}   # se muestra una vez
+    return {"message": "API key rotated", "username": user, "api_key": new_api_key}   # se muestra una vez
 
 
 @app.delete("/api-key")
-def revoke_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
+def revoke_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, str]:
     users[user]["api_key_hash"] = None
     return {"message": "API key revoked", "username": user}
 ```
@@ -332,7 +343,7 @@ def revoke_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str,
 - **Rota** con regularidad, y siempre que una clave pueda haberse filtrado o alguien que la conocía deje el equipo
 - **Revoca** cuando una clave se ha filtrado y todavía no necesitas una sustituta
 - La rotación usa `POST` porque **crea** una clave nueva en cada llamada
-- La clave identifica al usuario, así que estas rutas no necesitan cuerpo en la petición
+- Una clave API sola no puede rotarse ni revocarse: `get_basic_user` responde `401` con `WWW-Authenticate: Basic realm="Authentication Required"` salvo que usuario y contraseña coincidan
 
 ---
 
@@ -351,9 +362,10 @@ curl -X POST -H "Content-Type: application/json" \
 **Respuesta Esperada:**
 ```json
 {
-  "message": "User registered successfully. Store this API key now: it will not be shown again.",
+  "message": "User registered successfully",
   "username": "alice",
-  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA"
+  "api_key": "sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA",
+  "warning": "Store this API key now. It will not be shown again."
 }
 ```
 
@@ -404,15 +416,16 @@ curl -i http://127.0.0.1:8000/users
 ### 5. Rotar tu Clave API
 
 ```bash
-curl -X POST -H "X-API-Key: sk_Vq3o0m3k8X0bS2Yc1d5yGQ0q3ZpWm1x9lJ7cE4tR2uA" \
-     http://127.0.0.1:8000/api-key/rotate
+curl -X POST -u alice:secret123 http://127.0.0.1:8000/api-key/rotate
 ```
 
 **Respuesta Esperada:**
 ```json
 {
-  "message": "API key rotated. The previous key no longer works. Store the new key now: it will not be shown again.",
-  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b"
+  "message": "API key rotated. The previous key no longer works.",
+  "username": "alice",
+  "api_key": "sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b",
+  "warning": "Store this API key now. It will not be shown again."
 }
 ```
 
@@ -421,19 +434,18 @@ Ahora repite el paso 2 con la clave **anterior** (401) y con la clave **nueva** 
 ### 6. Revocar tu Clave API
 
 ```bash
-curl -X DELETE -H "X-API-Key: sk_9fJk2LmQ0wE7rT1yU5iO3pA8sD6fG4hJ2kL0zX9cV7b" \
-     http://127.0.0.1:8000/api-key
+curl -X DELETE -u alice:secret123 http://127.0.0.1:8000/api-key
 ```
 
 **Respuesta Esperada:**
 ```json
 {
-  "message": "API key revoked",
+  "message": "API key revoked. Use POST /api-key/rotate to get a new one.",
   "username": "alice"
 }
 ```
 
-Repite el paso 2 con esa clave: ahora responde 401.
+Repite el paso 2 con esa clave: ahora responde 401. Vuelve a rotar (paso 5) para tener una clave que funcione.
 
 ---
 
@@ -460,7 +472,8 @@ def register(data: UserCreate) -> dict[str, str]:
     }
 
     # 5. Devolver la clave API al cliente (la única vez)
-    return {"message": "User registered successfully", "username": data.username, "api_key": api_key}
+    return {"message": "User registered successfully", "username": data.username,
+            "api_key": api_key, "warning": "Store this API key now. It will not be shown again."}
 ```
 
 ### Flujo de Validación de Clave API
@@ -565,7 +578,7 @@ def get_users(user: Annotated[str, Depends(get_current_user)]):
 
 ### Problema 5: "He perdido mi clave API, ¿cómo la recupero?"
 
-No puedes, y es a propósito: el servidor solo guarda el hash. Mientras todavía tengas una clave (quizá filtrada), llama a `POST /api-key/rotate` para sustituirla. Si la clave se ha perdido del todo, en este ejercicio no queda nada con lo que autenticarte: reinicia el servidor y vuelve a registrarte (un proveedor real te dejaría entrar con tu contraseña y emitir una clave nueva).
+No puedes, y es a propósito: el servidor solo guarda el hash. Llama a `POST /api-key/rotate` con tu usuario y contraseña para obtener una nueva.
 
 ---
 
@@ -580,8 +593,8 @@ Tu implementación debería:
 - ✅ Comparar hashes con `hmac.compare_digest()`
 - ✅ Rechazar peticiones sin clave API (401)
 - ✅ Rechazar peticiones con clave API inválida (401)
-- ✅ Rotar claves con `POST /api-key/rotate` (autenticado con la clave); la clave anterior deja de funcionar
-- ✅ Revocar claves con `DELETE /api-key` (autenticado con la clave)
+- ✅ Rotar claves con `POST /api-key/rotate` (Auth Básica); la clave anterior deja de funcionar
+- ✅ Revocar claves con `DELETE /api-key` (Auth Básica)
 - ✅ Proteger rutas con una dependencia `Depends(get_current_user)` basada en `APIKeyHeader`
 - ✅ Responder 401 y `WWW-Authenticate` ante una clave ausente o inválida
 - ✅ Permitir múltiples usuarios con claves API únicas
@@ -736,6 +749,7 @@ def create_user(user: Annotated[str, Depends(require_scope("write"))]):
 ✅ Herramientas internas
 ✅ Autenticación temporal
 ✅ Prototipos rápidos
+✅ Endpoints de gestión de claves (rotar/revocar), como en este ejercicio
 
 ### Usar JWT (Siguiente Ejercicio) Cuando:
 

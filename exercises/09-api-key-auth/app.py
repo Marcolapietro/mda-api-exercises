@@ -14,7 +14,7 @@ from typing import Annotated
 
 import bcrypt
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.security import APIKeyHeader
+from fastapi.security import APIKeyHeader, HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field, field_validator
 
 app = FastAPI(title="API Key Auth")
@@ -25,6 +25,10 @@ app = FastAPI(title="API Key Auth")
 # TODO: Which header carries the key, and which value turns the automatic 403 off?
 # Hint: the header is X-API-Key; auto_error takes a boolean
 api_key_header = APIKeyHeader(name="_____", auto_error=_____)
+
+# HTTPBasic (as in Exercise 08) is used only to rotate or revoke a key:
+# your username and password prove who you are even if you lost the key.
+basic = HTTPBasic(realm="Authentication Required")
 
 # Recognisable prefix for our keys ("sk_" = secret key).
 # Secret scanners (GitHub, GitLab, gitleaks...) search for known prefixes,
@@ -38,6 +42,17 @@ users: dict[str, dict[str, str | None]] = {}
 
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except ValueError:  # bcrypt only accepts passwords of up to 72 bytes
+        return False
+
+
+# Compared against when the user does not exist, so both failures take the same time
+DUMMY_HASH = hash_password("not-a-real-password")
 
 
 class UserCreate(BaseModel):
@@ -92,6 +107,10 @@ def find_user_by_api_key(api_key: str) -> str | None:
     return None
 
 
+# ============================================================================
+# DEPENDENCIES (API key for normal requests, Basic Auth for rotate and revoke)
+# ============================================================================
+
 def get_current_user(api_key: Annotated[str | None, Depends(api_key_header)]) -> str:
     """Dependency: returns the username that owns the key, or answers 401."""
     if api_key is None:
@@ -108,6 +127,23 @@ def get_current_user(api_key: Annotated[str | None, Depends(api_key_header)]) ->
             status_code=401,
             detail="Invalid API key",
             headers={"WWW-Authenticate": "ApiKey"},
+        )
+    return username
+
+
+def get_basic_user(creds: Annotated[HTTPBasicCredentials, Depends(basic)]) -> str:
+    """Dependency: returns the username if username and password are right, or answers 401."""
+    username = next((u for u in users if secrets.compare_digest(u.encode(), creds.username.encode())), None)
+    # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
+    stored = users[username]["password"] if username else DUMMY_HASH
+    password_ok = verify_password(creds.password, stored)
+    if username is None or not password_ok:
+        # TODO: Which header tells the client what kind of authentication the server expects?
+        # Hint: WWW-Authenticate (the 401 response carries it, with the value 'Basic realm="..."')
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials",
+            headers={"_____": 'Basic realm="Authentication Required"'},
         )
     return username
 
@@ -132,25 +168,25 @@ def register(data: UserCreate) -> dict[str, str]:
 
     # This is the only time the plain key is shown
     return {
-        "message": "User registered successfully. Store this API key now: it will not be shown again.",
+        "message": "User registered successfully",
         "username": data.username,
         "api_key": api_key,
+        "warning": "Store this API key now. It will not be shown again.",
     }
 
 
 # ============================================================================
-# API KEY PROTECTED ENDPOINTS
+# BASIC AUTH PROTECTED ENDPOINTS (key rotation and revocation)
 # ============================================================================
 
 # TODO: Which method CREATES something new (a new key on every call)?
 # Hint: POST
 @app._____("/api-key/rotate")
-def rotate_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
+def rotate_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, str]:
     """
-    Issue a new API key and invalidate the old one. The key in the header
-    identifies the user, so the request needs no body.
+    Issue a new API key and invalidate the old one. Protected by Basic Auth.
 
-    Use it if the key may have leaked or as routine rotation.
+    Use it if you lost your key, if it leaked, or as routine rotation.
     The server cannot "recover" a key: it only has its hash.
     """
     new_api_key = generate_api_key()
@@ -159,17 +195,26 @@ def rotate_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str,
     users[user]["api_key_hash"] = hash_api_key(new_api_key)
 
     return {
-        "message": "API key rotated. The previous key no longer works. Store the new key now: it will not be shown again.",
+        "message": "API key rotated. The previous key no longer works.",
+        "username": user,
         "api_key": new_api_key,
+        "warning": "Store this API key now. It will not be shown again.",
     }
 
 
 @app.delete("/api-key")
-def revoke_api_key(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
-    """Revoke the API key that sent this request, without issuing a new one."""
+def revoke_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, str]:
+    """Revoke the current API key without issuing a new one. Protected by Basic Auth."""
     users[user]["api_key_hash"] = None
-    return {"message": "API key revoked", "username": user}
+    return {
+        "message": "API key revoked. Use POST /api-key/rotate to get a new one.",
+        "username": user,
+    }
 
+
+# ============================================================================
+# API KEY PROTECTED ENDPOINT (the main pattern to learn)
+# ============================================================================
 
 @app.get("/users")
 def get_users(user: Annotated[str, Depends(_____)]) -> dict[str, object]:

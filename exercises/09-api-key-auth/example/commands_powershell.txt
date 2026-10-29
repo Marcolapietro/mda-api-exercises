@@ -11,6 +11,13 @@ function Show-HttpError($err, $label) {
     Write-Host "$label -> HTTP $status $($err.ErrorDetails.Message)" -ForegroundColor Magenta
 }
 
+# Helper: build a Basic Auth header (used only for rotating/revoking keys)
+function Get-BasicAuthHeader($user, $password) {
+    $pair = "${user}:${password}"
+    $encodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($pair))
+    return @{ Authorization = "Basic $encodedCreds" }
+}
+
 Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "Exercise 9: API Key Authentication Tests" -ForegroundColor Cyan
 Write-Host ("=" * 70) -ForegroundColor Cyan
@@ -26,12 +33,14 @@ $registerBody = @{
     password = "secret123"
 } | ConvertTo-Json
 
+$aliceAuth = Get-BasicAuthHeader "alice" "secret123"
+
 try {
     $registerResponse = Invoke-RestMethod -UseBasicParsing -Method Post -Uri "$baseUrl/register" -Headers $headers -Body $registerBody
     Write-Host "Registration successful!" -ForegroundColor Green
     Write-Host "Username: $($registerResponse.username)" -ForegroundColor White
     Write-Host "API Key: $($registerResponse.api_key)" -ForegroundColor White
-    Write-Host "Message: $($registerResponse.message)" -ForegroundColor White
+    Write-Host "Warning: $($registerResponse.warning)" -ForegroundColor White
     Write-Host ""
 
     # Save API key for subsequent tests (the server will never show it again)
@@ -39,8 +48,17 @@ try {
 
 } catch {
     Show-HttpError $_ "Registration failed (user may already exist)"
-    Write-Host "The server cannot show a key again (it only stores the hash). Restart the server (users live in memory) and run this script again." -ForegroundColor Yellow
-    exit
+    Write-Host "The server cannot recover a key (it only stores the hash), so we ROTATE to get a new one..." -ForegroundColor Yellow
+
+    try {
+        $keyResponse = Invoke-RestMethod -UseBasicParsing -Method Post -Uri "$baseUrl/api-key/rotate" -Headers $aliceAuth
+        $apiKey = $keyResponse.api_key
+        Write-Host "New API key issued: $apiKey" -ForegroundColor Green
+    } catch {
+        Show-HttpError $_ "Could not rotate API key"
+        exit
+    }
+    Write-Host ""
 }
 
 # ============================================================================
@@ -68,19 +86,19 @@ try {
 }
 
 # ============================================================================
-# KEY ROTATION AND REVOCATION (also protected by the API key)
+# BASIC AUTH PROTECTED ENDPOINTS (Key Rotation and Revocation)
 # ============================================================================
 
 Write-Host ("=" * 70) -ForegroundColor Cyan
-Write-Host "ROTATE / REVOKE (protected by the API key)" -ForegroundColor Cyan
+Write-Host "BASIC AUTH PROTECTED ENDPOINTS (Rotate / Revoke)" -ForegroundColor Cyan
 Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "==> 3. Rotating the API key (the current key identifies the user)..." -ForegroundColor Yellow
+Write-Host "==> 3. Rotating API key with Basic Auth..." -ForegroundColor Yellow
 $oldApiKey = $apiKey
 
 try {
-    $rotateResponse = Invoke-RestMethod -UseBasicParsing -Method Post -Uri "$baseUrl/api-key/rotate" -Headers $apiKeyHeaders
+    $rotateResponse = Invoke-RestMethod -UseBasicParsing -Method Post -Uri "$baseUrl/api-key/rotate" -Headers $aliceAuth
     Write-Host "API key rotated:" -ForegroundColor Green
     $rotateResponse | ConvertTo-Json | Write-Host
     $apiKey = $rotateResponse.api_key
@@ -108,6 +126,26 @@ try {
 }
 Write-Host ""
 
+Write-Host "==> 6. Revoking API key (DELETE /api-key)..." -ForegroundColor Yellow
+try {
+    $revokeResponse = Invoke-RestMethod -UseBasicParsing -Method Delete -Uri "$baseUrl/api-key" -Headers $aliceAuth
+    Write-Host "$($revokeResponse.message)" -ForegroundColor Green
+} catch {
+    Show-HttpError $_ "Error revoking API key"
+}
+
+try {
+    Invoke-RestMethod -UseBasicParsing -Method Get -Uri "$baseUrl/users" -Headers @{ "X-API-Key" = $apiKey } | Out-Null
+    Write-Host "Unexpected success! The revoked key should not work." -ForegroundColor Red
+} catch {
+    Show-HttpError $_ "Expected error - revoked key rejected"
+}
+
+# Get a fresh key again so alice can keep using the API
+$apiKey = (Invoke-RestMethod -UseBasicParsing -Method Post -Uri "$baseUrl/api-key/rotate" -Headers $aliceAuth).api_key
+Write-Host "Rotated again, alice has a working key: $apiKey" -ForegroundColor Green
+Write-Host ""
+
 # ============================================================================
 # ERROR TESTING
 # ============================================================================
@@ -117,7 +155,7 @@ Write-Host "ERROR TESTING" -ForegroundColor Cyan
 Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "==> 6. Testing with missing API key (should fail)..." -ForegroundColor Yellow
+Write-Host "==> 7. Testing with missing API key (should fail)..." -ForegroundColor Yellow
 try {
     $missingKeyResponse = Invoke-RestMethod -UseBasicParsing -Method Get -Uri "$baseUrl/users"
     Write-Host "Unexpected success! Should have failed." -ForegroundColor Red
@@ -126,7 +164,7 @@ try {
     Write-Host ""
 }
 
-Write-Host "==> 7. Testing with invalid API key (should fail)..." -ForegroundColor Yellow
+Write-Host "==> 8. Testing with invalid API key (should fail)..." -ForegroundColor Yellow
 $invalidHeaders = @{
     "X-API-Key" = "sk_invalid-key-12345"
 }
@@ -139,12 +177,12 @@ try {
     Write-Host ""
 }
 
-Write-Host "==> 8. Rotating without a key (should fail)..." -ForegroundColor Yellow
+Write-Host "==> 9. Rotating with a wrong password (should fail)..." -ForegroundColor Yellow
 try {
-    Invoke-RestMethod -UseBasicParsing -Method Post -Uri "$baseUrl/api-key/rotate" | Out-Null
+    Invoke-RestMethod -UseBasicParsing -Method Post -Uri "$baseUrl/api-key/rotate" -Headers (Get-BasicAuthHeader "alice" "wrongpassword") | Out-Null
     Write-Host "Unexpected success! Should have failed." -ForegroundColor Red
 } catch {
-    Show-HttpError $_ "Expected error - no key"
+    Show-HttpError $_ "Expected error - wrong password"
     Write-Host ""
 }
 
@@ -157,7 +195,7 @@ Write-Host "MULTIPLE USERS TEST" -ForegroundColor Cyan
 Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "==> 9. Registering second user 'bob'..." -ForegroundColor Yellow
+Write-Host "==> 10. Registering second user 'bob'..." -ForegroundColor Yellow
 $registerBody2 = @{
     username = "bob"
     password = "password456"
@@ -173,7 +211,7 @@ try {
     $bobApiKey = $registerResponse2.api_key
 
     # Test bob's API key
-    Write-Host "==> 10. Testing bob's API key..." -ForegroundColor Yellow
+    Write-Host "==> 11. Testing bob's API key..." -ForegroundColor Yellow
     $bobHeaders = @{
         "X-API-Key" = $bobApiKey
     }
@@ -181,17 +219,6 @@ try {
     $bobUsersResponse = Invoke-RestMethod -UseBasicParsing -Method Get -Uri "$baseUrl/users" -Headers $bobHeaders
     Write-Host "Bob's API key works! Users visible:" -ForegroundColor Green
     $bobUsersResponse | ConvertTo-Json | Write-Host
-    Write-Host ""
-
-    Write-Host "==> 11. Revoking bob's key (DELETE /api-key)..." -ForegroundColor Yellow
-    $revokeResponse = Invoke-RestMethod -UseBasicParsing -Method Delete -Uri "$baseUrl/api-key" -Headers $bobHeaders
-    Write-Host "$($revokeResponse.message)" -ForegroundColor Green
-    try {
-        Invoke-RestMethod -UseBasicParsing -Method Get -Uri "$baseUrl/users" -Headers $bobHeaders | Out-Null
-        Write-Host "Unexpected success! The revoked key should not work." -ForegroundColor Red
-    } catch {
-        Show-HttpError $_ "Expected error - revoked key rejected"
-    }
     Write-Host ""
 
 } catch {
@@ -212,11 +239,13 @@ Write-Host "Summary:" -ForegroundColor Cyan
 Write-Host "- API keys generated with secrets.token_urlsafe(32), prefix sk_" -ForegroundColor White
 Write-Host "- Server stores only SHA-256(key) and shows the key ONCE" -ForegroundColor White
 Write-Host "- /users endpoint: Protected by API key ONLY (X-API-Key header)" -ForegroundColor White
-Write-Host "- POST /api-key/rotate and DELETE /api-key: Protected by the API key too (no body)" -ForegroundColor White
-Write-Host "- Leaked key? Rotate it; the old one stops working" -ForegroundColor White
+Write-Host "- POST /api-key/rotate and DELETE /api-key: Protected by Basic Auth" -ForegroundColor White
+Write-Host "- Lost or leaked key? Rotate it; the old one stops working" -ForegroundColor White
 Write-Host ""
 
 Write-Host "Your current API keys (store them in env vars, never in code):" -ForegroundColor Cyan
 Write-Host "- alice: $apiKey" -ForegroundColor White
-Write-Host "- bob: revoked" -ForegroundColor White
+if ($bobApiKey) {
+    Write-Host "- bob: $bobApiKey" -ForegroundColor White
+}
 Write-Host ""
