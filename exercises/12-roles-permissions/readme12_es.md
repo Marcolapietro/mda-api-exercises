@@ -1,4 +1,4 @@
-# Ejercicio 12: Implementación de Roles y Permisos en una API Flask
+# Ejercicio 12: Implementación de Roles y Permisos en una API con FastAPI
 
 ## Inicio Rápido
 
@@ -7,13 +7,15 @@ cd exercises/12-roles-permissions
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python app.py
+fastapi dev app.py
 ```
+
+Rellena los huecos (`_____`) de arriba abajo. Ningún hueco impide que la app arranque: el rol que escribas dentro de `require_role(...)` es solo texto hasta que llega una petición, así que la app arranca enseguida y los huecos (el código de estado `403`, el rol `"student"` de los usuarios nuevos, el método `pop` y los dos roles de `require_role("...")`) solo importan cuando una petición llega hasta ellos. La API se ejecuta en `http://127.0.0.1:8000`.
 
 ## Objetivo
 - **Asignación de Roles y Permisos:** Implementar un sistema de control de acceso basado en roles para la API.
 - **Protección de Rutas:** Asegurar que solo los usuarios con los permisos adecuados puedan acceder a rutas específicas.
-- **Autenticación y Seguridad:** Utilizar JWT (JSON Web Tokens) y Flask-Principal para gestionar usuarios, roles y permisos.
+- **Autenticación y Seguridad:** Utilizar JWT (JSON Web Tokens) y una dependencia que comprueba el rol para gestionar usuarios, roles y permisos.
 
 ---
 
@@ -21,10 +23,9 @@ python app.py
 
 1. **Instalar Dependencias:**
    Asegúrate de tener instaladas las siguientes bibliotecas:
-   - Flask
-   - Flask-JWT-Extended
-   - Flask-Principal
-   - Werkzeug
+   - FastAPI (`fastapi[standard]`)
+   - PyJWT
+   - bcrypt
 
    Puedes instalarlas con:
    ```bash
@@ -37,7 +38,7 @@ python app.py
 3. **Ejecutar el Script:**
    Inicia la aplicación con:
    ```bash
-   python app.py
+   fastapi dev app.py
    ```
 
 ---
@@ -48,14 +49,16 @@ python app.py
 Los usuarios nuevos se registran **siempre** como `student`. El rol nunca se lee del cuerpo de la petición: aceptarlo permitiría que cualquiera se registrase como admin (una vulnerabilidad de *mass assignment*). Solo un admin puede cambiar el rol de un usuario, con `PUT /users/<username>`.
 
 ### **Cuenta de Administrador**
-Al arrancar, la app crea un usuario `admin`. Su contraseña se toma de la variable de entorno `ADMIN_PASSWORD`; si no está definida, se genera una aleatoria y se muestra en la consola:
+Al arrancar, la app crea un usuario `admin`. Su contraseña se toma de la variable de entorno `ADMIN_PASSWORD`; si no está definida, se genera una aleatoria y se muestra en la consola (la terminal donde se ejecuta `fastapi dev`):
 
 ```
 Admin user created -> username: admin  password: Xy3...
 ```
 
+`fastapi dev` puede mostrar esta línea dos veces (el comando carga tu archivo una vez para encontrar la app y el servidor lo carga otra vez). Cada carga crea su propia contraseña aleatoria: usa la **última**. Para no tener dudas, define `ADMIN_PASSWORD` antes de arrancar el servidor.
+
 ### **Inicio de Sesión**
-Autentica a los usuarios y les proporciona un token JWT que será necesario para acceder a las rutas protegidas. El token incluye el rol del usuario como *claim*. En cada petición la identidad se reconstruye a partir del token (`Principal(app, use_sessions=False)`), así que los permisos nunca dependen de una cookie de sesión.
+Autentica a los usuarios y les proporciona un token JWT que será necesario para acceder a las rutas protegidas. El token incluye el rol del usuario como *claim*, pero ese *claim* es solo informativo. En cada petición se vuelve a buscar al usuario a partir del *claim* `sub` del token, así que los permisos nunca dependen de una cookie de sesión ni de lo que diga el token.
 
 ### **Roles Disponibles**
 1. **Admin:**
@@ -66,7 +69,7 @@ Autentica a los usuarios y les proporciona un token JWT que será necesario para
    - Acceso restringido a rutas específicas diseñadas para estudiantes.
 
 ### **Protección de Rutas**
-El acceso a las rutas está restringido según el rol del usuario. Esto se gestiona mediante los decoradores de Flask-Principal que verifican los permisos asignados.
+El acceso a las rutas está restringido según el rol del usuario. Esto se gestiona con una dependencia, `require_role("admin")`, que añades a cada operación protegida. En cada petición lee el rol **actual** del usuario en el almacén del servidor (no en el token) y responde `403` con `Permission denied.` si no coincide. Una petición sin token o con un token inválido ni siquiera llega ahí: responde `401`.
 
 ---
 
@@ -93,11 +96,12 @@ El acceso a las rutas está restringido según el rol del usuario. Esto se gesti
    - **Método:** `GET`
    - **Ruta:** `/users`
    - **Descripción:** Devuelve una lista paginada de usuarios registrados.
+   - **Requiere:** Rol de administrador.
 
 5. **Actualizar Usuario**
    - **Método:** `PUT`
    - **Ruta:** `/users/<username>`
-   - **Descripción:** Actualiza información del usuario (contraseña o rol).
+   - **Descripción:** Actualiza información del usuario (contraseña o rol). El rol debe ser `admin` o `student`; cualquier otro responde `422`.
    - **Requiere:** Rol de administrador.
 
 6. **Eliminar Usuario**
@@ -146,4 +150,4 @@ Comandos listos para usar: `example/commands_cmd.txt` y `example/commands_powers
 
 ---
 
-¡Buena suerte implementando roles y permisos en tu API Flask! 🎉
+¡Buena suerte implementando roles y permisos en tu API con FastAPI! 🎉

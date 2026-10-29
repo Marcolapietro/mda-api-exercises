@@ -1,4 +1,4 @@
-# Exercise 12: Implementation of Roles and Permissions in a Flask API
+# Exercise 12: Implementation of Roles and Permissions in an API with FastAPI
 
 ## Quick Start
 
@@ -7,13 +7,15 @@ cd exercises/12-roles-permissions
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python app.py
+fastapi dev app.py
 ```
+
+Fill the blanks (`_____`) from top to bottom. No blank stops the app from starting: the role you write inside `require_role(...)` is just text until a request arrives, so the app starts right away and the blanks (the `403` status code, the `"student"` role of new users, the `pop` method and the two roles of `require_role("...")`) only matter when a request reaches them. The API runs at `http://127.0.0.1:8000`.
 
 ## Objective
 - **Role and Permission Assignment:** Implement a role-based access control system for the API.
 - **Route Protection:** Ensure that only users with appropriate permissions can access specific routes.
-- **Authentication and Security:** Use JWT (JSON Web Tokens) and Flask-Principal to manage users, roles, and permissions.
+- **Authentication and Security:** Use JWT (JSON Web Tokens) and a dependency that checks the role to manage users, roles, and permissions.
 
 ---
 
@@ -21,10 +23,9 @@ python app.py
 
 1. **Install Dependencies:**
    Make sure you have the following libraries installed:
-   - Flask
-   - Flask-JWT-Extended
-   - Flask-Principal
-   - Werkzeug
+   - FastAPI (`fastapi[standard]`)
+   - PyJWT
+   - bcrypt
 
    You can install them with:
    ```bash
@@ -37,7 +38,7 @@ python app.py
 3. **Run the Script:**
    Start the application with:
    ```bash
-   python app.py
+   fastapi dev app.py
    ```
 
 ---
@@ -48,14 +49,16 @@ python app.py
 New users are **always** registered as `student`. The role is never read from the request body: accepting it would let anyone register as admin (a *mass assignment* vulnerability). Only an admin can change a user's role, with `PUT /users/<username>`.
 
 ### **Admin Account**
-At start-up the app creates one `admin` user. Its password is taken from the `ADMIN_PASSWORD` environment variable; if it is not set, a random password is generated and printed in the console:
+At start-up the app creates one `admin` user. Its password is taken from the `ADMIN_PASSWORD` environment variable; if it is not set, a random password is generated and printed in the console (the terminal where `fastapi dev` runs):
 
 ```
 Admin user created -> username: admin  password: Xy3...
 ```
 
+`fastapi dev` may print this line twice (the command loads your file once to find the app, and the server loads it again). Each load creates its own random password: use the **last** one. To avoid the doubt, set `ADMIN_PASSWORD` before starting the server.
+
 ### **Login**
-Authenticates users and provides them with a JWT token that will be required to access protected routes. The token includes the user's role as a claim. On every request the identity is rebuilt from the token (`Principal(app, use_sessions=False)`), so permissions never depend on a session cookie.
+Authenticates users and provides them with a JWT token that will be required to access protected routes. The token includes the user's role as a claim, but that claim is only informative. On every request the user is looked up again from the token's `sub` claim, so permissions never depend on a session cookie or on what the token says.
 
 ### **Available Roles**
 1. **Admin:**
@@ -66,7 +69,7 @@ Authenticates users and provides them with a JWT token that will be required to 
    - Restricted access to specific routes designed for students.
 
 ### **Route Protection**
-Access to routes is restricted based on the user's role. This is managed through Flask-Principal decorators that verify assigned permissions.
+Access to routes is restricted based on the user's role. This is managed with a dependency, `require_role("admin")`, that you add to each protected path operation. On every request it reads the user's **current** role from the server's user store (not from the token) and answers `403` with `Permission denied.` if it does not match. A request with a missing or invalid token never gets that far: it answers `401`.
 
 ---
 
@@ -93,11 +96,12 @@ Access to routes is restricted based on the user's role. This is managed through
    - **Method:** `GET`
    - **Route:** `/users`
    - **Description:** Returns a paginated list of registered users.
+   - **Requires:** Administrator role.
 
 5. **Update User**
    - **Method:** `PUT`
    - **Route:** `/users/<username>`
-   - **Description:** Updates user information (password or role).
+   - **Description:** Updates user information (password or role). The role must be `admin` or `student`; anything else answers `422`.
    - **Requires:** Administrator role.
 
 6. **Delete User**
@@ -146,4 +150,4 @@ Ready-made commands: `example/commands_cmd.txt` and `example/commands_powershell
 
 ---
 
-Good luck implementing roles and permissions in your Flask API!
+Good luck implementing roles and permissions in your API with FastAPI!

@@ -1,174 +1,244 @@
-import os
-from flask import Flask, jsonify, request
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, verify_jwt_in_request
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_principal import Principal, Permission, RoleNeed, identity_loaded, UserNeed, Identity, AnonymousIdentity
-import math
-import random
-import string
-import secrets
+"""
+Roles and Permissions API (Starter)
 
-app = Flask(__name__)
+Run it with:  fastapi dev app.py
+Fill the blanks (_____) from top to bottom. No blank stops the app from starting (the
+role you write inside require_role(...) is just text until a request arrives), so the app
+starts right away. The blanks only matter when a request reaches them, so you will notice
+them while testing.
+"""
+
+import math
+import os
+import random
+import secrets
+import string
+import sys
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Callable
+
+import bcrypt
+import jwt
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field, field_validator
+
+app = FastAPI(title="Roles and Permissions API")
 
 # JWT configuration for token-based authentication
 # WARNING: In production, use environment variables for secrets!
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
-jwt = JWTManager(app)
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)  # from env; random per run if unset
+JWT_ALG = "HS256"
+ACCESS_TOKEN_MINUTES = 15
 
-# Flask-Principal configuration for role and permission management
-app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
-# use_sessions=False: the identity comes from the JWT on every request, never from a session cookie
-principals = Principal(app, use_sessions=False)
+# HTTPBearer reads "Authorization: Bearer <token>" and hands us the token.
+# auto_error=False: if the header is missing we get None and answer 401 ourselves
+# (by default FastAPI would answer 403).
+bearer = HTTPBearer(auto_error=False)
 
-VALID_ROLES = ('admin', 'student')
+VALID_ROLES = ("admin", "student")
+
+# Simulated database for storing users: {username: {"username", "password" (bcrypt hash), "role"}}
+users: dict[str, dict[str, str]] = {}
 
 
-@principals.identity_loader
-def load_identity_from_jwt():
-    """Builds the Flask-Principal identity from the JWT sent in the Authorization header."""
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(pw: str, hashed: str) -> bool:
     try:
-        verify_jwt_in_request(optional=True)
-        username = get_jwt_identity()
-    except Exception:
-        username = None
-    return Identity(username) if username else AnonymousIdentity()
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except ValueError:  # bcrypt only accepts passwords of up to 72 bytes
+        return False
 
-# Role and permission definitions
-admin_permission = Permission(RoleNeed('admin'))  # Permission for administrators
-student_permission = Permission(RoleNeed('student'))  # Permission for students
 
-# Simulated database for storing users
-users = {}
+# Compared against when the user does not exist, so both failures take the same time
+DUMMY_HASH = hash_password("not-a-real-password")
+
+
+class UserCreate(BaseModel):
+    # No "role" field: the role is never taken from the request body
+    # (Pydantic ignores extra fields such as "role").
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, pw: str) -> str:
+        if len(pw.encode()) > 72:  # bcrypt counts bytes, not characters
+            raise ValueError("password must be at most 72 bytes")
+        return pw
+
+
+class Credentials(BaseModel):
+    # Plain str: wrong credentials must answer 401, never 422
+    username: str
+    password: str
+
+
+class UserUpdate(BaseModel):
+    role: str | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=72)
+
+    @field_validator("role")
+    @classmethod
+    def role_is_valid(cls, role: str | None) -> str | None:
+        if role is not None and role not in VALID_ROLES:
+            raise ValueError(f"Invalid role. Allowed: {', '.join(VALID_ROLES)}.")
+        return role
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, pw: str | None) -> str | None:
+        if pw is not None and len(pw.encode()) > 72:  # bcrypt counts bytes, not characters
+            raise ValueError("password must be at most 72 bytes")
+        return pw
+
+
+def create_access_token(user: dict[str, str]) -> str:
+    now = datetime.now(timezone.utc)
+    claims = {
+        "sub": user["username"],
+        # The role travels inside the token as a claim (informative: permissions are still
+        # checked against the current role in the store on every request)
+        "role": user["role"],
+        "iat": now,
+        "exp": now + timedelta(minutes=ACCESS_TOKEN_MINUTES),
+    }
+    return jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALG)
+
+
+def get_current_user(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> dict[str, str]:
+    """Dependency: returns the stored user record, or answers 401 if the token is missing, expired or invalid."""
+    unauthorized = HTTPException(
+        status_code=401,
+        detail="Missing or invalid token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if creds is None:
+        raise unauthorized
+    try:
+        claims = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG], options={"require": ["sub", "exp"]})
+    except jwt.InvalidTokenError:  # expired, bad signature, malformed...
+        raise unauthorized
+    user = users.get(claims["sub"])
+    if user is None:  # the account was deleted after the token was issued
+        raise unauthorized
+    return user
+
+
+def require_role(role: str) -> Callable[..., dict[str, str]]:
+    """Builds a dependency that only lets users with the given role through.
+
+    The role is read from the users store on every request, NOT from the token: if an
+    admin promotes or demotes someone, the change applies to the token they already have.
+    """
+    def check_role(user: Annotated[dict[str, str], Depends(get_current_user)]) -> dict[str, str]:
+        if user["role"] != role:
+            # TODO: Which status code means "you are known, but not allowed"?
+            # Hint: 403
+            raise HTTPException(status_code=_____, detail="Permission denied.")
+        return user
+
+    return check_role
+
 
 # Generate test users
-def generate_users(users, total):
+def generate_users(total: int) -> None:
     """Generates test users with random roles"""
-    roles = ['admin', 'student']
     # These users only exist to have data to list (nobody logs in with them).
     # Hashing one random password once keeps start-up fast: hashing 100 passwords
     # one by one takes many seconds.
-    unusable_hash = generate_password_hash(secrets.token_hex(16))
+    unusable_hash = hash_password(secrets.token_hex(16))
     for _ in range(total):
-        username = ''.join(random.choices(string.ascii_letters, k=8))
-        role = random.choice(roles)
-        users[username] = {
-            'password': unusable_hash,
-            'api_key': secrets.token_hex(16),
-            'role': role
-        }
+        username = "".join(random.choices(string.ascii_letters, k=8))
+        users[username] = {"username": username, "password": unusable_hash, "role": random.choice(VALID_ROLES)}
 
-def create_admin_user():
+
+def create_admin_user() -> None:
     """Bootstraps one admin account so the admin-only endpoints can be tested.
 
     The password comes from the ADMIN_PASSWORD environment variable; if it is not set,
     a random one is generated and printed once in the console.
     """
-    password = os.environ.get('ADMIN_PASSWORD') or secrets.token_urlsafe(12)
-    users['admin'] = {
-        'password': generate_password_hash(password),
-        'api_key': secrets.token_hex(16),
-        'role': 'admin'
-    }
-    if not os.environ.get('ADMIN_PASSWORD'):
-        print(f"Admin user created -> username: admin  password: {password}")
+    password = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(12)
+    users["admin"] = {"username": "admin", "password": hash_password(password), "role": "admin"}
+    if not os.environ.get("ADMIN_PASSWORD"):
+        print(f"Admin user created -> username: admin  password: {password}", file=sys.stderr)
 
-@app.route('/register', methods=['POST'])
-def register_user():
+
+# Generate 100 test users with random roles for testing, plus one known admin
+generate_users(100)
+create_admin_user()
+
+
+@app.post("/register", status_code=201)
+def register_user(data: UserCreate) -> dict[str, str]:
     """Registers a new user. New users are ALWAYS students.
 
     Security: the role is never taken from the request body. Accepting it would let anyone
     register as admin (a "mass assignment" vulnerability). Only an admin can change roles
-    via PUT /users/<username>.
+    via PUT /users/{username}.
     """
-    data = request.get_json(silent=True) or {}
-    username = data.get('username')
-    password = data.get('password')
+    if data.username in users:
+        raise HTTPException(status_code=409, detail="User already exists.")
 
-    if not username or not password:
-        return jsonify({'message': 'Username and password are required.'}), 400
-    if username in users:
-        return jsonify({'message': 'User already exists.'}), 409
+    # TODO: Which role does EVERY new user get, whatever the request says?
+    # Hint: student
+    users[data.username] = {"username": data.username, "password": hash_password(data.password), "role": "_____"}
+    return {"message": "User registered successfully.", "role": "student"}
 
-    users[username] = {
-        'password': generate_password_hash(password),
-        'api_key': secrets.token_hex(16),
-        'role': 'student'
-    }
-    return jsonify({'message': 'User registered successfully.', 'role': 'student'}), 201
 
-@app.route('/login', methods=['POST'])
-def login():
+@app.post("/login")
+def login(data: Credentials) -> dict[str, str]:
     """Authenticates a user and generates a JWT token that includes the role as a claim"""
-    data = request.get_json(silent=True) or {}
-    username = data.get('username')
-    password = data.get('password')
+    user = users.get(data.username)
+    # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
+    password_ok = verify_password(data.password, user["password"] if user else DUMMY_HASH)
+    if user is None or not password_ok:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return {"access_token": create_access_token(user), "token_type": "bearer"}
 
-    if not username or not password:
-        return jsonify({'message': 'Username and password are required.'}), 400
 
-    user = users.get(username)
-    if user and check_password_hash(user['password'], password):
-        # The role travels inside the token as a claim (informative: permissions are still
-        # checked against the current role in the database on every request)
-        access_token = create_access_token(identity=username, additional_claims={'role': user['role']})
-        return jsonify({'access_token': access_token}), 200
-
-    return jsonify({'message': 'Invalid username or password.'}), 401
-
-@app.route('/profile', methods=['GET'])
-@jwt_required()
-def profile():
+@app.get("/profile")
+def profile(user: Annotated[dict[str, str], Depends(get_current_user)]) -> dict[str, str]:
     """Returns the authenticated user's profile"""
-    current_user = get_jwt_identity()
-    return jsonify({'profile': f'Profile information for {current_user}'}), 200
+    return {"profile": f"Profile information for {user['username']}"}
 
-@identity_loaded.connect_via(app)
-def on_identity_loaded(sender, identity):
-    """
-    Loads permissions and roles for the authenticated user.
 
-    This function is called automatically by Flask-Principal when a user is authenticated.
-    It assigns the user's role to their identity, which is used to check permissions.
-
-    Complete the blank to add the role permission to the user's identity.
-    """
-    identity.user = identity.id  # Associates the authenticated user with the identity
-    identity.provides.add(UserNeed(identity.id))  # Adds permission based on user ID
-
-    if identity.id in users:
-        role = users[identity.id].get('role')  # Retrieves the authenticated user's role
-        if role:
-            # TODO: Add the role as a permission
-            # Hint: Use the Need class that matches roles (check the flask_principal import at the top)
-            # The pattern is: _____Need(role) where _____ is the type of need
-            identity.provides.add(_____Need(role))
-
-@app.route('/users', methods=['GET'])
-@jwt_required()
-def get_users():
-    """Returns a list of users with pagination"""
-    page = request.args.get('page', 1, type=int)
-    per_page = min(max(request.args.get('per_page', 10, type=int), 1), 100)  # clamp to 1..100
+@app.get("/users")
+def get_users(
+    admin: Annotated[dict[str, str], Depends(require_role("admin"))],
+    page: int = 1,
+    per_page: int = 10,
+) -> dict[str, list[str] | int]:
+    """Returns a list of users with pagination (admins only)"""
+    per_page = min(max(per_page, 1), 100)  # clamp to 1..100
 
     total_users = len(users)
     total_pages = math.ceil(total_users / per_page)
 
     if page > total_pages or page < 1:
-        return jsonify({'message': 'Page not found.'}), 404
+        raise HTTPException(status_code=404, detail="Page not found.")
 
     start = (page - 1) * per_page
     end = start + per_page
     users_list = list(users.keys())[start:end]
 
-    return jsonify({
-        'users': users_list,
-        'total_pages': total_pages,
-        'current_page': page
-    }), 200
+    return {"users": users_list, "total_pages": total_pages, "current_page": page}
 
-@app.route('/users/<username>', methods=['PUT'])
-@jwt_required()
-def update_user(username):
+
+@app.put("/users/{username}")
+def update_user(
+    username: str,
+    data: UserUpdate,
+    admin: Annotated[dict[str, str], Depends(require_role("admin"))],
+) -> dict[str, str]:
     """
     Updates an existing user's information (password and/or role).
 
@@ -177,40 +247,31 @@ def update_user(username):
         200: User updated successfully
         403: Permission denied (not an admin)
         404: User not found
+        422: Invalid role or password
     """
-    # Check permission BEFORE looking the user up: answering 404 to a non-admin
-    # would reveal which usernames exist
-    if not admin_permission.can():
-        return jsonify({'message': 'Permission denied.'}), 403
-
+    # The admin check is a dependency, so it runs BEFORE this body: answering 404
+    # to a non-admin would reveal which usernames exist
     if username not in users:
-        return jsonify({'message': 'User not found.'}), 404
+        raise HTTPException(status_code=404, detail="User not found.")
 
-    data = request.get_json(silent=True) or {}
-    password = data.get('password')
-    role = data.get('role')
+    if data.password is not None:
+        users[username]["password"] = hash_password(data.password)
+    if data.role is not None:
+        users[username]["role"] = data.role
 
-    if role is not None and role not in VALID_ROLES:
-        return jsonify({'message': f'Invalid role. Allowed: {", ".join(VALID_ROLES)}.'}), 400
+    return {"message": "User updated successfully."}
 
-    if password:
-        users[username]['password'] = generate_password_hash(password)
-    if role:
-        # TODO: Update the user's role in the database
-        # Hint: What key stores the role in the users dictionary? (see register_user())
-        users[username]['_____'] = role
 
-    return jsonify({'message': 'User updated successfully.'}), 200
-
-@app.route('/users/<username>', methods=['DELETE'])
-@jwt_required()
-@admin_permission.require(http_exception=403)
-def delete_user(username):
+@app.delete("/users/{username}")
+def delete_user(
+    username: str,
+    admin: Annotated[dict[str, str], Depends(require_role("admin"))],
+) -> dict[str, str]:
     """
     Deletes a user if the requester has administrator permissions.
 
-    The @admin_permission.require() decorator automatically returns 403
-    if the user doesn't have admin role.
+    The require_role("admin") dependency automatically returns 403
+    if the user doesn't have the admin role.
 
     Returns:
         200: User deleted successfully
@@ -218,56 +279,35 @@ def delete_user(username):
         404: User not found
     """
     if username not in users:
-        return jsonify({'message': 'User not found.'}), 404
+        raise HTTPException(status_code=404, detail="User not found.")
 
     # TODO: Delete the user from the database
     # Hint: dict method that removes a key and returns its value (3 letters)
     users._____(username)
-    return jsonify({'message': 'User deleted successfully.'}), 200
+    return {"message": "User deleted successfully."}
 
-@app.route('/admin/dashboard', methods=['GET'])
-@jwt_required()
-@admin_permission.require(http_exception=403)
-def admin_dashboard():
+
+@app.get("/admin/dashboard")
+def admin_dashboard(
+    user: Annotated[dict[str, str], Depends(require_role("_____"))],  # TODO: Which role may open the admin dashboard?
+) -> dict[str, str]:
+    # Hint: admin
     """
     Returns the dashboard exclusive to administrators.
 
     Only users with 'admin' role can access this endpoint.
     """
-    return jsonify({'message': f'Welcome to the admin dashboard, {get_jwt_identity()}.'}), 200
+    return {"message": f"Welcome to the admin dashboard, {user['username']}."}
 
-@app.route('/student/data', methods=['GET'])
-@jwt_required()
-@student_permission.require(http_exception=403)
-def student_data():
+
+@app.get("/student/data")
+def student_data(
+    user: Annotated[dict[str, str], Depends(require_role("_____"))],  # TODO: Which role may read the student data?
+) -> dict[str, str]:
+    # Hint: student
     """
     Returns specific data for the authenticated student.
 
     Only users with 'student' role can access this endpoint.
     """
-    return jsonify({'message': f'Student data for {get_jwt_identity()}.'}), 200
-
-# Error handlers
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Resource not found.'}), 404
-
-@app.errorhandler(405)
-def method_not_allowed(error):
-    return jsonify({'error': 'Method not allowed.'}), 405
-
-@app.errorhandler(500)
-def internal_error(error):
-    app.logger.error(f'Internal server error: {str(error)}')
-    return jsonify({'error': 'Internal server error.'}), 500
-
-if __name__ == '__main__':
-    debug = os.getenv("FLASK_DEBUG") == "1"
-    # In debug mode the reloader runs this file twice: a watcher process and the process
-    # that actually serves requests (WERKZEUG_RUN_MAIN == 'true'). Create the data only in
-    # the serving process, so the admin password printed is the one that works.
-    if not debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-        # Generate 100 test users with random roles for testing, plus one known admin
-        generate_users(users, 100)
-        create_admin_user()
-    app.run(debug=debug)
+    return {"message": f"Student data for {user['username']}."}

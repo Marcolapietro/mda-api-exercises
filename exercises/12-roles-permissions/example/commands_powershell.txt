@@ -2,9 +2,9 @@
 
 # 0. Start the app with a known admin password (or use the one printed at start-up):
 #    $env:ADMIN_PASSWORD="admin123"
-#    python app.py
+#    fastapi dev app.py
 
-$baseUrl = "http://127.0.0.1:5000"
+$baseUrl = "http://127.0.0.1:8000"
 $headers = @{
     "Content-Type" = "application/json"
 }
@@ -12,7 +12,7 @@ $headers = @{
 # 1. Register a student (new users are always students)
 $studentBody = @{
     username = "student1"
-    password = "pass123"
+    password = "pass1234"
 } | ConvertTo-Json
 
 Invoke-RestMethod -Method Post -Uri "$baseUrl/register" -Headers $headers -Body $studentBody
@@ -20,7 +20,7 @@ Invoke-RestMethod -Method Post -Uri "$baseUrl/register" -Headers $headers -Body 
 # 2. Try to register as admin: the role in the body is ignored, you get "role": "student"
 $malloryBody = @{
     username = "mallory"
-    password = "pass123"
+    password = "pass1234"
     role = "admin"
 } | ConvertTo-Json
 
@@ -63,7 +63,7 @@ Invoke-RestMethod -Method Get -Uri "$baseUrl/student/data" -Headers $studentAuth
 Invoke-RestMethod -Method Get -Uri "$baseUrl/users?page=1&per_page=5" -Headers $adminAuthHeaders
 
 # 9. Try to update a user as a student (expected: 403)
-$hackBody = @{ password = "hacked" } | ConvertTo-Json
+$hackBody = @{ password = "hacked-pass-1" } | ConvertTo-Json
 try {
     Invoke-RestMethod -Method Put -Uri "$baseUrl/users/admin" -Headers $studentAuthHeaders -Body $hackBody
 } catch {
