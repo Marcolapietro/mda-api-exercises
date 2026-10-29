@@ -3,7 +3,7 @@
 ## Quick Start
 
 - This is a theory/overview exercise. There is no app to run.
-- Read through the concepts, then continue with exercise 03 (Flask intro). If you skipped it, exercise 01 shows how to call APIs with Postman.
+- Read through the concepts, then continue with exercise 03 (FastAPI intro). If you skipped it, exercise 01 shows how to call APIs with Postman.
 
 ## Objective
 Understand what an API is and its importance in software development. Identify examples of popular APIs and their uses.

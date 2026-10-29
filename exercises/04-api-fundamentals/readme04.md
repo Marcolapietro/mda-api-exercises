@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This exercise introduces core HTTP + JSON API fundamentals using a small Notes API built with Flask. It comes right after 03 (Flask intro) and before 05 (CRUD) and focuses on clean request/response design and basic validation — no authentication yet. The same Notes API grows into full CRUD in exercise 05 and gets pagination in exercise 06.
+This exercise introduces core HTTP + JSON API fundamentals using a small Notes API built with Flask. It comes right after 03 (FastAPI intro) and before 05 (CRUD) and focuses on clean request/response design and basic validation — no authentication yet. The same Notes API grows into full CRUD in exercise 05 and gets pagination in exercise 06.
 
 ## Learning Objectives
 
