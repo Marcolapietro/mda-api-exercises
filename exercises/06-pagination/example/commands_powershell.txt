@@ -1,10 +1,10 @@
 # Exercise 6: Pagination - Notes API (Windows PowerShell 5.1)
-# Start the API first: python app.py   (it starts with 95 seed notes: ids 1..95, newest first)
+# Start the API first: fastapi dev app.py   (from exercises/06-pagination; it starts with 95 seed notes: ids 1..95, newest first)
 # Paste the blocks in order. Step 0 defines a helper used by the other steps.
 
 # 0. Base URL + helper that prints status code, Link header and body.
 #    Windows PowerShell 5.1 THROWS on 4xx/5xx, so the helper uses try/catch to show them too.
-$baseUrl = "http://127.0.0.1:5000"
+$baseUrl = "http://127.0.0.1:8000"
 
 function Show-Http {
     param(
@@ -68,9 +68,9 @@ while ($url) {
     $url = $resp.page.next
 }
 
-# 7. Default page size (20) and maximum (100: limit=500 is clamped to 100)
+# 7. Default page size (20) and maximum (100: limit=500 is rejected, not clamped -> 422)
 Write-Host ("default limit: " + (Invoke-RestMethod "$baseUrl/notes").page.limit)
-Write-Host ("limit=500 ->   " + (Invoke-RestMethod "$baseUrl/notes?limit=500").page.limit)
+Show-Http -Method Get -Uri "$baseUrl/notes?limit=500"
 
 # --- Errors (application/problem+json) ---
 
@@ -80,7 +80,7 @@ Show-Http -Method Get -Uri "$baseUrl/notes?offset=0&cursor=OTE"
 # 9. Invalid cursor -> 400
 Show-Http -Method Get -Uri "$baseUrl/notes?cursor=not-a-real-cursor"
 
-# 10. Invalid limit -> 400
+# 10. Invalid limit -> 422
 Show-Http -Method Get -Uri "$baseUrl/notes?limit=0"
 
 # --- Experiment: insert a note while you paginate ---

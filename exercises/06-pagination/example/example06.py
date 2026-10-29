@@ -1,333 +1,270 @@
-import os
+"""
+Notes API - Pagination (Solution)
+
+Run it with:  fastapi dev example06.py
+"""
+
 import base64
 from datetime import datetime, timedelta, timezone
+from http import HTTPStatus
+from typing import Annotated, Literal
 
-from flask import Flask, jsonify, request, url_for
+from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-app = Flask(__name__)
-app.json.sort_keys = False  # keep keys in the order we write them (easier to read)
+app = FastAPI(title="Notes API")
 
-DEFAULT_LIMIT = 20  # page size when the client does not send ?limit=
-MAX_LIMIT = 100     # upper bound: bigger values are clamped to 100
 
-# In-memory "database": {id: note}. Everything is lost when the app restarts.
-notes = {}
+class NoteCreate(BaseModel):
+    title: str = Field(min_length=1)
+    content: str = ""
+
+
+# PATCH: every field is optional; only the ones the client sends are changed
+class NoteUpdate(BaseModel):
+    title: str | None = Field(None, min_length=1)
+    content: str | None = None
+
+
+class Note(BaseModel):
+    id: int
+    title: str
+    content: str
+    created_at: str
+    updated_at: str
+
+
+# The "page" object differs per mode, so there is one model for each
+class OffsetPage(BaseModel):
+    mode: Literal["offset"]
+    offset: int
+    limit: int
+    total: int
+    next: str | None
+    prev: str | None
+
+
+class CursorPage(BaseModel):
+    mode: Literal["cursor"]
+    limit: int
+    next_cursor: str | None
+    next: str | None
+    prev: str | None
+
+
+class OffsetNoteList(BaseModel):
+    data: list[Note]
+    page: OffsetPage
+
+
+class CursorNoteList(BaseModel):
+    data: list[Note]
+    page: CursorPage
+
+
+# In-memory data store. Everything is lost when the app restarts.
+notes: dict[int, Note] = {}
 next_id = 1
 
 
-def now_iso():
+def now_iso() -> str:
     """Current time in ISO 8601, UTC (e.g. '2026-10-26T09:30:00Z')."""
-    return datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def add_note(title, content='', timestamp=None):
+def add_note(title: str, content: str = "", timestamp: str | None = None) -> Note:
     """Store a new note and return it. The server assigns id and timestamps."""
     global next_id
     timestamp = timestamp or now_iso()
-    note = {
-        'id': next_id,
-        'title': title,
-        'content': content,
-        'created_at': timestamp,
-        'updated_at': timestamp
-    }
-    notes[next_id] = note
+    note = Note(id=next_id, title=title, content=content, created_at=timestamp, updated_at=timestamp)
+    notes[note.id] = note
     next_id += 1
     return note
 
 
-def seed_notes(total):
+def seed_notes(total: int) -> None:
     """Create `total` notes (ids 1..total), one minute apart, so there is data to paginate."""
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
     for i in range(1, total + 1):
-        created = (start + timedelta(minutes=i)).isoformat().replace('+00:00', 'Z')
-        add_note(f'Note {i}', f'Seed note number {i}', timestamp=created)
+        created = (start + timedelta(minutes=i)).isoformat().replace("+00:00", "Z")
+        add_note(f"Note {i}", f"Seed note number {i}", timestamp=created)
 
 
 seed_notes(95)
 
 
 # ---------------------------------------------------------------------------
-# Errors: RFC 9457 "problem details" (same helper as exercise 05)
+# Errors: RFC 9457 "problem details" (same helper and handlers as exercise 05)
 # ---------------------------------------------------------------------------
 
-def problem(status, title, detail, **extra):
-    """Build an RFC 9457 error response. Extra keyword arguments become extension members."""
-    body = {'type': 'about:blank', 'title': title, 'status': status, 'detail': detail}
-    body.update(extra)
-    response = jsonify(body)
-    response.status_code = status
-    response.content_type = 'application/problem+json'
+def problem(request: Request, status: int, title: str, detail: str, **extra) -> JSONResponse:
+    """RFC 9457 problem details: one error format for the whole API."""
+    body = {"type": "about:blank", "title": title, "status": status, "detail": detail,
+            "instance": request.url.path, **extra}
+    return JSONResponse(body, status_code=status, media_type="application/problem+json")
+
+
+# Starlette raises the same HTTPException class for unknown URLs (404) and wrong methods (405),
+# so registering the handler for it covers our own errors and the router's.
+@app.exception_handler(StarletteHTTPException)
+def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    response = problem(request, exc.status_code, HTTPStatus(exc.status_code).phrase, str(exc.detail))
+    response.headers.update(exc.headers or {})  # e.g. Allow on a 405
     return response
 
 
-def validation_problem(errors):
-    """422: the JSON is valid, but the data inside it is not."""
-    return problem(422, 'Unprocessable Content', 'The note has invalid or missing fields.', errors=errors)
+@app.exception_handler(RequestValidationError)
+def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return problem(request, 422, "Unprocessable Content", "Request body or parameters are invalid.",
+                   errors=jsonable_encoder(exc.errors()))
 
 
-def read_json_object():
-    """Return (data, None) if the body is a JSON object, otherwise (None, error_response)."""
-    if request.mimetype != 'application/json':
-        return None, problem(415, 'Unsupported Media Type', 'Content-Type must be application/json.')
-    data = request.get_json(silent=True)
-    if data is None:
-        return None, problem(400, 'Bad Request', 'The request body is not valid JSON.')
-    if not isinstance(data, dict):
-        return None, validation_problem([{'pointer': '#', 'detail': 'the body must be a JSON object'}])
-    return data, None
-
-
-def validate_note(data, required):
-    """Return a list of field errors (an empty list means the data is valid)."""
-    errors = []
-    for field in required:
-        if field not in data:
-            errors.append({'pointer': f'#/{field}', 'detail': f'{field} is required'})
-    if 'title' in data and (not isinstance(data['title'], str) or not data['title'].strip()):
-        errors.append({'pointer': '#/title', 'detail': 'title must be a non-empty string'})
-    if 'content' in data and not isinstance(data['content'], str):
-        errors.append({'pointer': '#/content', 'detail': 'content must be a string'})
-    return errors
-
-
-def note_not_found(note_id):
-    return problem(404, 'Not Found', f'Note {note_id} does not exist.')
+def get_or_404(note_id: int) -> Note:
+    if note_id not in notes:
+        raise HTTPException(status_code=404, detail=f"Note {note_id} does not exist.")
+    return notes[note_id]
 
 
 # ---------------------------------------------------------------------------
 # Pagination helpers
 # ---------------------------------------------------------------------------
 
-def parse_limit():
-    """Return (limit, None) or (None, error_response). Default 20, values above 100 are clamped."""
-    raw = request.args.get('limit', str(DEFAULT_LIMIT))
-    try:
-        limit = int(raw)
-    except ValueError:
-        return None, problem(400, 'Bad Request', 'limit must be an integer.')
-    if limit < 1:
-        return None, problem(400, 'Bad Request', 'limit must be 1 or greater.')
-    return min(limit, MAX_LIMIT), None
-
-
-def parse_offset():
-    """Return (offset, None) or (None, error_response). Offset must be an integer >= 0."""
-    try:
-        offset = int(request.args['offset'])
-    except ValueError:
-        return None, problem(400, 'Bad Request', 'offset must be an integer.')
-    if offset < 0:
-        return None, problem(400, 'Bad Request', 'offset must be 0 or greater.')
-    return offset, None
-
-
-def encode_cursor(note_id):
+def encode_cursor(note_id: int) -> str:
     """Opaque cursor: base64 (URL-safe, without '=' padding) of the last id the client has seen."""
-    return base64.urlsafe_b64encode(str(note_id).encode()).decode().rstrip('=')
+    return base64.urlsafe_b64encode(str(note_id).encode()).decode().rstrip("=")  # 91 -> "OTE"
 
 
-def decode_cursor(cursor):
-    """Return the id inside the cursor, or None if the cursor is not one of ours."""
+def decode_cursor(cursor: str) -> int:
+    """Return the id inside the cursor; a cursor that is not one of ours is a 400."""
     try:
-        padded = cursor + '=' * (-len(cursor) % 4)
-        raw = base64.urlsafe_b64decode(padded).decode('ascii')
+        padded = cursor + "=" * (-len(cursor) % 4)
+        raw = base64.urlsafe_b64decode(padded).decode("ascii")
     except ValueError:  # bad base64 or non-ASCII content
-        return None
+        raw = ""
     if not raw.isdigit():
-        return None
+        raise HTTPException(status_code=400,
+                            detail="The cursor is not valid. Use the next_cursor value from a previous response.")
     return int(raw)
 
 
-def page_url(**params):
+def page_url(request: Request, **params) -> str:
     """Absolute URL to /notes with the given query parameters."""
-    return url_for('list_notes', _external=True, **params)
+    return str(request.url_for("list_notes").include_query_params(**params))
 
 
-def paged_response(data, page):
-    """Body {"data": [...], "page": {...}} plus an RFC 8288 Link header."""
-    response = jsonify({'data': data, 'page': page})
+def link_header(next_url: str | None, prev_url: str | None) -> str | None:
+    """RFC 8288 Link header with the same next/prev URLs that are in the body."""
     links = []
-    if page['next']:
-        links.append(f'<{page["next"]}>; rel="next"')
-    if page['prev']:
-        links.append(f'<{page["prev"]}>; rel="prev"')
-    if links:
-        response.headers['Link'] = ', '.join(links)
-    return response
+    if next_url:
+        links.append(f'<{next_url}>; rel="next"')
+    if prev_url:
+        links.append(f'<{prev_url}>; rel="prev"')
+    return ", ".join(links) or None
 
 
-def offset_page(ordered, limit):
+def offset_page(request: Request, ordered: list[Note], offset: int, limit: int) -> OffsetNoteList:
     """?offset=N&limit=M: skip N notes, return the next M. Simple, but shifts when data changes."""
-    offset, error = parse_offset()
-    if error:
-        return error
-
     total = len(ordered)
     data = ordered[offset:offset + limit]
-    next_url = page_url(offset=offset + limit, limit=limit) if offset + limit < total else None
-    prev_url = page_url(offset=max(offset - limit, 0), limit=limit) if offset > 0 else None
-    return paged_response(data, {
-        'mode': 'offset',
-        'offset': offset,
-        'limit': limit,
-        'total': total,
-        'next': next_url,
-        'prev': prev_url
-    })
+    next_url = page_url(request, offset=offset + limit, limit=limit) if offset + limit < total else None
+    prev_url = page_url(request, offset=max(offset - limit, 0), limit=limit) if offset > 0 else None
+    return OffsetNoteList(data=data, page=OffsetPage(mode="offset", offset=offset, limit=limit, total=total,
+                                                     next=next_url, prev=prev_url))
 
 
-def cursor_page(ordered, limit):
+def cursor_page(request: Request, ordered: list[Note], cursor: str | None, limit: int) -> CursorNoteList:
     """?cursor=X&limit=M: return the M notes that come right after the note inside the cursor."""
-    cursor = request.args.get('cursor')
-    if cursor is None:
-        remaining = ordered  # no cursor: first page
-    else:
+    remaining = ordered  # no cursor: first page
+    if cursor is not None:
         after_id = decode_cursor(cursor)
-        if after_id is None:
-            return problem(400, 'Bad Request', 'The cursor is not valid. Use the next_cursor value from a previous response.')
         # Newest first: the notes that come "after" a note are the ones with a smaller id
-        remaining = [note for note in ordered if note['id'] < after_id]
+        remaining = [note for note in ordered if note.id < after_id]
 
     data = remaining[:limit]
-    next_cursor = encode_cursor(data[-1]['id']) if len(remaining) > limit else None
-    next_url = page_url(cursor=next_cursor, limit=limit) if next_cursor else None
-    return paged_response(data, {
-        'mode': 'cursor',
-        'limit': limit,
-        'next_cursor': next_cursor,
-        'next': next_url,
-        'prev': None  # forward-only: to go back, the client reuses a cursor it already has
-    })
+    next_cursor = encode_cursor(data[-1].id) if len(remaining) > limit else None
+    next_url = page_url(request, cursor=next_cursor, limit=limit) if next_cursor else None
+    # prev is always None: forward-only. To go back, the client reuses a cursor it already has
+    return CursorNoteList(data=data, page=CursorPage(mode="cursor", limit=limit, next_cursor=next_cursor,
+                                                     next=next_url, prev=None))
 
 
 # ---------------------------------------------------------------------------
 # Collection: /notes
 # ---------------------------------------------------------------------------
 
-@app.route('/notes', methods=['GET'])
-def list_notes():
+@app.get("/notes")
+def list_notes(
+    request: Request,
+    response: Response,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int | None, Query(ge=0)] = None,
+    cursor: Annotated[str | None, Query()] = None,
+) -> OffsetNoteList | CursorNoteList:
     """List notes, newest first. Offset mode (?offset=&limit=) or cursor mode (?cursor=&limit=)."""
-    if 'offset' in request.args and 'cursor' in request.args:
-        return problem(400, 'Bad Request', 'Use either offset or cursor, not both.')
+    if offset is not None and cursor is not None:
+        raise HTTPException(status_code=400, detail="Use either offset or cursor, not both.")
 
-    limit, error = parse_limit()
-    if error:
-        return error
+    ordered = sorted(notes.values(), key=lambda note: note.id, reverse=True)
+    if offset is not None:
+        result = offset_page(request, ordered, offset, limit)
+    else:
+        result = cursor_page(request, ordered, cursor, limit)
 
-    ordered = sorted(notes.values(), key=lambda note: note['id'], reverse=True)
-    if 'offset' in request.args:
-        return offset_page(ordered, limit)
-    return cursor_page(ordered, limit)
+    link = link_header(result.page.next, result.page.prev)
+    if link:
+        response.headers["Link"] = link
+    return result
 
 
-@app.route('/notes', methods=['POST'])
-def create_note():
-    """Create a note -> 201 Created + Location header."""
-    data, error = read_json_object()
-    if error:
-        return error
-
-    errors = validate_note(data, required=('title',))
-    if errors:
-        return validation_problem(errors)
-
-    note = add_note(data['title'].strip(), data.get('content', ''))
-    return jsonify(note), 201, {'Location': url_for('get_note', note_id=note['id'], _external=True)}
+@app.post("/notes", status_code=201)
+def create_note(data: NoteCreate, request: Request, response: Response) -> Note:
+    note = add_note(data.title, data.content)
+    # 201 Created must say WHERE the new note lives
+    response.headers["Location"] = str(request.url_for("get_note", note_id=note.id))
+    return note
 
 
 # ---------------------------------------------------------------------------
-# Item: /notes/<id> (same as exercise 05)
+# Item: /notes/{note_id} (same as exercise 05)
 # ---------------------------------------------------------------------------
 
-@app.route('/notes/<int:note_id>', methods=['GET'])
-def get_note(note_id):
-    note = notes.get(note_id)
-    if note is None:
-        return note_not_found(note_id)
-    return jsonify(note), 200
+@app.get("/notes/{note_id}")
+def get_note(note_id: int) -> Note:
+    return get_or_404(note_id)
 
 
-@app.route('/notes/<int:note_id>', methods=['PUT'])
-def replace_note(note_id):
-    note = notes.get(note_id)
-    if note is None:
-        return note_not_found(note_id)
-
-    data, error = read_json_object()
-    if error:
-        return error
-
-    errors = validate_note(data, required=('title', 'content'))
-    if errors:
-        return validation_problem(errors)
-
-    note['title'] = data['title'].strip()
-    note['content'] = data['content']
-    note['updated_at'] = now_iso()
-    return jsonify(note), 200
+# PUT replaces the WHOLE note: NoteCreate makes title required (content defaults to "")
+@app.put("/notes/{note_id}")
+def replace_note(note_id: int, data: NoteCreate) -> Note:
+    note = get_or_404(note_id)
+    note.title = data.title
+    note.content = data.content
+    note.updated_at = now_iso()
+    return note
 
 
-@app.route('/notes/<int:note_id>', methods=['PATCH'])
-def update_note(note_id):
-    note = notes.get(note_id)
-    if note is None:
-        return note_not_found(note_id)
-
-    data, error = read_json_object()
-    if error:
-        return error
-
-    errors = validate_note(data, required=())
-    if not errors and 'title' not in data and 'content' not in data:
-        errors.append({'pointer': '#', 'detail': 'send at least one of: title, content'})
-    if errors:
-        return validation_problem(errors)
-
-    if 'title' in data:
-        note['title'] = data['title'].strip()
-    if 'content' in data:
-        note['content'] = data['content']
-    note['updated_at'] = now_iso()
-    return jsonify(note), 200
+# PATCH changes only the fields that are sent
+@app.patch("/notes/{note_id}")
+def update_note(note_id: int, data: NoteUpdate) -> Note:
+    note = get_or_404(note_id)
+    # exclude_unset: only the fields the client really sent (exclude_none: a null means "not sent")
+    changes = data.model_dump(exclude_unset=True, exclude_none=True)
+    if not changes:
+        raise RequestValidationError([{"type": "value_error", "loc": ("body",),
+                                       "msg": "Send at least one of: title, content", "input": {}}])
+    for field, value in changes.items():
+        setattr(note, field, value)
+    note.updated_at = now_iso()
+    return note
 
 
-@app.route('/notes/<int:note_id>', methods=['DELETE'])
-def delete_note(note_id):
-    if note_id not in notes:
-        return note_not_found(note_id)
+@app.delete("/notes/{note_id}", status_code=204)
+def delete_note(note_id: int) -> Response:
+    get_or_404(note_id)
     del notes[note_id]
-    return '', 204
-
-
-# ---------------------------------------------------------------------------
-# Error handlers
-# ---------------------------------------------------------------------------
-
-@app.errorhandler(404)
-def not_found(error):
-    return problem(404, 'Not Found', 'The requested URL does not exist.')
-
-
-@app.errorhandler(405)
-def method_not_allowed(error):
-    response = problem(405, 'Method Not Allowed', f'{request.method} is not allowed on this URL.')
-    response.headers['Allow'] = ', '.join(sorted(error.valid_methods or []))
-    return response
-
-
-@app.errorhandler(500)
-def internal_error(error):
-    app.logger.error(f'Internal server error: {error}')
-    return problem(500, 'Internal Server Error', 'An unexpected error occurred.')
-
-
-if __name__ == '__main__':
-    print("\n" + "=" * 70)
-    print("📝 Notes API — Pagination (Solution)")
-    print("=" * 70)
-    print("Offset: GET http://127.0.0.1:5000/notes?offset=0&limit=5")
-    print("Cursor: GET http://127.0.0.1:5000/notes?limit=5")
-    print("Docs: readme06.md (EN) / readme06_es.md (ES)")
-    print("=" * 70 + "\n")
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1")
+    # 204 means NO body, so we return an empty Response instead of a value
+    return Response(status_code=204)
