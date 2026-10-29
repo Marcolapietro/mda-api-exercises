@@ -12,11 +12,11 @@ You'll create a complete Postman collection automatically from an OpenAPI file.
 
 #### Method 1: Import from Running API
 
-1. Make sure the documented API from Part 1 is still running (http://127.0.0.1:5000)
+1. Make sure the documented API from Part 1 is still running (http://127.0.0.1:8000)
 2. Open Postman
 3. Click **Import** button (top left)
 4. Choose **Link** tab
-5. Paste: `http://127.0.0.1:5000/swagger.json`
+5. Paste: `http://127.0.0.1:8000/openapi.json`
 6. Click **Continue** and then **Import**
 
 #### Method 2: Import from File
@@ -104,7 +104,7 @@ Answer these questions:
 If you have time:
 
 1. Make a change to the API (add a new field to the book model)
-2. Restart the API
+2. Save the file (fastapi dev restarts the API for you)
 3. Re-import the OpenAPI spec to Postman
 4. See the change automatically reflected!
 

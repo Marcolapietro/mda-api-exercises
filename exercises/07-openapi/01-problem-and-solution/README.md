@@ -27,10 +27,10 @@ python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
-python undocumented_api.py
+fastapi dev undocumented_api.py
 ```
 
-The API is now running at http://127.0.0.1:5000
+The API is now running at http://127.0.0.1:8000
 
 ### Your Task
 
@@ -66,18 +66,18 @@ While exploring, note:
 
 ### Now With Swagger UI!
 
-Let's see the SAME API, but with proper documentation.
+Let's see the SAME API, but with proper documentation. This version is written with FastAPI, which generates the OpenAPI spec and Swagger UI from the type hints and models in the code.
 
 ### Setup
 
 ```bash
-# Make sure you're in the same directory
-python documented_api.py
+# Stop the previous API first (Ctrl+C) and stay in the same directory
+fastapi dev documented_api.py
 ```
 
 ### Explore the Swagger UI
 
-Open your browser and go to: **http://127.0.0.1:5000/docs**
+Open your browser and go to: **http://127.0.0.1:8000/docs**
 
 You'll see Swagger UI - interactive API documentation.
 
@@ -123,7 +123,7 @@ Explore the Swagger UI and answer these questions:
 
 ### Bonus: View the OpenAPI Spec
 
-Go to http://127.0.0.1:5000/swagger.json to see the raw OpenAPI specification. This file can be:
+Go to http://127.0.0.1:8000/openapi.json to see the raw OpenAPI specification. FastAPI builds it from the type hints and models, you never write it by hand. This file can be:
 - Imported into Postman (you'll do this next!)
 - Used to generate client SDKs
 - Shared with other developers

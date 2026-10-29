@@ -12,7 +12,7 @@ Instead of focusing on writing YAML syntax, this exercise helps you understand:
 ## Exercise Structure (40-50 minutes)
 
 ### Part 1: The Problem and The Solution (20-25 minutes)
-First, experience the frustration of working with an undocumented API. Then, see the same API with Swagger UI and discover how interactive documentation changes everything.
+First, experience the frustration of working with an undocumented API. Then, see the same API built with FastAPI, which generates the OpenAPI spec and Swagger UI for you from the code, and discover how interactive documentation changes everything.
 
 **Location:** `01-problem-and-solution/`
 

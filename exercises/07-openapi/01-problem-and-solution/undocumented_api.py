@@ -1,12 +1,13 @@
 """
 Undocumented Books API
 This API has NO documentation - students must figure it out through trial and error.
+(FastAPI normally serves /docs and /openapi.json; here they are switched off on purpose.)
 """
 
-import os
-from flask import Flask, jsonify, request
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
-app = Flask(__name__)
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 # In-memory book storage
 books = {
@@ -16,97 +17,88 @@ books = {
 }
 next_id = 4
 
-@app.route('/')
-def index():
-    return 'Books API is running. But where are the endpoints? 🤔'
 
-@app.route('/api/books', methods=['GET', 'POST'])
-def handle_books():
+@app.get('/')
+def index():
+    return 'Books API is running. But where are the endpoints?'
+
+
+# Support filtering by author (but students don't know this!)
+# Support pagination (but students don't know the param names!)
+@app.get('/api/books')
+def list_books(author: str | None = None, page: int = 1, limit: int = 10):
+    result = list(books.values())
+
+    if author:
+        result = [b for b in result if author.lower() in b['author'].lower()]
+
+    # Simple pagination
+    start = (page - 1) * limit
+    end = start + limit
+    paginated = result[start:end]
+
+    return {
+        'books': paginated,
+        'total': len(result),
+        'page': page,
+        'limit': limit
+    }
+
+
+@app.post('/api/books', status_code=201)
+def create_book(data: dict | None = None):
     global next_id
 
-    if request.method == 'GET':
-        # Support filtering by author (but students don't know this!)
-        author = request.args.get('author')
-        # Support pagination (but students don't know the param names!)
-        page = request.args.get('page', 1, type=int)
-        limit = request.args.get('limit', 10, type=int)
+    # No validation error messages - students must guess what's wrong
+    if not data or 'title' not in data or 'author' not in data:
+        return JSONResponse({'error': 'Bad request'}, status_code=400)
 
-        result = list(books.values())
+    book = {
+        'id': next_id,
+        'title': data['title'],
+        'author': data['author'],
+        'year': data.get('year'),
+        'isbn': data.get('isbn')
+    }
+    books[next_id] = book
+    next_id += 1
 
-        if author:
-            result = [b for b in result if author.lower() in b['author'].lower()]
+    return book
 
-        # Simple pagination
-        start = (page - 1) * limit
-        end = start + limit
-        paginated = result[start:end]
 
-        return jsonify({
-            'books': paginated,
-            'total': len(result),
-            'page': page,
-            'limit': limit
-        })
+@app.get('/api/books/{book_id}')
+def get_book(book_id: int):
+    if book_id not in books:
+        return JSONResponse({'error': 'Not found'}, status_code=404)
+    return books[book_id]
 
-    else:  # POST
-        data = request.get_json()
 
-        # No validation error messages - students must guess what's wrong
-        if not data:
-            return jsonify({'error': 'Bad request'}), 400
+@app.put('/api/books/{book_id}')
+def update_book(book_id: int, data: dict | None = None):
+    if book_id not in books:
+        return JSONResponse({'error': 'Not found'}, status_code=404)
 
-        if 'title' not in data or 'author' not in data:
-            return jsonify({'error': 'Bad request'}), 400
+    if not data:
+        return JSONResponse({'error': 'Bad request'}, status_code=400)
 
-        book = {
-            'id': next_id,
-            'title': data['title'],
-            'author': data['author'],
-            'year': data.get('year'),
-            'isbn': data.get('isbn')
-        }
-        books[next_id] = book
-        next_id += 1
+    # Update fields
+    book = books[book_id]
+    if 'title' in data:
+        book['title'] = data['title']
+    if 'author' in data:
+        book['author'] = data['author']
+    if 'year' in data:
+        book['year'] = data['year']
+    if 'isbn' in data:
+        book['isbn'] = data['isbn']
 
-        return jsonify(book), 201
+    return book
 
-@app.route('/api/books/<int:book_id>', methods=['GET', 'PUT', 'DELETE'])
-def handle_book(book_id):
-    if request.method == 'GET':
-        if book_id not in books:
-            return jsonify({'error': 'Not found'}), 404
-        return jsonify(books[book_id])
 
-    elif request.method == 'PUT':
-        if book_id not in books:
-            return jsonify({'error': 'Not found'}), 404
+@app.delete('/api/books/{book_id}')
+def delete_book(book_id: int):
+    if book_id not in books:
+        return JSONResponse({'error': 'Not found'}, status_code=404)
 
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Bad request'}), 400
-
-        # Update fields
-        book = books[book_id]
-        if 'title' in data:
-            book['title'] = data['title']
-        if 'author' in data:
-            book['author'] = data['author']
-        if 'year' in data:
-            book['year'] = data['year']
-        if 'isbn' in data:
-            book['isbn'] = data['isbn']
-
-        return jsonify(book)
-
-    else:  # DELETE
-        if book_id not in books:
-            return jsonify({'error': 'Not found'}), 404
-
-        deleted = books.pop(book_id)
-        return jsonify({'message': 'Book deleted', 'book': deleted})
-
-if __name__ == '__main__':
-    print("🚀 Undocumented Books API is running!")
-    print("📍 http://127.0.0.1:5000")
-    print("❓ Can you figure out how to use it?")
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1")
+    deleted = books.pop(book_id)
+    return {'message': 'Book deleted', 'book': deleted}

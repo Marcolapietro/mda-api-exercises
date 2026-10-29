@@ -1,248 +1,329 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: Books API
-  description: A well-documented API for managing books
+  description: A well-documented API for managing books. Compare this to the undocumented
+    version!
   version: 1.0.0
-
 servers:
-  - url: http://127.0.0.1:5000
-    description: Local development server
-
+- url: http://127.0.0.1:8000
+  description: Local development server
 tags:
-  - name: books
-    description: Book management operations
-
+- name: books
+  description: Book management operations
 paths:
   /api/books:
     get:
       tags:
-        - books
+      - books
       summary: List all books
-      description: Returns a list of books with optional filtering and pagination
-      operationId: listBooks
+      description: Returns a list of books with optional filtering and pagination.
+      operationId: list_books_api_books_get
       parameters:
-        - name: author
-          in: query
+      - name: author
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
           description: Filter books by author name (partial match)
-          required: false
-          schema:
-            type: string
-            example: Orwell
-        - name: page
-          in: query
+          title: Author
+        description: Filter books by author name (partial match)
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
           description: Page number for pagination
-          required: false
-          schema:
-            type: integer
-            default: 1
-            example: 1
-        - name: limit
-          in: query
+          default: 1
+          title: Page
+        description: Page number for pagination
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
           description: Number of books per page
-          required: false
-          schema:
-            type: integer
-            default: 10
-            example: 10
+          default: 10
+          title: Limit
+        description: Number of books per page
       responses:
         '200':
-          description: Successful response
+          description: Successful Response
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Book'
-              example:
-                - id: 1
-                  title: "1984"
-                  author: "George Orwell"
-                  year: 1949
-                  isbn: "978-0451524935"
-                - id: 2
-                  title: "To Kill a Mockingbird"
-                  author: "Harper Lee"
-                  year: 1960
-                  isbn: "978-0061120084"
-
+                title: Response List Books Api Books Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
-        - books
+      - books
       summary: Create a new book
-      description: Add a new book to the collection
-      operationId: createBook
+      description: Provide title and author (required), year and isbn (optional).
+      operationId: create_book_api_books_post
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BookInput'
-            example:
-              title: "1984"
-              author: "George Orwell"
-              year: 1949
-              isbn: "978-0451524935"
+              $ref: '#/components/schemas/BookCreate'
       responses:
         '201':
-          description: Book created successfully
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Book'
-        '400':
-          description: Validation error
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/books/{id}:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/books/{book_id}:
     get:
       tags:
-        - books
+      - books
       summary: Get a book by ID
-      description: Returns a single book if it exists
-      operationId: getBook
+      description: Returns a single book if it exists, otherwise returns 404.
+      operationId: get_book_api_books__book_id__get
       parameters:
-        - name: id
-          in: path
-          description: The book identifier
-          required: true
-          schema:
-            type: integer
-            example: 1
+      - name: book_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Book Id
       responses:
         '200':
-          description: Successful response
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Book'
         '404':
           description: Book not found
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-
+                $ref: '#/components/schemas/HTTPValidationError'
     put:
       tags:
-        - books
+      - books
       summary: Update a book
-      description: Update book information (all fields optional)
-      operationId: updateBook
+      description: All fields are optional - only provided fields will be updated.
+      operationId: update_book_api_books__book_id__put
       parameters:
-        - name: id
-          in: path
-          description: The book identifier
-          required: true
-          schema:
-            type: integer
-            example: 1
+      - name: book_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Book Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BookInput'
-            example:
-              title: "1984 (Updated)"
-              author: "George Orwell"
+              $ref: '#/components/schemas/BookUpdate'
       responses:
         '200':
-          description: Book updated successfully
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Book'
         '404':
           description: Book not found
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-
+                $ref: '#/components/schemas/HTTPValidationError'
     delete:
       tags:
-        - books
+      - books
       summary: Delete a book
-      description: Permanently remove a book from the system
-      operationId: deleteBook
+      description: Permanently removes the book from the system.
+      operationId: delete_book_api_books__book_id__delete
       parameters:
-        - name: id
-          in: path
-          description: The book identifier
-          required: true
-          schema:
-            type: integer
-            example: 1
+      - name: book_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Book Id
       responses:
         '204':
-          description: Book deleted successfully
+          description: Successful Response
         '404':
           description: Book not found
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     Book:
-      type: object
-      required:
-        - id
-        - title
-        - author
       properties:
+        title:
+          type: string
+          title: Title
+          description: Book title
+          examples:
+          - '1984'
+        author:
+          type: string
+          title: Author
+          description: Book author
+          examples:
+          - George Orwell
+        year:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Year
+          description: Publication year
+          examples:
+          - 1949
+        isbn:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Isbn
+          description: ISBN number
+          examples:
+          - 978-0451524935
         id:
           type: integer
+          title: Id
           description: The book unique identifier
-          example: 1
-        title:
-          type: string
-          description: Book title
-          example: "1984"
-        author:
-          type: string
-          description: Book author
-          example: "George Orwell"
-        year:
-          type: integer
-          description: Publication year
-          example: 1949
-        isbn:
-          type: string
-          description: ISBN number
-          example: "978-0451524935"
-
-    BookInput:
+          examples:
+          - 1
       type: object
       required:
-        - title
-        - author
+      - title
+      - author
+      - id
+      title: Book
+    BookCreate:
       properties:
         title:
           type: string
+          title: Title
           description: Book title
-          example: "1984"
+          examples:
+          - '1984'
         author:
           type: string
+          title: Author
           description: Book author
-          example: "George Orwell"
+          examples:
+          - George Orwell
         year:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Year
           description: Publication year
-          example: 1949
+          examples:
+          - 1949
         isbn:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Isbn
           description: ISBN number
-          example: "978-0451524935"
-
-    Error:
+          examples:
+          - 978-0451524935
       type: object
+      required:
+      - title
+      - author
+      title: BookCreate
+    BookUpdate:
       properties:
-        message:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+          description: Book title
+          examples:
+          - 1984 (Updated)
+        author:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Author
+          description: Book author
+          examples:
+          - George Orwell
+        year:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Year
+          description: Publication year
+          examples:
+          - 1949
+        isbn:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Isbn
+          description: ISBN number
+          examples:
+          - 978-0451524935
+      type: object
+      title: BookUpdate
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
           type: string
-          description: Error message
-          example: "Book not found"
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
