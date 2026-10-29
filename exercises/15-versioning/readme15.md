@@ -669,7 +669,7 @@ Notice `updated_at` changed!
 
 **Try to update using v1 (will fail - endpoint doesn't exist):**
 ```bash
-curl -X PUT http://127.0.0.1:8000/api/v1/notes/2 \
+curl -i -X PUT http://127.0.0.1:8000/api/v1/notes/2 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"title":"This will fail"}'
