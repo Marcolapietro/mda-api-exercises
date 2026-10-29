@@ -47,9 +47,11 @@ updated after the branch is finished (see "Publication order").
   Flask one; new FastAPI ideas are introduced one at a time, in the README, when first used.
 - The slides and the repo disagree on a command, route, field name or header. Students run the
   slide command and get a 404.
-- An exercise works in the solution but the starter `app.py` cannot run until every blank is
-  filled, when before it could. Keep the same "runs with blanks filled one by one" behaviour
-  where the Flask version had it.
+- A starter that fails with a confusing error. In FastAPI the HTTP method is the decorator
+  (`@app.get`) and `status_code=` is evaluated at import, so a starter with blanks there does
+  not even import; that is accepted (it was already the case in 09, 11, 14 and 17), but the
+  README says so up front and the first blank in every file is the one closest to the top, so
+  the first error a student sees points at the first TODO.
 - Something that only works on the teacher's machine (a cached package, a Python 3.14-only
   feature, an emoji that crashes a cp1252 console).
 
@@ -94,7 +96,7 @@ updated after the branch is finished (see "Publication order").
 | custom `X-API-Key` check | `fastapi.security.APIKeyHeader` as a dependency | 09, 17 (`notes_api.py`) |
 | `werkzeug.security.generate_password_hash` | `bcrypt.hashpw` / `bcrypt.checkpw` (two lines, no passlib) | 08 to 15 |
 | Flask-JWT-Extended | `PyJWT` directly (`jwt.encode` / `jwt.decode` with `exp`, `iss`, `aud`) and `fastapi.security.HTTPBearer`; a `get_current_user` dependency replaces `@jwt_required()` | 10, 11, 12, 13, 15 |
-| Flask-Principal | a `require_role("admin")` dependency that reads the `role` claim from the JWT | 12 |
+| Flask-Principal | a `require_role("admin")` dependency that looks the user up in the in-memory store on every request; the `role` claim in the JWT stays informative only, exactly as today, so a promoted user keeps working with the token they already have (README step 4) | 12 |
 | `authlib.integrations.flask_client` | `authlib.integrations.starlette_client.OAuth` + `SessionMiddleware` (`itsdangerous`) | 13 |
 | Flask-Limiter | `slowapi` (`Limiter(key_func=get_remote_address, headers_enabled=True)`, `@limiter.limit("10/minute")`, `app.state.limiter`, 429 handler) | 14 |
 | URL-prefixed routes | `APIRouter(prefix="/api/v1")` and `/api/v2`; deprecation headers added by a router dependency | 15 |
@@ -102,7 +104,11 @@ updated after the branch is finished (see "Publication order").
 | `requests` | `httpx` (same call shape, already a dependency of 17) | 10, 17 |
 
 Exercise 17's `mcp_server.py`, `client.py` and `example/example17.py` do not change except the
-default `NOTES_API_URL` (port 8000).
+default `NOTES_API_URL` (port 8000) and the docstring/README lines that start the API
+(`fastapi dev notes_api.py` instead of `python notes_api.py` / `FLASK_DEBUG=1`).
+
+The `example/commands_cmd.txt` and `commands_powershell.txt` files (05, 06, 08 to 12) and
+`16-webhooks-ngrok/example/send_signed_webhook.py` move to port 8000 like everything else.
 
 ### Errors
 
@@ -117,12 +123,26 @@ teaches RFC 9457, so:
   extra `errors` field.
 - Exercises that used plain `{"error": ...}` JSON in Flask (08 to 16) may keep FastAPI's
   default `{"detail": ...}`; do not add problem+json there unless the Flask version had it.
+- Input validation follows FastAPI, not the Flask hand-rolled checks (decided by the teacher
+  on 2026-10-29). In 04, 05 and 06 a non-JSON `Content-Type`, malformed JSON, a missing or
+  wrong-typed field, a non-integer `limit` and a `limit` outside `1..100` all answer 422
+  (rendered as problem+json). The 415 and 400 cases for those situations disappear from the
+  code, the READMEs (EN and ES), the status-code tables and the `curl` examples; one README
+  paragraph in 04 explains that FastAPI validates shape and content together and answers 422
+  with the detail, and that 400 and 415 exist in HTTP but are not fabricated by hand here.
+  `limit` is declared as `Query(20, ge=1, le=100)`: values above 100 are rejected, not
+  clamped. The only 400s left in 06 are the ones that are not about shape: an invalid cursor
+  and `offset` together with `cursor`. Slides 11, 29, 30, 31 and 65 need no change for this.
 
 ### Blanks and starter files
 
 - Keep the same number of blanks per exercise, give or take two, and the same kind of thing
   being blanked: HTTP method, status code, header name, dependency name, field name. Do not
   blank things the student has not been taught (for example `Depends` in exercise 03).
+- The HTTP method is blanked in the decorator itself (`@app._____("/notes/{note_id}")  # TODO:
+  which method REPLACES a resource?`), not through `api_route(methods=[...])`. The starter will
+  not import until those blanks are filled; the README's "Quick Start" says: "fill the blanks
+  from top to bottom; the app starts once the decorators are complete".
 - Where the Flask starter had a hint comment above a blank, the FastAPI starter has one too.
 - A new FastAPI concept gets a two-to-five-line explanation in the README the first time it
   appears, in this order: path operation decorators and path parameters (03), Pydantic models
