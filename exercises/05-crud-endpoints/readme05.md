@@ -58,7 +58,7 @@ The API runs at `http://127.0.0.1:8000` (automatic documentation at `/docs`) and
 1. **Read `app.py`:**
    - It starts from the same code as exercise 04: the models, the `problem()` helper and the two exception handlers.
    - `get_or_404()` returns a note or raises the `404`; the item routes share it.
-   - `POST /notes` and `GET /notes/{id}` are already implemented. Notice how the same URL `/notes/{id}` does different things depending on the method.
+   - `GET /notes/{id}` is already implemented, and `POST /notes` only misses the name of the header that says where the new note lives. Notice how the same URL `/notes/{id}` does different things depending on the method.
 
 2. **Fill in the blanks (`_____`) in `exercises/05-crud-endpoints/app.py`:**
 

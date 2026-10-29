@@ -58,7 +58,7 @@ La API arranca en `http://127.0.0.1:8000` (documentación automática en `/docs`
 1. **Lee `app.py`:**
    - Parte del mismo código del ejercicio 04: los modelos, la función `problem()` y los dos manejadores de excepciones.
    - `get_or_404()` devuelve una nota o lanza el `404`; las rutas de una nota la comparten.
-   - `POST /notes` y `GET /notes/{id}` ya están implementados. Fíjate en que la misma URL `/notes/{id}` hace cosas distintas según el método.
+   - `GET /notes/{id}` ya está implementado, y a `POST /notes` solo le falta el nombre de la cabecera que indica dónde vive la nueva nota. Fíjate en que la misma URL `/notes/{id}` hace cosas distintas según el método.
 
 2. **Completa los espacios en blanco (`_____`) en `exercises/05-crud-endpoints/app.py`:**
 
