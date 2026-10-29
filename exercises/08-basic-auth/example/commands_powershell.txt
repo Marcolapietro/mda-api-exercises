@@ -6,7 +6,7 @@ $body = @{
     password = "password123"
 } | ConvertTo-Json
 
-Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/users" -ContentType "application/json" -Body $body
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/users" -ContentType "application/json" -Body $body
 
 # 2. Get the list of users (with authentication)
 $pair = "user1:password123"
@@ -15,7 +15,7 @@ $headers = @{
     Authorization = "Basic $encodedCreds"
 }
 
-Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:5000/users" -Headers $headers
+Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/users" -Headers $headers
 
 # 3. Wrong password (expected: 401 Unauthorized)
 $wrongPair = "user1:wrongpass"
@@ -25,10 +25,10 @@ $wrongHeaders = @{
 }
 
 try {
-    Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:5000/users" -Headers $wrongHeaders
+    Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/users" -Headers $wrongHeaders
 } catch {
     Write-Host "Expected error: $($_.Exception.Message)"
 }
 
 # 4. No credentials: look at the WWW-Authenticate header in the 401 response
-curl.exe -i http://127.0.0.1:5000/users
+curl.exe -i http://127.0.0.1:8000/users

@@ -1,7 +1,7 @@
 # Exercise 8: Basic Authentication
 
 ## Objective
-Implement basic authentication (Basic Auth) in a REST API using Python and Flask.
+Implement basic authentication (Basic Auth) in a REST API using Python and FastAPI.
 
 ## Description
 In this exercise, you will develop a simple REST API that manages "user" resources. You will implement basic authentication to protect certain routes, ensuring that only authenticated users can access them.
@@ -13,21 +13,23 @@ cd exercises/08-basic-auth
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python app.py
+fastapi dev app.py
 ```
+
+Fill the blanks (`_____`) from top to bottom; the app starts once the `POST` decorator and the `Depends(...)` of `get_users` are complete. The header name blank is only used when a request fails authentication, so you will notice it when you test a wrong password.
 
 ## Requirements
 1. **Project Setup:**
    - Initialize a virtual environment.
-   - Install the necessary dependencies (`Flask`, `Flask-HTTPAuth`, `Werkzeug`).
+   - Install the necessary dependencies (`fastapi[standard]`, `bcrypt`).
 
 2. **API Structure:**
    - Create a route to register new users (`POST /users`).
    - Create a route to get the list of users (`GET /users`), protected with basic authentication.
 
 3. **Basic Authentication Implementation:**
-   - Use `Flask-HTTPAuth` to handle authentication.
-   - Store passwords securely using `Werkzeug` to hash passwords.
+   - Use `fastapi.security.HTTPBasic` to handle authentication.
+   - Store passwords securely: hash them with `bcrypt`.
    - Protect routes that require authentication by verifying the provided credentials.
 
 4. **Testing:**
@@ -35,9 +37,13 @@ python app.py
 
 ## Instructions:
 
-In the _____ space, use the appropriate Werkzeug function to hash the password provided by the user.
-Also, observe the spaces within the code to set up the appropriate HTTP methods for each function.
-Once corrected, run the script and perform tests from Postman.
+Fill in the three `_____` spaces in `app.py`:
+
+- the HTTP method of the route that registers a user (`POST`);
+- the dependency inside `Depends(...)` that protects `GET /users` (the function that checks the credentials);
+- the name of the header that tells the client which kind of authentication the server expects (it goes in the 401 response).
+
+The password hashing (`hash_password`, `verify_password`) is already written for you. Once corrected, run the app and perform tests from Postman.
 
 ## Suggested Steps
 
@@ -50,18 +56,28 @@ Once corrected, run the script and perform tests from Postman.
    ```
 
 2. **Create the API:**
-   - Set up the Flask application.
+   - Set up the FastAPI application.
    - Define routes for user registration and listing users.
 
 3. **Implement Basic Authentication:**
-   - Use `Flask-HTTPAuth` to create an authentication handler.
-   - Hash passwords using `generate_password_hash` from Werkzeug.
-   - Verify credentials using `check_password_hash`.
+   - Use `HTTPBasic` from `fastapi.security` and a `get_current_user` dependency to check the credentials.
+   - Hash passwords with `bcrypt.hashpw`.
+   - Verify credentials with `bcrypt.checkpw`.
 
 4. **Test the API:**
    - Register a user via `POST /users`.
    - Try accessing `GET /users` without credentials (should fail).
    - Access `GET /users` with valid credentials (should succeed).
+
+## New in FastAPI: `Depends` and `fastapi.security`
+
+A **dependency** is a function that FastAPI runs *before* your route and whose result it hands to your route. You declare it in the parameters with `Annotated[Type, Depends(function)]`; here `get_users` receives the authenticated username from `get_current_user`. If the dependency raises an error (for example `HTTPException(401)`), the route never runs, so protecting a route is just adding a `Depends(...)` parameter to it.
+
+`fastapi.security` contains ready-made dependencies for common schemes. `HTTPBasic` reads the `Authorization: Basic ...` header and gives you `HTTPBasicCredentials` with the decoded `username` and `password`; if the header is missing it answers `401` with `WWW-Authenticate` by itself. `get_current_user` depends on it, compares the credentials with the stored hash and raises `401` when they do not match. Swagger UI (`/docs`) also shows an "Authorize" button for it.
+
+## Password rules
+
+Passwords are stored as `bcrypt` hashes, never in plain text. `hash_password` and `verify_password` wrap the two `bcrypt` calls, and the `UserCreate` model requires a password of **8 to 72 characters**: `bcrypt` cannot handle more than 72 bytes, so longer passwords are rejected with `422` by the model. A login with an unknown username still runs a `bcrypt` comparison against a dummy hash, so response time does not reveal which usernames exist.
 
 ## Example Requests with `curl`
 
@@ -69,17 +85,17 @@ Once corrected, run the script and perform tests from Postman.
    ```bash
    curl -X POST -H "Content-Type: application/json" \
    -d '{"username": "user1", "password": "password123"}' \
-   http://127.0.0.1:5000/users
+   http://127.0.0.1:8000/users
    ```
 
 2. **Get List of Users (With Authentication):**
    ```bash
-   curl -u user1:password123 http://127.0.0.1:5000/users
+   curl -u user1:password123 http://127.0.0.1:8000/users
    ```
 
 3. **Get List of Users (Without Authentication):**
    ```bash
-   curl -i http://127.0.0.1:5000/users
+   curl -i http://127.0.0.1:8000/users
    ```
    This should return `401 Unauthorized` with the header `WWW-Authenticate: Basic realm="Authentication Required"`: that is how the server tells the client which kind of authentication it expects.
 
@@ -88,6 +104,7 @@ Once corrected, run the script and perform tests from Postman.
 ## Points to Consider
 
 - Passwords should never be stored in plain text.
+- Registering the same username twice answers `409 Conflict`; a password shorter than 8 or longer than 72 characters answers `422`.
 - Basic Auth sends credentials in Base64 encoding (not encryption), so use HTTPS in production.
 - Test both successful and failed authentication scenarios.
 

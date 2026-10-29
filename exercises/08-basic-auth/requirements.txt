@@ -1,3 +1,2 @@
-Flask==3.0.0
-Werkzeug==3.0.1
-Flask-HTTPAuth==4.8.0
+fastapi[standard]==0.162.0
+bcrypt==5.0.0

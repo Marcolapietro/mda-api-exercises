@@ -1,76 +1,70 @@
-import os
-from flask import Flask, request, jsonify
-from flask_httpauth import HTTPBasicAuth
-from werkzeug.security import generate_password_hash, check_password_hash
+import secrets
+from typing import Annotated
 
-app = Flask(__name__)
-auth = HTTPBasicAuth()
+import bcrypt
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from pydantic import BaseModel, Field, field_validator
 
-users = {}
+app = FastAPI(title="Users API")
 
-@auth.verify_password
-def verify_password(username, password):
-    if username in users and check_password_hash(users[username], password):
-        return username
-    return None
+# HTTPBasic reads the Authorization header and decodes username and password.
+# If the header is missing it already answers 401 with WWW-Authenticate.
+security = HTTPBasic(realm="Authentication Required")
 
-@app.route('/users', methods=['POST'])
-def register_user():
-    """
-    Register a new user.
+# In-memory database: {username: bcrypt hash}
+users: dict[str, str] = {}
 
-    Request Body:
-        username (str): User's username
-        password (str): User's password
 
-    Returns:
-        201: User created successfully
-        400: Invalid input data
-        409: User already exists
-    """
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Request body must be JSON"}), 400
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 
-    username = data.get("username")
-    password = data.get("password")
 
-    if not username or not password:
-        return jsonify({"error": "Required data is missing"}), 400
+def verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except ValueError:  # bcrypt only accepts passwords of up to 72 bytes
+        return False
 
-    if username in users:
-        return jsonify({"error": "User already exists"}), 409  # Fixed: 409 instead of 400
 
-    users[username] = generate_password_hash(password)
-    return jsonify({"message": "User registered successfully"}), 201
+# Compared against when the user does not exist, so both failures take the same time
+DUMMY_HASH = hash_password("not-a-real-password")
 
-@app.route('/users', methods=['GET'])
-@auth.login_required
-def get_users():
-    """
-    Get list of all registered users.
 
-    Requires HTTP Basic Authentication.
+class UserCreate(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=8, max_length=72)
 
-    Returns:
-        200: List of usernames
-        401: Authentication required
-    """
-    return jsonify({"users": list(users.keys())}), 200
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, pw: str) -> str:
+        if len(pw.encode()) > 72:  # bcrypt counts bytes, not characters
+            raise ValueError("password must be at most 72 bytes")
+        return pw
 
-@app.errorhandler(404)
-def not_found(e):
-    return jsonify({"error": "Route not found"}), 404
 
-@app.errorhandler(405)
-def method_not_allowed(e):
-    return jsonify({"error": "Method not allowed"}), 405  # Fixed: Removed detail exposure
+def get_current_user(creds: Annotated[HTTPBasicCredentials, Depends(security)]) -> str:
+    """Dependency: returns the username, or answers 401 if the credentials are wrong."""
+    username = next((u for u in users if secrets.compare_digest(u.encode(), creds.username.encode())), None)
+    # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
+    password_ok = verify_password(creds.password, users.get(username, DUMMY_HASH))
+    if username is None or not password_ok:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": 'Basic realm="Authentication Required"'},
+        )
+    return username
 
-@app.errorhandler(500)
-def internal_error(e):
-    # Log the error but don't expose details to client
-    app.logger.error(f"Internal error: {str(e)}")
-    return jsonify({"error": "Internal server error"}), 500
 
-if __name__ == '__main__':
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1")
+@app.post("/users", status_code=201)
+def register_user(data: UserCreate) -> dict[str, str]:
+    if data.username in users:
+        raise HTTPException(status_code=409, detail="User already exists")
+    users[data.username] = hash_password(data.password)
+    return {"message": "User registered successfully", "username": data.username}
+
+
+@app.get("/users")
+def get_users(user: Annotated[str, Depends(get_current_user)]) -> list[str]:
+    return list(users)

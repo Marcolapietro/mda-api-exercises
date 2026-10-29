@@ -1,105 +1,83 @@
-import os
-from flask import Flask, request, jsonify
-from flask_httpauth import HTTPBasicAuth
-from werkzeug.security import generate_password_hash, check_password_hash
+"""
+Users API with Basic Auth (Starter)
 
-app = Flask(__name__)
-auth = HTTPBasicAuth()
+Run it with:  fastapi dev app.py
+Fill the blanks (_____) from top to bottom; the app starts once the POST decorator and the Depends(...) of get_users are complete.
+"""
 
-# In-memory database for this example
-users = {
-    "admin": generate_password_hash("admin123")  # We are creating a test user here
-}
+import secrets
+from typing import Annotated
 
-# Verify the provided credentials
-@auth.verify_password
-def verify_password(username, password):
-    """
-    Verifies user credentials for HTTP Basic Authentication.
+import bcrypt
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from pydantic import BaseModel, Field, field_validator
 
-    This function is called automatically by Flask-HTTPAuth when a protected
-    route is accessed with Basic Auth credentials.
+app = FastAPI(title="Users API")
 
-    Args:
-        username: Username from the Authorization header
-        password: Plain text password from the Authorization header
+# HTTPBasic reads the Authorization header and decodes username and password.
+# If the header is missing it already answers 401 with WWW-Authenticate.
+security = HTTPBasic(realm="Authentication Required")
 
-    Returns:
-        username if credentials are valid, None otherwise
-    """
-    # Check if the user is in the database and if the password is correct
-    if username in users and check_password_hash(users[username], password):
-        return username
-    return None
+# In-memory database: {username: bcrypt hash}
+users: dict[str, str] = {}
 
-# Route to register new users
-@app.route('/users', methods=['   '])  # TODO: Fill in the HTTP method
-# Hint: Use 'POST' to create a user
-def register_user():
-    """
-    Register a new user.
 
-    Request Body (JSON):
-        username: User's username
-        password: User's password (will be hashed before storing)
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 
-    Returns:
-        201: User created successfully
-        400: Missing required fields or invalid data
-        409: User already exists
-    """
-    data = request.get_json()
-    username = data.get("username")
-    password = data.get("password")
 
-    if not username or not password:
-        return jsonify({"error": "Required data is missing"}), 400
+def verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except ValueError:  # bcrypt only accepts passwords of up to 72 bytes
+        return False
 
-    if username in users:
-        return jsonify({"error": "User already exists"}), 409  # 409 Conflict
 
-    # TODO: Hash the password before storing it
-    # Hint: Use generate_password_hash from Werkzeug library (imported at top)
-    users[username] = _____(password)
-    return jsonify({"message": "User registered successfully"}), 201
+# Compared against when the user does not exist, so both failures take the same time
+DUMMY_HASH = hash_password("not-a-real-password")
 
-# Protected route to get the list of users
-@app.route('/users', methods=['   '])  # TODO: Fill in the HTTP method
-# Hint: Use 'GET' to list users
-@auth.login_required  # Requires HTTP Basic Authentication
-def get_users():
-    """
-    Get list of all registered users (protected endpoint).
 
-    Requires HTTP Basic Authentication with valid credentials.
-    The credentials should be sent in the Authorization header as:
-    Authorization: Basic <base64(username:password)>
+class UserCreate(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=8, max_length=72)
 
-    Returns:
-        200: List of usernames
-        401: Authentication required or invalid credentials
-    """
-    # Return the list of registered users
-    return jsonify({"users": list(users.keys())}), 200
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, pw: str) -> str:
+        if len(pw.encode()) > 72:  # bcrypt counts bytes, not characters
+            raise ValueError("password must be at most 72 bytes")
+        return pw
 
-# Custom error handlers
-@app.errorhandler(404)
-def not_found(e):
-    """Handle 404 Not Found errors"""
-    return jsonify({"error": "Route not found"}), 404
 
-@app.errorhandler(405)
-def method_not_allowed(e):
-    """Handle 405 Method Not Allowed errors"""
-    return jsonify({"error": "Method not allowed"}), 405
+def get_current_user(creds: Annotated[HTTPBasicCredentials, Depends(security)]) -> str:
+    """Dependency: returns the username, or answers 401 if the credentials are wrong."""
+    username = next((u for u in users if secrets.compare_digest(u.encode(), creds.username.encode())), None)
+    # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
+    password_ok = verify_password(creds.password, users.get(username, DUMMY_HASH))
+    if username is None or not password_ok:
+        # TODO: Which header tells the client what kind of authentication the server expects?
+        # Hint: WWW-Authenticate (the 401 response carries it, with the value 'Basic realm="..."')
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials",
+            headers={"_____": 'Basic realm="Authentication Required"'},
+        )
+    return username
 
-@app.errorhandler(500)
-def internal_error(e):
-    """Handle 500 Internal Server Error"""
-    app.logger.error(f'Internal server error: {str(e)}')
-    return jsonify({"error": "Internal server error"}), 500
 
-if __name__ == '__main__':
-    # Run the application in debug mode to facilitate testing
-    # Debug mode only when FLASK_DEBUG=1 — never in production
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1")
+# TODO: Which method CREATES a user?
+# Hint: POST
+@app._____("/users", status_code=201)
+def register_user(data: UserCreate) -> dict[str, str]:
+    if data.username in users:
+        raise HTTPException(status_code=409, detail="User already exists")
+    users[data.username] = hash_password(data.password)
+    return {"message": "User registered successfully", "username": data.username}
+
+
+@app.get("/users")
+def get_users(user: Annotated[str, Depends(_____)]) -> list[str]:
+    # TODO: Protect this route: which dependency checks the credentials and gives us the user?
+    # Hint: get_current_user, defined above. Depends() takes the function itself, without ()
+    return list(users)

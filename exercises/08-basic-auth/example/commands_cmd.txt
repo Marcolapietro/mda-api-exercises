@@ -1,13 +1,13 @@
 REM Exercise 8: Basic Authentication (Windows CMD)
 
 REM 1. Register a user
-curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"user1\",\"password\":\"password123\"}" http://127.0.0.1:5000/users
+curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"user1\",\"password\":\"password123\"}" http://127.0.0.1:8000/users
 
 REM 2. Get the list of users (with authentication)
-curl -X GET --user user1:password123 http://127.0.0.1:5000/users
+curl -X GET --user user1:password123 http://127.0.0.1:8000/users
 
 REM 3. Wrong password (expected: 401 Unauthorized)
-curl -i -X GET --user user1:wrongpass http://127.0.0.1:5000/users
+curl -i -X GET --user user1:wrongpass http://127.0.0.1:8000/users
 
 REM 4. No credentials: look at the WWW-Authenticate header in the 401 response
-curl -i http://127.0.0.1:5000/users
+curl -i http://127.0.0.1:8000/users
