@@ -7,8 +7,10 @@ cd exercises/15-versioning
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python app.py
+fastapi dev app.py
 ```
+
+Fill the blanks (`_____`) from top to bottom. The app starts once three blanks are filled: the `status_code` of the v1 `POST` decorator and the two `app.include_router(...)` calls at the end of the routes. The other blanks do not stop the server from starting: the router prefixes give you `404` until they are right, and the rest fail only when a request reaches them (a `500` error or a missing header).
 
 ## Objective
 
@@ -145,13 +147,16 @@ POST /api/v2/users {"name": "Alice", "email": "alice@example.com"}
 
 **Example:**
 ```python
-@app.route('/api/v1/notes', methods=['GET'])
-def get_notes_v1():
-    return jsonify([...])  # Simple array
+v1 = APIRouter(prefix="/api/v1")
+v2 = APIRouter(prefix="/api/v2")
 
-@app.route('/api/v2/notes', methods=['GET'])
+@v1.get("/notes")
+def get_notes_v1():
+    return [...]  # Simple array
+
+@v2.get("/notes")
 def get_notes_v2():
-    return jsonify({'data': [...], 'count': 10})  # Wrapped object
+    return {'data': [...], 'count': 10}  # Wrapped object
 ```
 
 **Used by:** Stripe, Twilio, Twitter, Shopify
@@ -172,12 +177,11 @@ def get_notes_v2():
 
 **Example:**
 ```python
-@app.route('/api/notes')
-def get_notes():
-    version = request.headers.get('API-Version', 'v1')
-    if version == 'v2':
-        return jsonify({'data': [...]})
-    return jsonify([...])
+@app.get('/api/notes')
+def get_notes(api_version: Annotated[str, Header()] = 'v1'):  # reads the API-Version header
+    if api_version == 'v2':
+        return {'data': [...]}
+    return [...]
 ```
 
 **Used by:** GitHub API, Azure API
@@ -271,7 +275,8 @@ You want to add:
   ],
   "count": 1,
   "page": 1,
-  "per_page": 10
+  "per_page": 10,
+  "version": "v2"
 }
 ```
 
@@ -309,76 +314,105 @@ Link: </api/v2>; rel="successor-version"
 
 ## Part 2: Implementing Version Headers (15 minutes)
 
-### Task 2.1: Complete the `add_version_headers` Function
+### Routers: one per version
 
-Open `app.py` and find the `add_version_headers` function:
+So far every route hung directly from `app`. Here each version gets its own **`APIRouter`**, a mini-app that groups routes:
+
+- `APIRouter(prefix="/api/v1")` adds the prefix to every route declared with `@v1.get(...)`, `@v1.post(...)`, so you do not repeat `/api/v1` in each decorator.
+- `dependencies=[Depends(...)]` runs those dependencies on every route of the router. Here: authentication and the version headers, written once instead of once per route.
+- A router serves nothing until the app includes it with `app.include_router(v1)`. Do it after the routes are declared: `include_router` copies the routes the router has at that moment.
+
+A dependency can also declare a `response: Response` parameter (as exercise 04 did to set `Location`). Headers set on it are added to the response of the route. That is how `add_deprecation_headers` marks every v1 response without touching the routes.
+
+> **Headers only travel on successful responses.** When the authentication dependency or a route raises `HTTPException` (`401`, `403`, `404`), FastAPI builds a new response and the headers set on the dependency's `response` are not part of it. The same happens with `422` and with `405` (a `PUT` on `/api/v1/notes/2` never reaches the router's dependencies). So the `Deprecation`, `Sunset` and `Link` headers appear on the `200` and `201` answers of v1, not on its errors. Try it in Part 5.
+
+### Task 2.1: Complete the `add_deprecation_headers` Dependency
+
+Open `app.py` and find the `add_deprecation_headers` function:
 
 ```python
-def add_version_headers(response, version):
-    """Add version-related headers to response"""
+def add_deprecation_headers(response: Response) -> None:
+    """Router dependency: runs on every v1 request"""
+    info = API_VERSIONS['v1']
 
-    # TODO: Add API-Version header with the current version
-    # Hint: response.headers['API-Version'] = version
+    # TODO: Add API-Version header with the version this router serves
+    # Hint: response.headers['API-Version'] = 'v1'
     response.headers['API-Version'] = _____
 
-    if API_VERSIONS[version]['status'] == 'deprecated':
-        # TODO: Add Deprecation header (RFC 9745): "@" + when it was deprecated, as a Unix timestamp
-        response.headers['Deprecation'] = _____
+    # TODO: Add Deprecation header (RFC 9745): "@" + when it was deprecated, as a Unix timestamp
+    response.headers['Deprecation'] = _____
 
-        # TODO: Add Sunset header (RFC 8594): when the version will stop working, as an HTTP date
-        response.headers['Sunset'] = _____
+    # TODO: Add Sunset header (RFC 8594): when the version will stop working, as an HTTP date
+    response.headers['Sunset'] = _____
 
-        # TODO: Add Link header pointing clients to the version that replaces this one
-        response.headers['Link'] = _____
-
-    return response
+    # TODO: Add Link header pointing clients to the version that replaces this one
+    response.headers['Link'] = _____
 ```
 
 The helpers `to_epoch()` and `to_http_date()` (defined right after `API_VERSIONS`) convert the dates stored as `'2026-01-01'` into the formats the headers need.
 
 **Your tasks:**
-1. Fill in `API-Version` header with the version parameter
+1. Fill in `API-Version` header with the version this router serves
 2. Add `Deprecation` header: `@` followed by `to_epoch(...)` of the deprecation date
 3. Add `Sunset` header: `to_http_date(...)` of the sunset date from `API_VERSIONS`
 4. Add `Link` header pointing to the successor version
 
 **Solution:**
 ```python
-response.headers['API-Version'] = version
-response.headers['Deprecation'] = f"@{to_epoch(API_VERSIONS[version]['deprecation_date'])}"
-response.headers['Sunset'] = to_http_date(API_VERSIONS[version]['sunset_date'])
-response.headers['Link'] = f'<{API_VERSIONS[version]["successor"]}>; rel="successor-version"'
+response.headers['API-Version'] = 'v1'
+response.headers['Deprecation'] = f"@{to_epoch(info['deprecation_date'])}"
+response.headers['Sunset'] = to_http_date(info['sunset_date'])
+response.headers['Link'] = f'<{info["successor"]}>; rel="successor-version"'
 ```
+
+### Task 2.2: Complete the Router Prefixes
+
+Below the dependencies you find the two routers. `add_v2_header` is given: v2 only sets `API-Version`, because it is not deprecated.
+
+```python
+# TODO: Complete the prefix of each router
+v1 = APIRouter(
+    prefix="/api/_____",
+    tags=["v1 (deprecated)"],
+    dependencies=[Depends(get_current_user), Depends(add_deprecation_headers)],
+)
+v2 = APIRouter(
+    prefix="/api/_____",
+    tags=["v2"],
+    dependencies=[Depends(get_current_user), Depends(add_v2_header)],
+)
+```
+
+**Your task:** write `v1` and `v2` so the prefixes are `/api/v1` and `/api/v2`.
 
 ## Part 3: Implementing Version 1 (20 minutes)
 
 Version 1 is the original, simple API that many clients are already using.
 
-### Task 3.1: Complete `get_notes_v1`
+### Task 3.1: Complete the v1 Routes
 
 ```python
-@app.route('/api/v1/notes', methods=['GET'])
-@jwt_required()
-def get_notes_v1():
+@v1.get("/notes")
+def get_notes_v1(user: Annotated[str, Depends(get_current_user)]) -> list[dict]:
     """Version 1: Get all notes - Returns a simple list"""
-    current_user = get_jwt_identity()
-    user_notes = [note for note in notes.values() if note['owner'] == current_user]
+    user_notes = [note for note in notes.values() if note['owner'] == user]
 
-    # TODO: Create response with jsonify and user_notes
-    response = make_response(jsonify(_____))
+    # TODO: Return the plain list. v1 clients expect an array, not an object
+    return _____
 
-    # TODO: Add version headers to response
-    response = add_version_headers(response, _____)
 
-    return response
+# TODO: A note was created. Which status code?
+@v1.post("/notes", status_code=_____)
+def create_note_v1(data: NoteCreate, user: Annotated[str, Depends(get_current_user)]) -> dict:
+    ...
 ```
 
 **Your tasks:**
-1. Create response with the `user_notes` list
-2. Add version headers for 'v1'
+1. Return the `user_notes` list as it is
+2. Set the status code of the create route
 
-**Why make_response?**
-We use `make_response()` instead of just `jsonify()` because we need to modify the response headers before returning it.
+**Why no headers here?**
+The routes do not touch headers at all: the `v1` router dependency adds them to every response. That is the point of the router.
 
 ## Part 4: Implementing Version 2 (30 minutes)
 
@@ -387,15 +421,14 @@ Version 2 introduces breaking changes with improved functionality.
 ### Task 4.1: Complete `get_notes_v2` with Pagination
 
 ```python
-@app.route('/api/v2/notes', methods=['GET'])
-@jwt_required()
-def get_notes_v2():
+@v2.get("/notes")
+def get_notes_v2(
+    user: Annotated[str, Depends(get_current_user)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> dict:
     """Version 2: Get all notes with pagination"""
-    current_user = get_jwt_identity()
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-
-    user_notes = [note for note in notes.values() if note['owner'] == current_user]
+    user_notes = [note for note in notes.values() if note['owner'] == user]
 
     # TODO: Calculate pagination
     start = _____
@@ -403,44 +436,36 @@ def get_notes_v2():
     paginated_notes = user_notes[start:end]
 
     # TODO: Create v2 response structure
-    response_data = {
+    return {
         'data': _____,
         'count': _____,
-        'page': _____,
-        'per_page': _____
+        'page': page,
+        'per_page': per_page,
+        'version': 'v2'
     }
-
-    response = make_response(jsonify(response_data))
-    response = add_version_headers(response, 'v2')
-
-    return response
 ```
 
 **Your tasks:**
 1. Calculate the start index for pagination: `(page - 1) * per_page`
 2. Fill in the response structure with paginated data
 
+`page` and `per_page` are validated by `Query(ge=1)`: a `page=0` answers `422`.
+
 ### Task 4.2: Complete `create_note_v2` with Timestamps
 
 ```python
-@app.route('/api/v2/notes', methods=['POST'])
-@jwt_required()
-def create_note_v2():
+@v2.post("/notes", status_code=201)
+def create_note_v2(data: NoteCreateV2, user: Annotated[str, Depends(get_current_user)]) -> dict:
     """Version 2: Create note with timestamps and tags"""
     global note_id_counter
-    current_user = get_jwt_identity()
-    data = request.get_json()
-
-    if not data or 'title' not in data:
-        return jsonify({'error': 'Missing title'}), 400
 
     # TODO: Create note with v2 fields
     note = {
         'id': note_id_counter,
-        'title': data['title'],
-        'content': data.get('content', ''),
-        'tags': data.get('tags', []),
-        'owner': current_user,
+        'title': data.title,
+        'content': data.content,
+        'tags': data.tags,
+        'owner': user,
         'created_at': _____,  # TODO: Add timestamp
         'updated_at': _____   # TODO: Add timestamp
     }
@@ -449,47 +474,27 @@ def create_note_v2():
     note_id_counter += 1
 
     # TODO: Wrap response in 'data' object for v2
-    response_data = _____
-
-    response = make_response(jsonify(response_data), 201)
-    response = add_version_headers(response, 'v2')
-
-    return response
+    return _____
 ```
 
 **Your tasks:**
-1. Add `created_at` timestamp using `datetime.utcnow().isoformat()`
+1. Add `created_at` timestamp using `datetime.now(timezone.utc).isoformat()`
 2. Add `updated_at` timestamp
 3. Wrap the response: `{'data': note, 'message': 'Note created successfully'}`
 
-### Task 4.3: Complete `get_note_v2`
+`get_note_v2` (also wrapped in `data`) and the new `PUT /api/v2/notes/{note_id}` are already implemented.
+
+### Task 4.3: Plug the Routers into the App
+
+At the end of the routes:
 
 ```python
-@app.route('/api/v2/notes/<int:note_id>', methods=['GET'])
-@jwt_required()
-def get_note_v2(note_id):
-    """Version 2: Get a specific note with wrapped response"""
-    current_user = get_jwt_identity()
-
-    if note_id not in notes:
-        return jsonify({'error': 'Note not found'}), 404
-
-    note = notes[note_id]
-
-    if note['owner'] != current_user:
-        return jsonify({'error': 'Unauthorized'}), 403
-
-    # TODO: Wrap note in 'data' object for v2 response
-    response_data = _____
-
-    response = make_response(jsonify(response_data))
-    response = add_version_headers(response, 'v2')
-
-    return response
+# TODO: Include both routers in the app
+app.include_router(_____)
+app.include_router(_____)
 ```
 
-**Your task:**
-Wrap the note in a data object: `{'data': note}`
+**Your task:** include `v1` and `v2`.
 
 ## Part 5: Testing the Versions (40 minutes)
 
@@ -497,26 +502,26 @@ Wrap the note in a data object: `{'data': note}`
 
 ```bash
 cd exercises/15-versioning
-python app.py
+fastapi dev app.py
 ```
 
-You should see both v1 and v2 endpoints listed.
+Open http://127.0.0.1:8000/docs: the routes are grouped by tag (`auth`, `v1 (deprecated)`, `v2`).
 
 ### Step 5.2: Register and Login
 
 ```bash
 # Register a user
-curl -X POST http://127.0.0.1:5000/auth/register \
+curl -X POST http://127.0.0.1:8000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password123"}'
 
 # Login to get JWT token
-curl -X POST http://127.0.0.1:5000/auth/login \
+curl -X POST http://127.0.0.1:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password123"}'
 ```
 
-Save the `access_token` from the response.
+Save the `access_token` from the response (the password must have 8 to 72 characters).
 
 ### Step 5.3: Test Version 1 (Deprecated)
 
@@ -524,7 +529,7 @@ Save the `access_token` from the response.
 ```bash
 TOKEN="your_access_token_here"
 
-curl -X POST http://127.0.0.1:5000/api/v1/notes \
+curl -X POST http://127.0.0.1:8000/api/v1/notes \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"title":"My First Note","content":"This is v1"}'
@@ -542,7 +547,7 @@ curl -X POST http://127.0.0.1:5000/api/v1/notes \
 
 **Get notes using v1:**
 ```bash
-curl -i http://127.0.0.1:5000/api/v1/notes \
+curl -i http://127.0.0.1:8000/api/v1/notes \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -572,7 +577,7 @@ Link: </api/v2>; rel="successor-version"
 ```bash
 TOKEN="your_access_token_here"
 
-curl -X POST http://127.0.0.1:5000/api/v2/notes \
+curl -X POST http://127.0.0.1:8000/api/v2/notes \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"title":"My Second Note","content":"This is v2","tags":["work","important"]}'
@@ -587,8 +592,8 @@ curl -X POST http://127.0.0.1:5000/api/v2/notes \
     "content": "This is v2",
     "tags": ["work", "important"],
     "owner": "alice",
-    "created_at": "2024-01-01T10:30:00.123456",
-    "updated_at": "2024-01-01T10:30:00.123456"
+    "created_at": "2024-01-01T10:30:00.123456+00:00",
+    "updated_at": "2024-01-01T10:30:00.123456+00:00"
   },
   "message": "Note created successfully"
 }
@@ -596,7 +601,7 @@ curl -X POST http://127.0.0.1:5000/api/v2/notes \
 
 **Get notes using v2 (with pagination):**
 ```bash
-curl -i "http://127.0.0.1:5000/api/v2/notes?page=1&per_page=5" \
+curl -i "http://127.0.0.1:8000/api/v2/notes?page=1&per_page=5" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -621,13 +626,14 @@ API-Version: v2
       "content": "This is v2",
       "tags": ["work", "important"],
       "owner": "alice",
-      "created_at": "2024-01-01T10:30:00.123456",
-      "updated_at": "2024-01-01T10:30:00.123456"
+      "created_at": "2024-01-01T10:30:00.123456+00:00",
+      "updated_at": "2024-01-01T10:30:00.123456+00:00"
     }
   ],
   "count": 2,
   "page": 1,
-  "per_page": 5
+  "per_page": 5,
+  "version": "v2"
 }
 ```
 
@@ -637,7 +643,7 @@ API-Version: v2
 
 **Update a note (only in v2):**
 ```bash
-curl -X PUT http://127.0.0.1:5000/api/v2/notes/2 \
+curl -X PUT http://127.0.0.1:8000/api/v2/notes/2 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"title":"Updated Note","tags":["work","urgent"]}'
@@ -652,8 +658,8 @@ curl -X PUT http://127.0.0.1:5000/api/v2/notes/2 \
     "content": "This is v2",
     "tags": ["work", "urgent"],
     "owner": "alice",
-    "created_at": "2024-01-01T10:30:00.123456",
-    "updated_at": "2024-01-01T10:35:00.789012"
+    "created_at": "2024-01-01T10:30:00.123456+00:00",
+    "updated_at": "2024-01-01T10:35:00.789012+00:00"
   },
   "message": "Note updated successfully"
 }
@@ -663,21 +669,27 @@ Notice `updated_at` changed!
 
 **Try to update using v1 (will fail - endpoint doesn't exist):**
 ```bash
-curl -X PUT http://127.0.0.1:5000/api/v1/notes/2 \
+curl -X PUT http://127.0.0.1:8000/api/v1/notes/2 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"title":"This will fail"}'
 ```
 
-**Response:**
+**Response** (`405`, and no deprecation headers: it never reached the router):
 ```json
-{"error": "Method Not Allowed"}
+{"detail": "Method Not Allowed"}
+```
+
+**Errors do not carry the deprecation headers.** Compare a success and an error of v1:
+```bash
+curl -i http://127.0.0.1:8000/api/v1/notes/1 -H "Authorization: Bearer $TOKEN"   # 200: Deprecation, Sunset, Link
+curl -i http://127.0.0.1:8000/api/v1/notes/99 -H "Authorization: Bearer $TOKEN"  # 404: none of them
 ```
 
 ### Step 5.6: Check Version Information
 
 ```bash
-curl http://127.0.0.1:5000/api/versions
+curl http://127.0.0.1:8000/api/versions
 ```
 
 **Response:**
@@ -731,7 +743,8 @@ curl http://127.0.0.1:5000/api/versions
   ],
   "count": 1,
   "page": 1,
-  "per_page": 10
+  "per_page": 10,
+  "version": "v2"
 }
 ```
 
@@ -822,10 +835,10 @@ Don't wait! Start with `/api/v1` from day one, even if you don't plan changes.
 
 ```python
 # ✅ Good - versioned from the start
-@app.route('/api/v1/users')
+v1 = APIRouter(prefix='/api/v1')
 
 # ❌ Bad - hard to version later
-@app.route('/api/users')
+app = FastAPI()  # routes at /api/users
 ```
 
 ### 2. Version the Namespace, Not Individual Endpoints
@@ -911,16 +924,17 @@ from collections import Counter
 
 version_usage = Counter()
 
-@app.after_request
-def track_version(response):
+@app.middleware('http')
+async def track_version(request, call_next):
+    response = await call_next(request)
     version = response.headers.get('API-Version')
     if version:
         version_usage[version] += 1
     return response
 
-@app.route('/api/admin/version-stats')
+@app.get('/api/admin/version-stats')
 def version_stats():
-    return jsonify(dict(version_usage))
+    return dict(version_usage)
 ```
 
 This helps you understand when it's safe to sunset old versions.
@@ -1018,7 +1032,7 @@ All resources follow the same versioning strategy.
 ## Testing Checklist
 
 **Setup:**
-- [ ] Flask app installed and runs
+- [ ] FastAPI app installed and runs (`fastapi dev app.py`)
 - [ ] Can register and login successfully
 - [ ] JWT token obtained
 

@@ -1,3 +1,10 @@
-Flask==3.0.0
-Werkzeug==3.0.1
-Flask-JWT-Extended==4.6.0
+# Exercise 15: API Versioning - Python Dependencies
+
+# Web framework (includes the "fastapi" command and the dev server)
+fastapi[standard]==0.162.0
+
+# Password hashing
+bcrypt==5.0.0
+
+# JWT encoding and decoding
+PyJWT==2.15.1
