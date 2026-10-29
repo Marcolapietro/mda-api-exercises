@@ -88,7 +88,7 @@ def problem(request: Request, status: int, title: str, detail: str, **extra) -> 
 @app.exception_handler(StarletteHTTPException)
 def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     response = problem(request, exc.status_code, HTTPStatus(exc.status_code).phrase, str(exc.detail))
-    response.headers.update(exc.headers or {})  # e.g. Allow on a 405
+    response.headers.update(exc.headers or {})
     return response
 
 

@@ -245,7 +245,7 @@ def get_stats(
 def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     """
     Custom handler for rate limit exceeded errors
-    Returns the Flask-style JSON body, keeping the Retry-After and X-RateLimit-* headers
+    Returns a custom JSON error body, keeping the Retry-After and X-RateLimit-* headers
     """
     # slowapi's own handler already builds the 429 and adds the headers
     default = _rate_limit_exceeded_handler(request, exc)

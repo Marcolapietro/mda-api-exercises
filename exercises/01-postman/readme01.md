@@ -3,7 +3,7 @@
 
 ## Quick Start
 
-- This exercise uses Postman only; no Flask app to run.
+- This exercise uses Postman only; no app to run.
 - Install Postman, import or create requests, and follow the steps below.
 
 
