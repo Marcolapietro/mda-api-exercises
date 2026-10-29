@@ -2,7 +2,7 @@
 
 ## Objective
 
-Learn how to consume external public APIs and integrate their data into your own Flask API. This exercise teaches you to work with **multiple API endpoints** and handle real-world API integration challenges.
+Learn how to consume external public APIs and integrate their data into your own FastAPI API. This exercise teaches you to work with **multiple API endpoints** and handle real-world API integration challenges.
 
 ## Quick Start
 
@@ -12,8 +12,10 @@ python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
-python app.py
+fastapi dev app.py
 ```
+
+Fill the blanks (`_____`) from top to bottom; the app starts once the decorator of `/login` and the `Depends(...)` of `/weather` are complete. The other blanks (the environment variable name, `create_access_token`, the `params` dicts, `client.get`, `200`, `.json()`) are only used when a request reaches them, so you will notice them while testing. The API runs at `http://127.0.0.1:8000`.
 
 ---
 
@@ -21,7 +23,7 @@ python app.py
 
 This exercise builds on Exercise 11 (JWT authentication) and adds:
 
-1. **Consuming External APIs** with the `requests` library
+1. **Consuming External APIs** with the `httpx` library
 2. **Working with Multiple API Endpoints** (Geocoding + Weather)
 3. **Handling API Keys** and authentication with third-party services
 4. **Error Handling** for external API failures
@@ -32,7 +34,7 @@ This exercise builds on Exercise 11 (JWT authentication) and adds:
 
 ## The Challenge: Building a Weather API
 
-You'll create a Flask API that:
+You'll create a FastAPI API that:
 - Uses **OpenWeatherMap Geocoding API** to convert city names to coordinates
 - Uses **OpenWeatherMap Current Weather API** to get weather data by coordinates
 - Combines both APIs to provide weather information for any city worldwide
@@ -83,8 +85,10 @@ a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 
 **Never paste the key into `app.py`**: code ends up on GitHub and keys pushed to public repos are found by bots within minutes. `app.py` reads it from an environment variable instead:
 ```python
-OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', 'YOUR_API_KEY_HERE')
+OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY")
 ```
+
+If the variable is not set, `/weather` answers `503 Service Unavailable`: the problem is on the server side, not in your request.
 
 Set the variable in the terminal where you run the app:
 ```bash
@@ -114,12 +118,21 @@ set OPENWEATHER_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 
 | Method | Endpoint | Auth Required | Description |
 |--------|----------|---------------|-------------|
-| GET | `/weather?city=CityName&country=CC` | **No** | Get weather for a city |
+| GET | `/weather?city=CityName&country=CC` | **JWT** | Get weather for a city |
 
-**Why is `/weather` public?**
-- Focus of exercise is **consuming external APIs**, not authentication
-- Simpler testing (no need to login first)
-- Real-world use case: Public weather widgets
+**Why is `/weather` protected?**
+- Every call to `/weather` spends your OpenWeatherMap quota (60 calls per minute on the free tier)
+- Without a token, anybody could burn it: a request without one answers `401`
+- The focus is still **consuming external APIs**: login once, then reuse the token
+
+### How JWT works in FastAPI (new concept)
+
+FastAPI has no `@jwt_required()` decorator; we use the `PyJWT` library directly:
+
+- `create_access_token(username)` signs a token with `jwt.encode(...)`. It carries `sub` (the user) and `exp` (expires in 15 minutes).
+- `HTTPBearer` reads the `Authorization: Bearer <token>` header and gives it to a **dependency**, `get_current_user`, which checks it with `jwt.decode(...)`. A missing, expired or tampered token answers `401` with a `WWW-Authenticate: Bearer` header. `HTTPBearer(auto_error=False)` is there because by default FastAPI would answer 403 when the header is missing.
+- A route is protected by asking for that dependency: `user: Annotated[str, Depends(get_current_user)]`. It replaces `@jwt_required()`, and `user` replaces `get_jwt_identity()`.
+- `/login` takes the credentials as **JSON** (not a form): the form-based password flow in the FastAPI tutorial is the OAuth password grant, which OAuth 2.1 removed. Swagger UI (`/docs`) still shows an "Authorize" button for the token.
 
 ---
 
@@ -196,95 +209,112 @@ GET https://api.openweathermap.org/data/2.5/weather?lat=40.4165&lon=-3.7026&appi
 
 ### TODOs in app.py
 
-You need to complete **10 TODOs** (13 `_____` blanks; the two params dicts have several each).
+You need to complete **10 TODOs** (14 `_____` blanks; the two params dicts have several each).
 Line numbers can shift as you type, so search for `_____`:
 
-#### Authentication TODOs (from Exercise 11):
-1. `login()` (line 81): Create the JWT access token: `create_access_token(identity=username)`
-2. `profile()` (line 96): Get the user identity from the JWT: `get_jwt_identity()`
+#### Setup and Authentication TODOs (from Exercise 11):
+1. `OPENWEATHER_API_KEY` (line 44): The name of the environment variable: `OPENWEATHER_API_KEY`
+2. `@app._____("/login")` (line 119): The HTTP method that sends credentials in a body: `post`
+3. `login()` (line 132): Create the JWT access token: `create_access_token(data.username)`
+4. `weather()` (line 150): Require a valid token: `Depends(get_current_user)`
 
 #### Geocoding API TODOs (in `weather()`, step 1):
-3. `geo_params` (line 151): Fill `'q'` with `query` and `'appid'` with `OPENWEATHER_API_KEY`
-4. `geo_response` (line 157): Make the GET request: `requests.get(GEOCODING_API_URL, params=geo_params, timeout=10)`
-5. `geo_data` (line 169): Parse the JSON response: `geo_response.json()`
-6. `latitude` (line 182): `geo_data[0]['lat']`
-7. `longitude` (line 186): `geo_data[0]['lon']`
+5. `geo_params` (line 188): Fill `"q"` with `query` and `"appid"` with `OPENWEATHER_API_KEY`
+6. `geo_response` (line 193): Make the GET request: `client.get(GEOCODING_API_URL, params=geo_params)`
+7. `geo_response.status_code` (line 198): The status code that means success: `200`
+8. `geo_data` (line 206): Parse the JSON response: `geo_response.json()`
 
 #### Weather API TODOs (in `weather()`, step 2):
-8. `weather_params` (lines 215-217): Fill `'lat'`, `'lon'` and `'appid'`
-9. `weather_response` (line 225): Make the GET request: `requests.get(WEATHER_API_URL, params=weather_params, timeout=10)`
-10. `weather_data` (line 236): Parse the JSON response: `weather_response.json()`
+9. `weather_params` (lines 239-241): Fill `"lat"`, `"lon"` and `"appid"`
+10. `weather_response` (line 249) and `weather_data` (line 259): Make the GET request, `client.get(WEATHER_API_URL, params=weather_params)`, and parse it with `weather_response.json()`
 
 ### Key Concepts to Implement
 
 **1. Building the request parameters:**
 ```python
 # Geocoding API: GET {GEOCODING_API_URL}?q=...&appid=...&limit=1
-geo_params = {'q': query, 'appid': OPENWEATHER_API_KEY, 'limit': 1}
+geo_params = {"q": query, "appid": OPENWEATHER_API_KEY, "limit": 1}
 
 # Weather API: GET {WEATHER_API_URL}?lat=...&lon=...&appid=...&units=metric&lang=en
-weather_params = {'lat': latitude, 'lon': longitude, 'appid': OPENWEATHER_API_KEY,
-                  'units': 'metric', 'lang': 'en'}
+weather_params = {"lat": latitude, "lon": longitude, "appid": OPENWEATHER_API_KEY,
+                  "units": "metric", "lang": "en"}
 ```
 
-**Why a `params` dict and not an f-string URL?** `requests` URL-encodes every value. With
-`f'...?q={query}&appid=...'`, a user who asks for `?city=Paris%26limit%3D50` would inject an extra
+**Why a `params` dict and not an f-string URL?** `httpx` URL-encodes every value. With
+`f"...?q={query}&appid=..."`, a user who asks for `?city=Paris%26limit%3D50` would inject an extra
 `limit=50` parameter into the call to OpenWeatherMap, and a space in `New York` would break the URL.
 With `params=`, `Paris&limit=50` is sent as **one** value of `q` (`q=Paris%26limit%3D50`).
 
 **2. Making HTTP Requests:**
 ```python
-import requests
+import httpx
 
 # Always set a timeout on outbound calls: without it a slow upstream API blocks your worker forever
-response = requests.get(GEOCODING_API_URL, params=geo_params, timeout=10)
-if response.status_code == 200:
-    data = response.json()
-    # Process data
-else:
-    # Handle error (502 Bad Gateway: the upstream API failed, not your client)
+with httpx.Client(timeout=10) as client:
+    response = client.get(GEOCODING_API_URL, params=geo_params)
+    if response.status_code == 200:
+        data = response.json()
+        # Process data
+    else:
+        # Handle error (502 Bad Gateway: the upstream API failed, not your client)
+        raise HTTPException(status_code=502, detail="Geocoding API request failed")
 ```
 
 **3. Error Handling:**
 ```python
 try:
-    response = requests.get(GEOCODING_API_URL, params=geo_params, timeout=10)
+    response = client.get(GEOCODING_API_URL, params=geo_params)
     data = response.json()
-except requests.exceptions.RequestException:
+except httpx.HTTPError:
     # Network error. Do NOT return str(e) to the client: the exception message
     # can include the full URL, and that URL contains your appid (API key).
-    app.logger.exception('Geocoding API request failed')   # details stay in the server log
-    return jsonify({'error': 'Network error',
-                    'message': 'Could not connect to Geocoding API'}), 502
+    logger.exception("Geocoding API request failed")   # details stay in the server log
+    raise HTTPException(status_code=502, detail="Could not connect to Geocoding API")
 except (KeyError, IndexError, ValueError):
     # Invalid response format
-    app.logger.exception('Invalid response from Geocoding API')
-    return jsonify({'error': 'Invalid response from Geocoding API'}), 502
+    logger.exception("Invalid response from Geocoding API")
+    raise HTTPException(status_code=502, detail="Unexpected response format from Geocoding API")
 ```
+
+Errors use FastAPI's default `{"detail": "..."}` body.
 
 ---
 
 ## Testing the API
 
+### 0. Register, Log In and Keep the Token
+
+`/weather` is protected, so get a token first (passwords need 8 to 72 characters):
+
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"username":"alice","password":"secret123"}' http://127.0.0.1:8000/register
+curl -X POST -H "Content-Type: application/json" -d '{"username":"alice","password":"secret123"}' http://127.0.0.1:8000/login
+```
+
+The login response is `{"access_token": "...", "token_type": "bearer"}`. Send the token on every call as `-H "Authorization: Bearer YOUR_TOKEN"` (the examples below use that). Without it:
+
+```bash
+curl -i "http://127.0.0.1:8000/weather?city=Madrid"
+# 401 Unauthorized, header: WWW-Authenticate: Bearer
+```
+
 ### 1. Test Without API Key (Should Fail)
 
 ```bash
-curl "http://127.0.0.1:5000/weather?city=Madrid"
+curl -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather?city=Madrid"
 ```
 
-**Expected Response:**
+**Expected Response (503):**
 ```json
 {
-  "error": "OpenWeatherMap API key not configured",
-  "message": "Please set the OPENWEATHER_API_KEY environment variable",
-  "help": "Get a free API key at https://openweathermap.org/api"
+  "detail": "OpenWeatherMap API key not configured: set the OPENWEATHER_API_KEY environment variable (free key at https://openweathermap.org/api)"
 }
 ```
 
 ### 2. Test With API Key - Default City
 
 ```bash
-curl "http://127.0.0.1:5000/weather"
+curl -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather"
 ```
 
 **Expected Response (Madrid, default):**
@@ -320,16 +350,16 @@ curl "http://127.0.0.1:5000/weather"
 
 ```bash
 # Paris, France
-curl "http://127.0.0.1:5000/weather?city=Paris&country=FR"
+curl -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather?city=Paris&country=FR"
 
 # London, UK
-curl "http://127.0.0.1:5000/weather?city=London&country=GB"
+curl -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather?city=London&country=GB"
 
 # New York, USA (the space is encoded as %20)
-curl "http://127.0.0.1:5000/weather?city=New%20York&country=US"
+curl -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather?city=New%20York&country=US"
 
 # Tokyo, Japan
-curl "http://127.0.0.1:5000/weather?city=Tokyo&country=JP"
+curl -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather?city=Tokyo&country=JP"
 ```
 
 **Always quote URLs that contain `&`.** Unquoted, bash treats `&` as "run in the background" and
@@ -338,7 +368,7 @@ drops `country=...`; PowerShell refuses to parse it; in CMD you must escape it a
 **Spaces:** a literal space is not valid in a URL, so quotes alone are not enough
 (`"...city=New York..."` fails). Either encode it as `%20` (above) or let curl encode it:
 ```bash
-curl -G "http://127.0.0.1:5000/weather" --data-urlencode "city=New York" --data-urlencode "country=US"
+curl -G -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather" --data-urlencode "city=New York" --data-urlencode "country=US"
 ```
 
 **Windows PowerShell 5.1:** `curl` is an alias of `Invoke-WebRequest`; use `curl.exe` to run the real curl.
@@ -347,48 +377,42 @@ curl -G "http://127.0.0.1:5000/weather" --data-urlencode "city=New York" --data-
 
 **Without country code:**
 ```bash
-curl "http://127.0.0.1:5000/weather?city=Paris"
+curl -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather?city=Paris"
 # Returns: Paris, France (most common)
 ```
 
 **With country code:**
 ```bash
-curl "http://127.0.0.1:5000/weather?city=Paris&country=US"
+curl -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather?city=Paris&country=US"
 # Returns: Paris, Texas, USA
 ```
 
 ### 5. Test Invalid City (Should Fail)
 
 ```bash
-curl "http://127.0.0.1:5000/weather?city=InvalidCityXYZ"
+curl -H "Authorization: Bearer YOUR_TOKEN" "http://127.0.0.1:8000/weather?city=InvalidCityXYZ"
 ```
 
-**Expected Response:**
+**Expected Response (404):**
 ```json
 {
-  "error": "City not found",
-  "message": "Could not find coordinates for city: InvalidCityXYZ",
-  "suggestion": "Try adding a country code, e.g., ?city=Paris&country=FR"
+  "detail": "Could not find coordinates for city: InvalidCityXYZ. Try adding a country code, e.g., ?city=Paris&country=FR"
 }
 ```
 
 ---
 
-## Understanding the `requests` Library
+## Understanding the `httpx` Library
 
-### Installation
-
-```bash
-pip install requests
-```
+`httpx` is installed together with `fastapi[standard]`, and its calls look just like the ones of `requests`.
 
 ### Basic Usage
 
 ```python
-import requests
+import httpx
 
 # GET request
-response = requests.get('https://api.example.com/data')
+response = httpx.get('https://api.example.com/data')
 
 # Check status
 if response.status_code == 200:
@@ -406,30 +430,30 @@ print(data['key'])
 **Method 1: params dictionary (use this one)**
 ```python
 params = {'param1': value1, 'param2': value2}
-response = requests.get('https://api.example.com/data', params=params, timeout=10)
+response = httpx.get('https://api.example.com/data', params=params, timeout=10)
 ```
-`requests` URL-encodes each value, so spaces, `&`, `=` or `#` in user input can't break the URL
+`httpx` URL-encodes each value, so spaces, `&`, `=` or `#` in user input can't break the URL
 or add extra parameters.
 
 **Method 2: URL string (avoid with user input)**
 ```python
 # ❌ value1 is not encoded: "a&admin=1" becomes an extra parameter
 url = f'https://api.example.com/data?param1={value1}&param2={value2}'
-response = requests.get(url, timeout=10)
+response = httpx.get(url, timeout=10)
 ```
 
 ### Error Handling
 
 ```python
 try:
-    response = requests.get(url, timeout=5)
+    response = httpx.get(url, timeout=5)
     response.raise_for_status()  # Raises exception for 4xx/5xx
     data = response.json()
-except requests.exceptions.Timeout:
+except httpx.TimeoutException:
     print("Request timed out")
-except requests.exceptions.ConnectionError:
+except httpx.ConnectError:
     print("Network error")
-except requests.exceptions.HTTPError as e:
+except httpx.HTTPStatusError as e:
     print(f"HTTP error: {e}")
 except ValueError:
     print("Invalid JSON response")
@@ -549,13 +573,13 @@ def cache_weather(city, data, ttl_minutes=10):
 
 ```python
 # 5-day forecast
-@app.route('/weather/forecast', methods=['GET'])
+@app.get("/weather/forecast")
 def forecast():
     # Use: https://api.openweathermap.org/data/2.5/forecast
     pass
 
 # Air quality
-@app.route('/weather/air-quality', methods=['GET'])
+@app.get("/weather/air-quality")
 def air_quality():
     # Use: https://api.openweathermap.org/data/2.5/air_pollution
     pass
@@ -572,23 +596,28 @@ weather_info['weather']['icon_url'] = f"https://openweathermap.org/img/wn/{icon_
 ### 4. Add Temperature Unit Conversion
 
 ```python
-@app.route('/weather', methods=['GET'])
-def weather():
-    units = request.args.get('units', 'metric')  # metric, imperial, standard
-    # Use in API call: &units={units}
+@app.get("/weather")
+def weather(
+    user: Annotated[str, Depends(get_current_user)],
+    units: Annotated[str, Query()] = "metric",  # metric, imperial, standard
+    city: Annotated[str, Query()] = "Madrid",
+):
+    # Use in API call: "units": units
+    ...
 ```
 
-### 5. Protect Weather Endpoint with JWT
+### 5. Track Each User's Queries
 
-Make weather endpoint require authentication:
+`/weather` already knows who is calling (`user`). Count the queries per user:
 
 ```python
-@app.route('/weather', methods=['GET'])
-@jwt_required()  # Add this decorator
-def weather():
-    current_user = get_jwt_identity()
-    # Track user's weather queries for analytics
+query_counts: dict[str, int] = {}
+
+# inside weather(), after the token check
+query_counts[user] = query_counts.get(user, 0) + 1
 ```
+
+Expose it in a new protected `GET /weather/stats` endpoint.
 
 ---
 
@@ -601,8 +630,8 @@ OpenWeatherMap has deprecated city name queries:
 **Old Way (Deprecated, but still works):**
 ```python
 # Direct city name query - NOT RECOMMENDED
-requests.get('https://api.openweathermap.org/data/2.5/weather',
-             params={'q': city, 'appid': api_key}, timeout=10)
+httpx.get('https://api.openweathermap.org/data/2.5/weather',
+          params={'q': city, 'appid': api_key}, timeout=10)
 ```
 
 **Problems:**
@@ -614,13 +643,13 @@ requests.get('https://api.openweathermap.org/data/2.5/weather',
 **New Way (Recommended):**
 ```python
 # Step 1: Geocode
-requests.get('https://api.openweathermap.org/geo/1.0/direct',
-             params={'q': city, 'appid': api_key, 'limit': 1}, timeout=10)
+httpx.get('https://api.openweathermap.org/geo/1.0/direct',
+          params={'q': city, 'appid': api_key, 'limit': 1}, timeout=10)
 # Get coordinates
 
 # Step 2: Weather by coordinates
-requests.get('https://api.openweathermap.org/data/2.5/weather',
-             params={'lat': lat, 'lon': lon, 'appid': api_key}, timeout=10)
+httpx.get('https://api.openweathermap.org/data/2.5/weather',
+          params={'lat': lat, 'lon': lon, 'appid': api_key}, timeout=10)
 ```
 
 **Benefits:**
@@ -643,10 +672,10 @@ requests.get('https://api.openweathermap.org/data/2.5/weather',
 - [API Key Guide](https://openweathermap.org/appid)
 - [FAQ](https://openweathermap.org/faq)
 
-### Python requests Library
+### Python httpx Library
 
-- [Official Documentation](https://requests.readthedocs.io/)
-- [Quickstart Guide](https://requests.readthedocs.io/en/latest/user/quickstart/)
+- [Official Documentation](https://www.python-httpx.org/)
+- [Quickstart Guide](https://www.python-httpx.org/quickstart/)
 
 ### ISO Country Codes
 
@@ -660,7 +689,7 @@ requests.get('https://api.openweathermap.org/data/2.5/weather',
 **Key Takeaways:**
 
 1. **External API Consumption**
-   - Use `requests` library for HTTP calls
+   - Use the `httpx` library for HTTP calls
    - Parse JSON responses with `.json()`
    - Handle errors gracefully
 
@@ -683,7 +712,7 @@ requests.get('https://api.openweathermap.org/data/2.5/weather',
 
 5. **Building on Previous Knowledge**
    - JWT authentication (Exercise 11)
-   - Flask routing and error handling
+   - FastAPI routing and error handling
    - JSON responses
    - Now adding: External API consumption!
 

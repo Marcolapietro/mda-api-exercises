@@ -1,13 +1,3 @@
-# Exercise 10: Public API Consumption - Python Dependencies
-
-# Core Flask framework
-Flask==3.0.0
-
-# Password hashing utilities
-Werkzeug==3.0.1
-
-# JWT authentication library
-Flask-JWT-Extended==4.6.0
-
-# HTTP library for consuming external APIs
-requests==2.31.0
+fastapi[standard]==0.162.0
+bcrypt==5.0.0
+PyJWT==2.15.1

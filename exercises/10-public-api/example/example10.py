@@ -1,111 +1,141 @@
+import logging
 import os
 import secrets
-from flask import Flask, jsonify, request
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-import requests
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Any
 
-app = Flask(__name__)
+import bcrypt
+import httpx
+import jwt
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field, field_validator
+
+app = FastAPI(title="Weather API")
+
+# Same logger that fastapi dev uses, so errors show up in your terminal
+logger = logging.getLogger("uvicorn.error")
 
 # JWT Configuration
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)  # from env; random per run if unset
+JWT_ALG = "HS256"
+ACCESS_TOKEN_MINUTES = 15
 
-jwt = JWTManager(app)
+# HTTPBearer reads "Authorization: Bearer <token>" and hands us the token.
+# auto_error=False: if the header is missing we get None and answer 401 ourselves
+# (by default FastAPI would answer 403).
+bearer = HTTPBearer(auto_error=False)
 
-# Simulated database to store users
-users = {
-    # 'username': {'password': 'hashed_password'}
-}
+# In-memory database: {username: bcrypt hash}
+users: dict[str, str] = {}
 
 # OpenWeatherMap Configuration
 # Get your free API key from https://openweathermap.org/api
-OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', 'YOUR_API_KEY_HERE')  # set it as an environment variable, never in the code
-GEOCODING_API_URL = 'https://api.openweathermap.org/geo/1.0/direct'
-WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather'
+OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY")  # set it as an environment variable, never in the code
+GEOCODING_API_URL = "https://api.openweathermap.org/geo/1.0/direct"
+WEATHER_API_URL = "https://api.openweathermap.org/data/2.5/weather"
+
+
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except ValueError:  # bcrypt only accepts passwords of up to 72 bytes
+        return False
+
+
+# Compared against when the user does not exist, so both failures take the same time
+DUMMY_HASH = hash_password("not-a-real-password")
+
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, pw: str) -> str:
+        if len(pw.encode()) > 72:  # bcrypt counts bytes, not characters
+            raise ValueError("password must be at most 72 bytes")
+        return pw
+
+
+class Credentials(BaseModel):
+    # Plain str: wrong credentials must answer 401, never 422
+    username: str
+    password: str
+
+
+def create_access_token(username: str) -> str:
+    now = datetime.now(timezone.utc)
+    claims = {"sub": username, "iat": now, "exp": now + timedelta(minutes=ACCESS_TOKEN_MINUTES)}
+    return jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALG)
+
+
+def get_current_user(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> str:
+    """Dependency: returns the username from the JWT, or answers 401 if it is missing, expired or invalid."""
+    unauthorized = HTTPException(
+        status_code=401,
+        detail="Missing or invalid token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if creds is None:
+        raise unauthorized
+    try:
+        claims = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG], options={"require": ["sub", "exp"]})
+    except jwt.InvalidTokenError:  # expired, bad signature, malformed...
+        raise unauthorized
+    return claims["sub"]
 
 
 # ============================================================================
 # AUTHENTICATION ENDPOINTS (from Exercise 11)
 # ============================================================================
 
-@app.route('/register', methods=['POST'])
-def register():
+@app.post("/register", status_code=201)
+def register(data: UserCreate) -> dict[str, str]:
     """Register a new user - Public endpoint"""
-    data = request.get_json()
-
-    if not data:
-        return jsonify({'error': 'Request body must be JSON'}), 400
-
-    username = data.get('username')
-    password = data.get('password')
-
-    if not username or not password:
-        return jsonify({'error': 'Username and password are required'}), 400
-
-    if username in users:
-        return jsonify({'error': 'User already exists'}), 409
-
-    users[username] = {
-        'password': generate_password_hash(password)
-    }
-
-    return jsonify({
-        'message': 'User registered successfully',
-        'username': username
-    }), 201
+    if data.username in users:
+        raise HTTPException(status_code=409, detail="User already exists")
+    users[data.username] = hash_password(data.password)
+    return {"message": "User registered successfully", "username": data.username}
 
 
-@app.route('/login', methods=['POST'])
-def login():
+@app.post("/login")
+def login(data: Credentials) -> dict[str, str]:
     """Authenticate user and return JWT token - Public endpoint"""
-    data = request.get_json()
-
-    if not data:
-        return jsonify({'error': 'Request body must be JSON'}), 400
-
-    username = data.get('username')
-    password = data.get('password')
-
-    if not username or not password:
-        return jsonify({'error': 'Username and password are required'}), 400
-
-    if username not in users:
-        return jsonify({'error': 'Invalid credentials'}), 401
-
-    if not check_password_hash(users[username]['password'], password):
-        return jsonify({'error': 'Invalid credentials'}), 401
-
-    # Create JWT access token
-    access_token = create_access_token(identity=username)
-
-    return jsonify({
-        'message': 'Login successful',
-        'access_token': access_token,
-        'token_type': 'Bearer'
-    }), 200
+    # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
+    password_ok = verify_password(data.password, users.get(data.username, DUMMY_HASH))
+    if data.username not in users or not password_ok:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return {"access_token": create_access_token(data.username), "token_type": "bearer"}
 
 
-@app.route('/profile', methods=['GET'])
-@jwt_required()
-def profile():
+@app.get("/profile")
+def profile(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
     """Get current user's profile - Protected endpoint (requires JWT)"""
-    # Get the user identity from the JWT token
-    current_user = get_jwt_identity()
-
-    return jsonify({
-        'username': current_user,
-        'profile': f'Profile information for {current_user}'
-    }), 200
+    return {"username": user, "profile": f"Profile information for {user}"}
 
 
 # ============================================================================
-# EXTERNAL API CONSUMPTION - WEATHER ENDPOINTS
+# EXTERNAL API CONSUMPTION - WEATHER ENDPOINT
 # ============================================================================
 
-@app.route('/weather', methods=['GET'])
-def weather():
+@app.get("/weather")
+def weather(
+    user: Annotated[str, Depends(get_current_user)],
+    city: Annotated[str, Query()] = "Madrid",
+    country: Annotated[str, Query()] = "",
+) -> dict[str, Any]:
     """
-    Get weather information for a city - Public endpoint
+    Get weather information for a city - Protected endpoint (requires JWT)
 
     This endpoint demonstrates consuming MULTIPLE external APIs:
     1. OpenWeatherMap Geocoding API: Convert city name to coordinates
@@ -114,188 +144,116 @@ def weather():
     Query Parameters:
         city (str): City name (default: 'Madrid')
         country (str): Optional ISO 3166 country code (e.g., 'ES', 'US')
-
-    Returns:
-        JSON with weather information or error message
-
-    Note: This endpoint is PUBLIC (no JWT required) because the focus
-    is on learning to consume external APIs, not authentication.
     """
-    # Get parameters from query string
-    city = request.args.get('city', 'Madrid')
-    country_code = request.args.get('country', '')  # Optional country code
-
     # Validate API key is configured
-    if OPENWEATHER_API_KEY == 'YOUR_API_KEY_HERE':
-        return jsonify({
-            'error': 'OpenWeatherMap API key not configured',
-            'message': 'Please set the OPENWEATHER_API_KEY environment variable',
-            'help': 'Get a free API key at https://openweathermap.org/api'
-        }), 500
+    if not OPENWEATHER_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="OpenWeatherMap API key not configured: set the OPENWEATHER_API_KEY environment variable "
+                   "(free key at https://openweathermap.org/api)",
+        )
 
-    # ========================================================================
-    # STEP 1: Get coordinates from city name using Geocoding API
-    # ========================================================================
+    # One client for both calls; always set a timeout on outbound calls
+    with httpx.Client(timeout=10) as client:
 
-    # Build the geocoding query
-    # Format: "CityName,CountryCode" (country code is optional but recommended)
-    query = f"{city},{country_code}" if country_code else city
+        # ====================================================================
+        # STEP 1: Get coordinates from city name using Geocoding API
+        # ====================================================================
 
-    # Build the geocoding query parameters as a dict.
-    # requests URL-encodes every value, so "New York" or "Paris&limit=50" stay ONE parameter
-    # (an f-string URL would let the user inject extra parameters).
-    geo_params = {'q': query, 'appid': OPENWEATHER_API_KEY, 'limit': 1}
+        # Format: "CityName,CountryCode" (country code is optional but recommended)
+        query = f"{city},{country}" if country else city
 
-    # Make request to Geocoding API
-    try:
-        # Make GET request to geocoding API (always set a timeout for outbound calls)
-        geo_response = requests.get(GEOCODING_API_URL, params=geo_params, timeout=10)
+        # Build the geocoding query parameters as a dict.
+        # httpx URL-encodes every value, so "New York" or "Paris&limit=50" stay ONE parameter
+        # (an f-string URL would let the user inject extra parameters).
+        geo_params = {"q": query, "appid": OPENWEATHER_API_KEY, "limit": 1}
 
-        # Check if the request was successful
-        if geo_response.status_code != 200:
-            return jsonify({
-                'error': 'Geocoding API request failed',
-                'status_code': geo_response.status_code,
-                'message': 'Could not connect to OpenWeatherMap Geocoding API'
-            }), 502
+        try:
+            geo_response = client.get(GEOCODING_API_URL, params=geo_params)
 
-        # Parse JSON response from geocoding API
-        geo_data = geo_response.json()
+            # Check if the request was successful
+            if geo_response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Geocoding API request failed (upstream status {geo_response.status_code})",
+                )
 
-        # Check if city was found
-        if not geo_data or len(geo_data) == 0:
-            return jsonify({
-                'error': 'City not found',
-                'message': f'Could not find coordinates for city: {city}',
-                'suggestion': 'Try adding a country code, e.g., ?city=Paris&country=FR'
-            }), 404
+            geo_data = geo_response.json()
 
-        # Extract coordinates from first result
-        latitude = geo_data[0]['lat']
-        longitude = geo_data[0]['lon']
+            # Check if city was found
+            if not geo_data:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Could not find coordinates for city: {city}. "
+                           "Try adding a country code, e.g., ?city=Paris&country=FR",
+                )
 
-        # Get additional location info
-        location_name = geo_data[0].get('name', city)
-        country = geo_data[0].get('country', 'Unknown')
-        state = geo_data[0].get('state', '')  # Some locations have state info
+            # Extract coordinates and location info from the first result
+            latitude = geo_data[0]["lat"]
+            longitude = geo_data[0]["lon"]
+            location_name = geo_data[0].get("name", city)
+            location_country = geo_data[0].get("country", "Unknown")
+            state = geo_data[0].get("state", "")  # Some locations have state info
 
-    except requests.exceptions.RequestException:
-        # Never return str(e) to the client: it can contain the full URL, including the appid (API key).
-        # Log the details server-side and send a generic message.
-        app.logger.exception('Geocoding API request failed')
-        return jsonify({
-            'error': 'Network error',
-            'message': 'Could not connect to Geocoding API'
-        }), 502
-    except (KeyError, IndexError, ValueError):
-        app.logger.exception('Invalid response from Geocoding API')
-        return jsonify({
-            'error': 'Invalid response from Geocoding API',
-            'message': 'Unexpected response format from the upstream API'
-        }), 502
+        except httpx.HTTPError:
+            # Never return str(e) to the client: it can contain the full URL, including the appid (API key).
+            # Log the details server-side and send a generic message.
+            logger.exception("Geocoding API request failed")
+            raise HTTPException(status_code=502, detail="Could not connect to Geocoding API")
+        except (KeyError, IndexError, ValueError):
+            logger.exception("Invalid response from Geocoding API")
+            raise HTTPException(status_code=502, detail="Unexpected response format from Geocoding API")
 
-    # ========================================================================
-    # STEP 2: Get weather data using coordinates
-    # ========================================================================
+        # ====================================================================
+        # STEP 2: Get weather data using coordinates
+        # ====================================================================
 
-    # Build the weather query parameters (coordinates and API key)
-    weather_params = {
-        'lat': latitude,
-        'lon': longitude,
-        'appid': OPENWEATHER_API_KEY,
-        'units': 'metric',
-        'lang': 'en',
-    }
-
-    try:
-        # Make GET request to weather API
-        weather_response = requests.get(WEATHER_API_URL, params=weather_params, timeout=10)
-
-        if weather_response.status_code != 200:
-            return jsonify({
-                'error': 'Weather API request failed',
-                'status_code': weather_response.status_code,
-                'message': 'Could not retrieve weather information'
-            }), 502
-
-        # Parse JSON response from weather API
-        weather_data = weather_response.json()
-
-        # Extract relevant weather information
-        weather_info = {
-            'location': {
-                'city': location_name,
-                'country': country,
-                'state': state,
-                'coordinates': {
-                    'latitude': latitude,
-                    'longitude': longitude
-                }
-            },
-            'weather': {
-                'temperature': weather_data['main']['temp'],
-                'feels_like': weather_data['main']['feels_like'],
-                'humidity': weather_data['main']['humidity'],
-                'pressure': weather_data['main']['pressure'],
-                'description': weather_data['weather'][0]['description'],
-                'main': weather_data['weather'][0]['main'],
-                'icon': weather_data['weather'][0]['icon']
-            },
-            'wind': {
-                'speed': weather_data['wind']['speed'],
-                'direction': weather_data['wind'].get('deg', 'N/A')
-            },
-            'timestamp': weather_data['dt']
+        weather_params = {
+            "lat": latitude,
+            "lon": longitude,
+            "appid": OPENWEATHER_API_KEY,
+            "units": "metric",
+            "lang": "en",
         }
 
-        return jsonify(weather_info), 200
+        try:
+            weather_response = client.get(WEATHER_API_URL, params=weather_params)
 
-    except requests.exceptions.RequestException:
-        # Same rule as above: log server-side, never leak str(e) (it may contain the appid)
-        app.logger.exception('Weather API request failed')
-        return jsonify({
-            'error': 'Network error',
-            'message': 'Could not connect to Weather API'
-        }), 502
-    except (KeyError, ValueError):
-        app.logger.exception('Invalid response from Weather API')
-        return jsonify({
-            'error': 'Invalid response from Weather API',
-            'message': 'Unexpected response format from the upstream API'
-        }), 502
+            if weather_response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Weather API request failed (upstream status {weather_response.status_code})",
+                )
 
+            weather_data = weather_response.json()
 
-# ============================================================================
-# ERROR HANDLERS
-# ============================================================================
+            return {
+                "location": {
+                    "city": location_name,
+                    "country": location_country,
+                    "state": state,
+                    "coordinates": {"latitude": latitude, "longitude": longitude},
+                },
+                "weather": {
+                    "temperature": weather_data["main"]["temp"],
+                    "feels_like": weather_data["main"]["feels_like"],
+                    "humidity": weather_data["main"]["humidity"],
+                    "pressure": weather_data["main"]["pressure"],
+                    "description": weather_data["weather"][0]["description"],
+                    "main": weather_data["weather"][0]["main"],
+                    "icon": weather_data["weather"][0]["icon"],
+                },
+                "wind": {
+                    "speed": weather_data["wind"]["speed"],
+                    "direction": weather_data["wind"].get("deg", "N/A"),
+                },
+                "timestamp": weather_data["dt"],
+            }
 
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Resource not found'}), 404
-
-@app.errorhandler(405)
-def method_not_allowed(error):
-    return jsonify({'error': 'Method not allowed'}), 405
-
-
-if __name__ == '__main__':
-    print("\n" + "="*70)
-    print("Exercise 10: Public API Consumption - Weather API")
-    print("="*70)
-    print("\n⚠️  IMPORTANT: Configure your OpenWeatherMap API key first!")
-    print("   1. Get free API key: https://openweathermap.org/api")
-    print("   2. Set the OPENWEATHER_API_KEY environment variable")
-    print("\nAuthentication endpoints:")
-    print("  POST /register  - Register a new user")
-    print("  POST /login     - Login and get JWT token")
-    print("  GET  /profile   - Get user profile (requires JWT)")
-    print("\nWeather endpoint (public - no auth required):")
-    print("  GET  /weather?city=CityName&country=CountryCode")
-    print("\nExamples:")
-    print('  curl "http://127.0.0.1:5000/weather?city=Madrid"')
-    print('  curl "http://127.0.0.1:5000/weather?city=Paris&country=FR"')
-    print('  curl "http://127.0.0.1:5000/weather?city=London&country=GB"')
-    print("\nServer running at: http://127.0.0.1:5000")
-    print("="*70 + "\n")
-
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1")
+        except httpx.HTTPError:
+            # Same rule as above: log server-side, never leak str(e) (it may contain the appid)
+            logger.exception("Weather API request failed")
+            raise HTTPException(status_code=502, detail="Could not connect to Weather API")
+        except (KeyError, IndexError, ValueError):
+            logger.exception("Invalid response from Weather API")
+            raise HTTPException(status_code=502, detail="Unexpected response format from Weather API")
