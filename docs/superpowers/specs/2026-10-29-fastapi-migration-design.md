@@ -110,6 +110,34 @@ default `NOTES_API_URL` (port 8000) and the docstring/README lines that start th
 The `example/commands_cmd.txt` and `commands_powershell.txt` files (05, 06, 08 to 12) and
 `16-webhooks-ngrok/example/send_signed_webhook.py` move to port 8000 like everything else.
 
+### FastAPI conventions
+
+The official tutorial (fastapi.tiangolo.com, 2026) is the style reference:
+
+- Parameters use `Annotated`: `limit: Annotated[int, Query(ge=1, le=100)] = 20`,
+  `user: Annotated[User, Depends(get_current_user)]`. Not the `Query(20, ge=1)` default form.
+- Response models come from the return type annotation (`-> Note`, `-> list[Note]`);
+  `response_model=` only when the returned object is not that type.
+- Path operations are plain `def` (FastAPI runs them in a threadpool); `async def` only where
+  the body awaits something (exercise 16's `await request.body()`).
+- Status codes in decorators are numeric literals (`status_code=201`), which the tutorial
+  shows first and which match the slides; `fastapi.status` constants are mentioned once in
+  the README of 04 as the alternative.
+- Type hints on every parameter and model field; models are `BaseModel` subclasses named
+  after the resource (`Note`, `NoteCreate`, `NoteUpdate`).
+
+Deliberate deviations from the tutorial, each explained once in the README where it appears:
+
+1. Login takes a JSON body and tokens are read with `HTTPBearer`, not
+   `OAuth2PasswordBearer` + `OAuth2PasswordRequestForm`: that pattern is the password grant,
+   which slide 54 teaches as removed in OAuth 2.1. `HTTPBearer` still gives Swagger UI its
+   "Authorize" button.
+2. Errors in 04, 05, 06 and 17 are RFC 9457 problem+json through custom exception handlers
+   (the tutorial's "Handling Errors" page documents the mechanism), not the default
+   `{"detail": ...}`.
+3. Passwords are hashed with `bcrypt` directly rather than `pwdlib[argon2]`, to avoid a
+   native argon2 wheel on every student laptop.
+
 ### Errors
 
 FastAPI answers `{"detail": ...}` by default and uses 422 for validation errors. The course
