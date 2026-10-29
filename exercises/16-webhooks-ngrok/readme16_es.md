@@ -313,7 +313,7 @@ X-GitHub-Delivery:   <id único>                  ✅ iguales     → continuar
 
 #### ¿Por qué `async def` y `await request.body()`?
 
-Hasta ahora todas las operaciones de ruta del curso eran un `def` normal. Leer el cuerpo en bruto es distinto: `request.body()` es una **corrutina**, una función que tiene que esperar a que los bytes lleguen por la red, así que se llama con `await`, y `await` solo se permite dentro de una función `async def`. Por eso `github_webhook` es el **único `async def` del curso**. Todo lo demás sigue siendo `def`: FastAPI lo ejecuta en un pool de hilos, y solo necesitas `async def` cuando el cuerpo de la función espera algo con `await`. ¿Por qué no declarar un modelo de cuerpo como en los ejercicios anteriores? Porque el modelo te da el JSON *ya parseado*, y el HMAC hay que calcularlo sobre los bytes exactos que envió GitHub.
+Hasta ahora todas las operaciones de ruta del curso eran un `def` normal. Leer el cuerpo en bruto es distinto: `request.body()` es una **corrutina**, una función que tiene que esperar a que los bytes lleguen por la red, así que se llama con `await`, y `await` solo se permite dentro de una función `async def`. Por eso `github_webhook` es la **única operación de ruta (route handler) que es `async def` en el curso**. (El middleware de registro y los manejadores de error del mismo archivo también son `async def`, porque el framework los llama así, pero no son rutas.) Las demás rutas siguen siendo `def`: FastAPI las ejecuta en un pool de hilos, y solo necesitas `async def` cuando el cuerpo de la función espera algo con `await`. ¿Por qué no declarar un modelo de cuerpo como en los ejercicios anteriores? Porque el modelo te da el JSON *ya parseado*, y el HMAC hay que calcularlo sobre los bytes exactos que envió GitHub.
 
 #### Deduplicar por ID de entrega
 
@@ -852,8 +852,8 @@ En el Ejercicio 15 (ProManage) trabajarás en equipos donde:
 
 Escenario de ejemplo:
 - Estudiante A: Servicio de autenticación de usuarios (puerto 8000)
-- Estudiante B: Servicio de gestión de proyectos (puerto 5001)
-- Estudiante C: Servicio de gestión de tareas (puerto 5002)
+- Estudiante B: Servicio de gestión de proyectos (puerto 8001)
+- Estudiante C: Servicio de gestión de tareas (puerto 8002)
 
 Cada uno ejecuta su servicio en local, lo expone con ngrok y comparte las URLs con el equipo.
 
@@ -863,7 +863,7 @@ ngrok http 8000
 # Compartir: https://student-a.ngrok-free.app
 
 # Servicio de proyectos del Estudiante B
-ngrok http 5001
+ngrok http 8001
 # Compartir: https://student-b.ngrok-free.app
 
 # El Estudiante C ya puede llamar a ambos servicios:

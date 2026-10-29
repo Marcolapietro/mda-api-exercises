@@ -136,7 +136,7 @@ async def github_webhook(request: Request) -> dict:
     When you configure a webhook in GitHub repository settings, it sends POST
     requests to this endpoint with information about repository events.
 
-    This is the only `async def` in the course: reading the raw body is a coroutine,
+    This is the only route handler (path operation) that is `async def` in the course: reading the raw body is a coroutine,
     so the function must be `async def` and the call needs `await`.
 
     Security steps, in this order:

@@ -313,7 +313,7 @@ X-GitHub-Delivery:   <unique id>                 ✅ equal      → continue
 
 #### Why `async def` and `await request.body()`?
 
-Until now every path operation in the course was a plain `def`. Reading the raw request body is different: `request.body()` is a **coroutine**, a function that has to wait for the bytes to arrive from the network, so you call it with `await`, and `await` is only allowed inside an `async def` function. That is why `github_webhook` is the **only `async def` in the course**. Everything else stays `def`: FastAPI runs those in a thread pool, and you only need `async def` when the function body awaits something. Why not simply declare a body model, as in the earlier exercises? Because a model gives you the *parsed* JSON, and the HMAC must be computed over the exact bytes GitHub sent.
+Until now every path operation in the course was a plain `def`. Reading the raw request body is different: `request.body()` is a **coroutine**, a function that has to wait for the bytes to arrive from the network, so you call it with `await`, and `await` is only allowed inside an `async def` function. That is why `github_webhook` is the **only route handler (path operation) that is `async def` in the course**. (The logging middleware and the error handlers in the same file are `async def` too, because the framework calls them that way, but they are not routes.) Every other route stays `def`: FastAPI runs those in a thread pool, and you only need `async def` when the function body awaits something. Why not simply declare a body model, as in the earlier exercises? Because a model gives you the *parsed* JSON, and the HMAC must be computed over the exact bytes GitHub sent.
 
 #### Deduplicate by delivery ID
 
@@ -736,7 +736,7 @@ async def github_webhook(request: Request) -> dict:
 
 ### Issue 4: Connection timed out
 **Solution:**
-- Ensure The API is actually running
+- Ensure the API is actually running
 - Confirm ngrok is pointing to correct port (8000)
 - Check firewall settings
 
@@ -852,8 +852,8 @@ In Exercise 15 (ProManage), you'll work in teams where:
 
 Example scenario:
 - Student A: User authentication service (port 8000)
-- Student B: Project management service (port 5001)
-- Student C: Task management service (port 5002)
+- Student B: Project management service (port 8001)
+- Student C: Task management service (port 8002)
 
 Each runs their service locally, exposes via ngrok, and shares URLs with the team.
 
@@ -863,7 +863,7 @@ ngrok http 8000
 # Share: https://student-a.ngrok-free.app
 
 # Student B's project service
-ngrok http 5001
+ngrok http 8001
 # Share: https://student-b.ngrok-free.app
 
 # Student C can now call both services:
