@@ -77,7 +77,7 @@ def register_user(data: UserCreate) -> dict[str, str]:
 
 
 @app.get("/users")
-def get_users(user: Annotated[str, Depends(_____)]) -> list[str]:
+def get_users(user: Annotated[str, Depends(_____)]) -> dict[str, list[str]]:
     # TODO: Protect this route: which dependency checks the credentials and gives us the user?
     # Hint: get_current_user, defined above. Depends() takes the function itself, without ()
-    return list(users)
+    return {"users": list(users)}

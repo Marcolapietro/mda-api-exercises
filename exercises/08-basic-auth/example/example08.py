@@ -66,5 +66,5 @@ def register_user(data: UserCreate) -> dict[str, str]:
 
 
 @app.get("/users")
-def get_users(user: Annotated[str, Depends(get_current_user)]) -> list[str]:
-    return list(users)
+def get_users(user: Annotated[str, Depends(get_current_user)]) -> dict[str, list[str]]:
+    return {"users": list(users)}
