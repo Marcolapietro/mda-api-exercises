@@ -26,7 +26,7 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Terminal 1: the REST API (complete, nothing to fill in)
-python notes_api.py
+fastapi dev notes_api.py
 
 # Terminal 2: test your MCP server
 python client.py
@@ -45,7 +45,7 @@ python client.py
 
 ## Requirements
 
-1. **Dependencies:** `Flask`, `httpx` (HTTP client) and `mcp` (the official Python SDK, version 2). See `requirements.txt`.
+1. **Dependencies:** `FastAPI`, `httpx` (HTTP client) and `mcp` (the official Python SDK, version 2). See `requirements.txt`.
 
 2. **Tools to expose:**
 
@@ -135,8 +135,8 @@ export NOTES_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(3
 # Windows PowerShell
 $env:NOTES_API_KEY = python -c "import secrets; print(secrets.token_urlsafe(32))"
 
-python notes_api.py
-curl -i http://127.0.0.1:5000/notes      # 401 Unauthorized
+fastapi dev notes_api.py
+curl -i http://127.0.0.1:8000/notes      # 401 Unauthorized
 ```
 
 Run `python client.py` **in a terminal where `NOTES_API_KEY` is set to the same value**: it works, because `mcp_server.py` reads the key from its environment and adds the `X-API-Key` header. Look at `tools/list`: the key appears nowhere. The model can use your API, but it never sees your credentials.
@@ -213,4 +213,3 @@ An MCP server is just another client of your API. Everything from the course sti
 
 - The Notes API keeps everything in memory: notes created through MCP are lost when you restart `notes_api.py`.
 - This exercise uses version 2 of the `mcp` package (`from mcp.server.mcpserver import MCPServer`). Many tutorials online still show version 1 (`from mcp.server.fastmcp import FastMCP`): the idea is the same, but the import is different.
-- Debug mode of the Notes API is off by default. To turn it on: `FLASK_DEBUG=1 python notes_api.py` (PowerShell: `$env:FLASK_DEBUG="1"; python notes_api.py`).

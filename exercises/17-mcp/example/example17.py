@@ -16,7 +16,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-NOTES_API_URL = os.getenv('NOTES_API_URL', 'http://127.0.0.1:5000')
+NOTES_API_URL = os.getenv('NOTES_API_URL', 'http://127.0.0.1:8000')
 NOTES_API_KEY = os.getenv('NOTES_API_KEY', '')                # stays here: the model never sees it
 ALLOW_DELETE = os.getenv('NOTES_ALLOW_DELETE') == '1'         # least privilege: off by default
 
@@ -36,7 +36,7 @@ def call_api(method, path, **kwargs):
     try:
         response = httpx.request(method, NOTES_API_URL + path, headers=headers, timeout=10, **kwargs)
     except httpx.ConnectError:
-        raise ToolError(f'The Notes API is not running at {NOTES_API_URL}. Start it with: python notes_api.py')
+        raise ToolError(f'The Notes API is not running at {NOTES_API_URL}. Start it with: fastapi dev notes_api.py')
 
     if response.is_error:
         # The API answers with RFC 9457 problem+json: pass the readable "detail" back to the model

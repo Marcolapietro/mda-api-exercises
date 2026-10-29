@@ -6,7 +6,7 @@ It does what an assistant does behind the scenes: start the server, ask for its 
     python client.py                        # tests mcp_server.py (your version)
     python client.py example/example17.py   # tests the solution
 
-The Notes API must be running first: python notes_api.py
+The Notes API must be running first: fastapi dev notes_api.py
 """
 import asyncio
 import json
