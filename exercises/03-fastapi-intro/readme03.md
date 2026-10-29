@@ -1,24 +1,24 @@
-# Flask Introduction Guide
+# FastAPI Introduction Guide
 
 ## Table of Contents
-1. [What is Flask?](#what-is-flask)
+1. [What is FastAPI?](#what-is-fastapi)
 2. [Environment Setup](#environment-setup)
-3. [Your First Flask Application](#your-first-flask-application)
+3. [Your First FastAPI Application](#your-first-fastapi-application)
 4. [Basic Concepts](#basic-concepts)
 5. [Working with JSON](#working-with-json)
 6. [Additional Resources](#additional-resources)
 
-## What is Flask?
-Flask is a minimalist web framework written in Python that allows you to create web applications quickly with a minimum number of lines of code. It is especially popular for its simplicity and flexibility.
+## What is FastAPI?
+FastAPI is a modern web framework written in Python for building APIs quickly with a minimum number of lines of code. It is popular because it uses standard Python type hints to read, validate and document your requests and responses for you.
 
 ### Main Features:
-- Built-in development server
-- Built-in debugger
-- Unit testing support
-- Jinja2 template engine
-- WSGI 1.0 compatible
+- Fast to write: type hints replace most of the manual parsing and checking
+- Automatic data validation with Pydantic
+- Interactive API documentation generated automatically (Swagger UI at `/docs`)
+- Built on the ASGI standard (Starlette and uvicorn)
+- Development server with auto-reload (`fastapi dev`)
 - Extensive documentation
-- Large community and many available extensions
+- Large community
 
 ## Environment Setup
 
@@ -46,115 +46,130 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-### Step 3: Install Flask
+### Step 3: Install FastAPI
 ```bash
-pip install flask
+pip install "fastapi[standard]"
 ```
+The `standard` extra also installs the `fastapi` command and the uvicorn server.
 
-## Your First Flask Application
+## Your First FastAPI Application
 
 ### Step 1: Create the app.py file
 ```python
-from flask import Flask
+from fastapi import FastAPI
 
-app = Flask(__name__)
+app = FastAPI()
 
-@app.route('/')
+@app.get("/")
 def hello_world():
-    return 'Hello, students!'
-
-if __name__ == '__main__':
-    app.run(debug=True)  # only while developing locally - never on a public server (the app.py reads FLASK_DEBUG)
+    return {"message": "Hello, students!"}
 ```
 
 ### Step 2: Run the application
 ```bash
-python app.py
+fastapi dev app.py
 ```
-Visit http://localhost:5000 in your browser
+Visit http://127.0.0.1:8000 in your browser.
+
+`fastapi dev` is the development server: it reloads the app every time you save the file. Never use it on a public server; its production equivalent is `fastapi run`.
+
+FastAPI also generates interactive documentation for your app automatically. Open http://127.0.0.1:8000/docs to see every endpoint and try it from the browser.
 
 ## Basic Concepts
 
-### 1. Routes
-```python
-@app.route('/about')
-def about():
-    return 'Welcome to my first Flask application!'
+### 1. Path Operations
+A path operation is a function that answers one combination of HTTP method and path. The decorator says which: `@app.get(...)` for GET, `@app.post(...)` for POST, and so on.
 
-@app.route('/user/<username>')
-def show_user(username):
-    return f'Hello, {username}!'
+```python
+@app.get("/about")
+def about():
+    return "Welcome to my first FastAPI application!"
+
+@app.get("/user/{username}")
+def show_user(username: str):
+    return f"Hello, {username}!"
 ```
 
 ### 2. HTTP Methods
-```python
-from flask import request
+There is one decorator per method, named after it:
 
-@app.route('/login', methods=['GET', 'POST'])
+```python
+@app.get("/login")
+def login_form():
+    return "Please log in"
+
+@app.post("/login")
 def login():
-    if request.method == 'POST':
-        return 'Processing login...'
-    return 'Please log in'
+    return "Processing login..."
 ```
 
-### 3. Dynamic URL Parameters
+### 3. Path Parameters
+A name in braces in the path becomes a function parameter with the same name. Its type hint tells FastAPI how to convert (and check) the value:
+
 ```python
-@app.route('/user/<username>')
-def show_user(username):
-    return f'User profile for: {username}'
+@app.get("/user/{username}")
+def show_user(username: str):
+    return f"User profile for: {username}"
 
-@app.route('/post/<int:post_id>')
-def show_post(post_id):
-    return f'Displaying post {post_id}'
+@app.get("/post/{post_id}")
+def show_post(post_id: int):
+    return f"Displaying post {post_id}"
 ```
+
+If someone requests `/post/abc`, FastAPI answers with an error (422) before your function runs, because `abc` is not an `int`.
 
 ## Working with JSON
 
-Since you'll be building APIs in this course, it's important to learn how Flask handles JSON data. JSON is the standard format for sending and receiving data in web APIs.
+Since you'll be building APIs in this course, it's important to learn how FastAPI handles JSON data. JSON is the standard format for sending and receiving data in web APIs.
 
 ### 1. Returning JSON Responses
 
-Use `jsonify()` to return JSON data from your endpoints:
+Just return a Python dictionary or list; FastAPI converts it to JSON for you:
 
 ```python
-from flask import jsonify
-
-@app.route('/api/hello')
+@app.get("/api/hello")
 def hello_api():
-    return jsonify({'message': 'Hello, World!'})
+    return {"message": "Hello, World!"}
 
-@app.route('/api/user/<int:user_id>')
-def get_user(user_id):
-    user = {'id': user_id, 'name': 'John Doe', 'email': 'john@example.com'}
-    return jsonify(user)
+@app.get("/api/user/{user_id}")
+def get_user(user_id: int):
+    return {"id": user_id, "name": "John Doe", "email": "john@example.com"}
 
-@app.route('/api/users')
+@app.get("/api/users")
 def get_users():
-    users = [
-        {'id': 1, 'name': 'Alice'},
-        {'id': 2, 'name': 'Bob'}
+    return [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"},
     ]
-    return jsonify(users)
+```
+
+A plain string is also sent as JSON (with quotes). When you want plain text, as in `GET /` and `GET /about`, say so in the decorator:
+
+```python
+from fastapi.responses import PlainTextResponse
+
+@app.get("/", response_class=PlainTextResponse)
+def index():
+    return "Welcome to my first FastAPI application!"
 ```
 
 ### 2. Reading JSON from Requests
 
-When a client sends JSON data to your API, use `request.get_json()` to read it:
+To receive a JSON body, describe its shape with a Pydantic model: a class that inherits from `BaseModel` and lists the fields with their types. A field with a value, like `name: str = "Guest"`, is optional and uses that value as default.
 
 ```python
-from flask import request, jsonify
+from pydantic import BaseModel
 
-@app.route('/api/greet', methods=['POST'])
-def greet():
-    # Get JSON data from request body
-    data = request.get_json()
+class GreetRequest(BaseModel):
+    name: str = "Guest"
 
-    # Access fields from the JSON
-    name = data.get('name', 'Guest')
-
-    # Return a JSON response
-    return jsonify({'greeting': f'Hello, {name}!'})
+@app.post("/api/greet")
+def greet(body: GreetRequest):
+    # FastAPI already read the JSON and checked it against GreetRequest
+    return {"greeting": f"Hello, {body.name}!"}
 ```
+
+Declaring `body: GreetRequest` is all FastAPI needs: it reads the JSON, validates it (a `name` that is not text is answered with a 422 error automatically) and hands you a ready-made object. Because the model also describes the body, `/docs` shows it and lets you try it.
 
 **Testing with Postman:**
 - Set method to POST
@@ -167,57 +182,47 @@ def greet():
 For these exercises, we'll use Python dictionaries to store data (no database needed):
 
 ```python
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
-app = Flask(__name__)
+app = FastAPI()
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
 
 # Store users in memory
 users = {}
 next_id = 1
 
-@app.route('/api/users', methods=['GET', 'POST'])
-def handle_users():
+@app.post("/api/users")
+def create_user(data: UserCreate):
     global next_id
+    user = {"id": next_id, "name": data.name, "email": data.email}
+    users[next_id] = user
+    next_id += 1
+    return user
 
-    if request.method == 'POST':
-        # Create a new user
-        data = request.get_json()
-        user = {
-            'id': next_id,
-            'name': data.get('name'),
-            'email': data.get('email')
-        }
-        users[next_id] = user
-        next_id += 1
-        return jsonify(user)
+@app.get("/api/users")
+def list_users():
+    return list(users.values())
 
-    else:  # GET
-        # Return all users
-        return jsonify(list(users.values()))
-
-@app.route('/api/users/<int:user_id>')
-def get_user(user_id):
+@app.get("/api/users/{user_id}")
+def get_user(user_id: int):
     if user_id in users:
-        return jsonify(users[user_id])
-    else:
-        return jsonify({'error': 'User not found'}), 404
-
-if __name__ == '__main__':
-    app.run(debug=True)  # only while developing locally - never on a public server (the app.py reads FLASK_DEBUG)
+        return users[user_id]
+    raise HTTPException(status_code=404, detail="User not found")
 ```
 
 ### 4. Query Parameters
 
-Access URL query parameters with `request.args`:
+A function parameter that is not in the path is read from the query string:
 
 ```python
-from flask import request, jsonify
-
-@app.route('/api/search')
-def search():
-    # Access query parameter: /api/search?q=flask
-    query = request.args.get('q', '')
-    return jsonify({'search_query': query})
+@app.get("/api/search")
+def search(q: str = ""):
+    # Access query parameter: /api/search?q=fastapi
+    return {"search_query": q}
 ```
 
 **Note:** You'll learn more about HTTP status codes, validation, and error handling in the next exercises.
@@ -225,8 +230,8 @@ def search():
 ## Additional Resources
 
 ### Official Documentation
-- [Flask Documentation](https://flask.palletsprojects.com/)
-- [Official Flask Tutorial](https://flask.palletsprojects.com/tutorial/)
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [Official FastAPI Tutorial](https://fastapi.tiangolo.com/tutorial/)
 
 ### Useful Tools
 - Postman (for testing APIs)
@@ -243,7 +248,7 @@ def search():
 ## Tips for Students
 - Practice writing code regularly
 - Don't be afraid to experiment
-- Join Flask/Python communities
+- Join FastAPI/Python communities
 - Review open source projects
 - Keep a learning journal
 
@@ -251,7 +256,7 @@ Happy learning!
 
 ## Exercise Task (what to deliver)
 
-**Goal:** Create your first Flask application with simple routes and test it using Postman.
+**Goal:** Create your first FastAPI application with simple routes and test it using Postman.
 
 ### 1) Build the Application
 Create an `app.py` file with the following endpoints:
@@ -260,7 +265,7 @@ Create an `app.py` file with the following endpoints:
 - `GET /` - Return a welcome message (text or JSON)
 - `GET /about` - Return information about the app
 - `GET /api/hello` - Return a JSON message: `{"message": "Hello, World!"}`
-- `GET /api/user/<username>` - Return JSON with the username
+- `GET /api/user/{username}` - Return JSON with the username
 - `POST /api/greet` - Accept JSON with a "name" field, return a greeting
 
 **Example for the POST endpoint:**
@@ -279,14 +284,14 @@ venv\Scripts\activate  # Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the app
-python app.py
+# Run the app (fill the blanks from top to bottom; the app starts once the decorators are complete)
+fastapi dev app.py
 ```
 
-Visit http://127.0.0.1:5000 in your browser to see your app running.
+Visit http://127.0.0.1:8000 in your browser to see your app running, and http://127.0.0.1:8000/docs for the automatic documentation.
 
 ### 3) Test with Postman
-- Create a Postman collection named "Flask Intro" (keep it local, do not commit)
+- Create a Postman collection named "FastAPI Intro" (keep it local, do not commit)
 - Add requests for all 5 endpoints
 - For each request, include:
   - A clear name (e.g., "Get Welcome Message")

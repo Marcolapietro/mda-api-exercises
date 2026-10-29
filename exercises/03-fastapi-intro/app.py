@@ -1,61 +1,60 @@
 """
-Flask Introduction Exercise
-Create a simple Flask application with basic routes and JSON responses.
+FastAPI Introduction Exercise
+Create a simple FastAPI application with basic routes and JSON responses.
+
+Run it with:  fastapi dev app.py
+Fill the blanks (_____) from top to bottom; the app starts once the decorators are complete.
 """
 
-import os
-from flask import Flask, jsonify, request
+from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 
-app = Flask(__name__)
+app = FastAPI(title="FastAPI Intro")
+
+
+# TODO: Create the body model for POST /api/greet with one text field called 'name'
+# Hint: The field name is the key the client sends in the JSON body; it defaults to 'Guest'
+class GreetRequest(BaseModel):
+    _____: str = "Guest"
+
 
 # TODO: Create a route for the root path '/' that returns a welcome message
-# Hint: Use @app.route('/') and return a string or JSON
-@app.route('/')
-def _____():
-    return 'Welcome to my first Flask application!'
+# Hint: Use @app.get('/'); response_class=PlainTextResponse sends plain text instead of JSON
+@app.get("/", response_class=PlainTextResponse)
+def index():
+    return "Welcome to my first FastAPI application!"
+
 
 # TODO: Create a route for '/about' that returns information about the app
-# Hint: Return a string describing your app
-@app.route('/_____')
+# Hint: Write the path after the slash; return a string describing your app
+@app.get("/_____", response_class=PlainTextResponse)
 def about():
-    return 'This is a Flask introduction exercise to learn basic routing and JSON handling.'
+    return "This is a FastAPI introduction exercise to learn basic routing and JSON handling."
+
 
 # TODO: Create a route for '/api/hello' that returns a JSON message
-# Hint: Use jsonify() to return JSON data
-@app.route('/api/hello')
-def hello_api():
+# Hint: Give the function a name; FastAPI turns a returned dict into JSON
+@app.get("/api/hello")
+def _____():
     # TODO: Return a JSON object with a 'message' key
-    # Hint: return jsonify({'message': 'your message here'})
-    return jsonify({'_____': 'Hello, World!'})
+    # Hint: return {'message': 'your message here'}
+    return {"_____": "Hello, World!"}
 
-# TODO: Create a route for '/api/user/<username>' that accepts a username parameter
-# Hint: Use <username> in the route path and pass it as a function parameter
-@app.route('/api/user/<_____>')
-def get_user(_____):
+
+# TODO: Create a route for '/api/user/{username}' that accepts a username parameter
+# Hint: Put the parameter name in braces in the path and use the same name as a function parameter
+@app.get("/api/user/{_____}")
+def get_user(_____: str):
     # TODO: Return a JSON object with the username
-    # Hint: Create a dictionary with user information and use jsonify()
-    user_data = {
-        'username': _____,
-        'message': f'Welcome, {_____}!'
-    }
-    return jsonify(user_data)
+    # Hint: Return a dictionary with user information
+    return {"username": _____, "message": f"Welcome, {_____}!"}
+
 
 # TODO: Create a route for '/api/greet' that accepts POST requests
-# Hint: Add methods=['POST'] to the route decorator
-@app.route('/api/greet', methods=['_____'])
-def greet():
-    # TODO: Get JSON data from the request body
-    # Hint: Use request.get_json() to parse the JSON body
-    data = request._____()
-
-    # TODO: Extract the 'name' field from the JSON data
-    # Hint: Use data.get('name', 'default_value')
-    name = data.get('_____', 'Guest')
-
+# Hint: The decorator is named after the HTTP method, in lowercase
+@app._____("/api/greet")
+def greet(body: GreetRequest):
     # TODO: Return a JSON response with a greeting
-    # Hint: Create a dictionary with a 'greeting' key and use jsonify()
-    return jsonify({'greeting': f'Hello, {_____}!'})
-
-if __name__ == '__main__':
-    # Run the Flask application in debug mode
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1")
+    # Hint: FastAPI already parsed the body into a GreetRequest; read the name with body.name
+    return {"greeting": f"Hello, {body._____}!"}

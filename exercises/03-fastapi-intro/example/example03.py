@@ -1,36 +1,48 @@
 """
-Flask Introduction Exercise - Complete Solution
-This is the reference solution for the Flask introduction exercise.
+FastAPI Introduction Exercise - Complete Solution
+This is the reference solution for the FastAPI introduction exercise.
+
+Run it with:  fastapi dev example03.py
 """
 
-import os
-from flask import Flask, jsonify, request
+from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 
-app = Flask(__name__)
+app = FastAPI(title="FastAPI Intro")
 
-@app.route('/')
+
+class GreetRequest(BaseModel):
+    """Body of POST /api/greet. 'name' is optional and defaults to 'Guest'."""
+    name: str = "Guest"
+
+
+@app.get("/", response_class=PlainTextResponse)
 def index():
     """
     Root endpoint that returns a welcome message.
     """
-    return 'Welcome to my first Flask application!'
+    return "Welcome to my first FastAPI application!"
 
-@app.route('/about')
+
+@app.get("/about", response_class=PlainTextResponse)
 def about():
     """
     About endpoint that returns information about the app.
     """
-    return 'This is a Flask introduction exercise to learn basic routing and JSON handling.'
+    return "This is a FastAPI introduction exercise to learn basic routing and JSON handling."
 
-@app.route('/api/hello')
+
+@app.get("/api/hello")
 def hello_api():
     """
     API endpoint that returns a simple JSON message.
     """
-    return jsonify({'message': 'Hello, World!'})
+    return {"message": "Hello, World!"}
 
-@app.route('/api/user/<username>')
-def get_user(username):
+
+@app.get("/api/user/{username}")
+def get_user(username: str):
     """
     API endpoint that accepts a username parameter and returns user information.
 
@@ -40,14 +52,11 @@ def get_user(username):
     Returns:
         JSON response with username and welcome message
     """
-    user_data = {
-        'username': username,
-        'message': f'Welcome, {username}!'
-    }
-    return jsonify(user_data)
+    return {"username": username, "message": f"Welcome, {username}!"}
 
-@app.route('/api/greet', methods=['POST'])
-def greet():
+
+@app.post("/api/greet")
+def greet(body: GreetRequest):
     """
     API endpoint that accepts a POST request with JSON body containing a name,
     and returns a personalized greeting.
@@ -60,16 +69,5 @@ def greet():
     Returns:
         JSON response with greeting message
     """
-    # Get JSON data from request body
-    data = request.get_json()
-
-    # Extract the 'name' field, default to 'Guest' if not provided
-    name = data.get('name', 'Guest')
-
-    # Return JSON response with greeting
-    return jsonify({'greeting': f'Hello, {name}!'})
-
-if __name__ == '__main__':
-    # Run the Flask application in debug mode
-    # Debug mode enables auto-reload and better error messages
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1")
+    # FastAPI has already parsed the JSON and validated it against GreetRequest
+    return {"greeting": f"Hello, {body.name}!"}
