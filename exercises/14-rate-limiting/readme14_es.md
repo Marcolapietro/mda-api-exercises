@@ -7,12 +7,12 @@ cd exercises/14-rate-limiting
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python app.py
+fastapi dev app.py
 ```
 
 ## Objetivo
 
-Aprende a proteger tu API del abuso usando **limitación de tasa** con Flask-Limiter:
+Aprende a proteger tu API del abuso usando **limitación de tasa** con slowapi:
 
 - **Prevenir Abuso**: Protege tu API de usuarios maliciosos y bots
 - **Gestión de Recursos**: Controla la carga del servidor y previene el agotamiento de recursos
@@ -45,7 +45,7 @@ Antes de comenzar este ejercicio, completa:
 
 ## Lo que Aprenderás
 
-1. **Biblioteca Flask-Limiter**: Estándar de la industria para limitación de tasa en Flask
+1. **Biblioteca slowapi**: Limitación de tasa para FastAPI (un port del popular Flask-Limiter)
 2. **Estrategias de limitación de tasa**:
    - Por dirección IP (predeterminado)
    - Por usuario (solicitudes autenticadas)
@@ -61,10 +61,10 @@ Antes de comenzar este ejercicio, completa:
 El ejercicio requiere estas dependencias (ya en `requirements.txt`):
 
 ```txt
-Flask==3.0.0
-Werkzeug==3.0.1
-Flask-JWT-Extended==4.6.0
-Flask-Limiter==3.5.0
+fastapi[standard]==0.162.0
+bcrypt==5.0.0
+PyJWT==2.15.1
+slowapi==0.1.10
 ```
 
 Instálalas:
@@ -72,19 +72,21 @@ Instálalas:
 pip install -r requirements.txt
 ```
 
-## Cómo Funciona Flask-Limiter
+## Cómo Funciona slowapi
 
 ### Concepto Básico
 
 ```python
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from slowapi import Limiter
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 limiter = Limiter(
-    app=app,
     key_func=get_remote_address,  # Identificar clientes por dirección IP
-    default_limits=["200 per day", "50 per hour"]  # Aplicado a todas las rutas
+    default_limits=["200/day", "50/hour"]  # Aplicado a las rutas sin límite propio
 )
+app.state.limiter = limiter  # slowapi busca el limiter aquí
+app.add_middleware(SlowAPIMiddleware)  # aplica los límites predeterminados a todas las rutas
 ```
 
 **Componentes clave:**
@@ -92,21 +94,25 @@ limiter = Limiter(
 - `default_limits`: Límites de respaldo aplicados a todas las rutas a menos que se sobrescriban
 - `storage_uri`: Dónde almacenar datos de límite de tasa (memoria, Redis, etc.)
 
+**Dos cosas que slowapi necesita de tus funciones de ruta** (`app.py` ya las tiene):
+- Toda ruta con `@limiter.limit(...)` debe recibir un parámetro `request: Request`: slowapi lee de él la dirección del cliente.
+- Una ruta que devuelve un dict también debe recibir `response: Response`: es el objeto al que slowapi añade las cabeceras `X-RateLimit-*` en una llamada exitosa (en un `429` las añade el manejador de errores).
+
 ### Sintaxis de Límite de Tasa
 
-Flask-Limiter usa un formato de cadena intuitivo:
+slowapi usa un formato de cadena corto, `<cantidad>/<periodo>`:
 
 ```python
-"5 per minute"     # 5 solicitudes por minuto
-"100 per hour"     # 100 solicitudes por hora
-"1000 per day"     # 1000 solicitudes por día
-"1 per second"     # 1 solicitud por segundo
-"10/minute"        # Sintaxis alternativa (igual que "10 per minute")
+"5/minute"      # 5 solicitudes por minuto
+"100/hour"      # 100 solicitudes por hora
+"1000/day"      # 1000 solicitudes por día
+"1/second"      # 1 solicitud por segundo
+"5 per minute"  # Sintaxis alternativa (igual que "5/minute")
 ```
 
 **Puedes combinar límites:**
 ```python
-@limiter.limit("5 per minute;100 per hour;1000 per day")
+@limiter.limit("5/minute;100/hour;1000/day")
 ```
 
 Esto aplica TODOS los límites simultáneamente - el que se alcance primero activa el límite de tasa.
@@ -120,6 +126,8 @@ El `app.py` proporcionado tiene una API parcialmente completa con TODOs:
 - `requirements.txt` - Dependencias
 - `readme14_es.md` - Este archivo de instrucciones
 
+Completa los espacios en blanco de arriba hacia abajo. La app no arranca hasta que completes `key_func`, `default_limits` y los cuatro `@limiter.limit(_____)` (Python los evalúa al cargar el archivo). El último TODO, el `@limiter.exempt` que falta, no impide que la app arranque, pero mientras no lo agregues `/api/unlimited` queda limitado por los límites predeterminados.
+
 ## Parte 1: Comprendiendo la Estructura del Código (10 minutos)
 
 ### Paso 1.1: Revisar la Configuración
@@ -127,11 +135,10 @@ El `app.py` proporcionado tiene una API parcialmente completa con TODOs:
 Abre `app.py` y examina la configuración:
 
 ```python
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 limiter = Limiter(
-    app=app,
     key_func=_____,  # TODO: ¿Qué identifica al cliente?
     default_limits=_____  # TODO: Establecer límites predeterminados razonables
 )
@@ -139,11 +146,11 @@ limiter = Limiter(
 
 **Tu tarea:**
 1. Completa `key_func` con `get_remote_address` (rastrea por dirección IP)
-2. Completa `default_limits` con `["200 per day", "50 per hour"]`
+2. Completa `default_limits` con `["200/day", "50/hour"]`
 
 **¿Por qué estos valores predeterminados?**
-- `200 per day`: Previene que una sola IP haga miles de solicitudes
-- `50 per hour`: Control más granular dentro del límite diario
+- `200/day`: Previene que una sola IP haga miles de solicitudes
+- `50/hour`: Control más granular dentro del límite diario
 - Ambos límites se aplican - alcanzar cualquiera activa la limitación de tasa
 
 ### Paso 1.2: Entender la Función Clave
@@ -154,15 +161,16 @@ El parámetro `key_func` determina **quién** está haciendo la solicitud.
 
 ```python
 # Estrategia 1: Por dirección IP (simple, funciona para solicitudes no autenticadas)
-from flask_limiter.util import get_remote_address
+from slowapi.util import get_remote_address
 key_func=get_remote_address
 
 # Estrategia 2: Por usuario autenticado (requiere JWT/sesión)
-def get_user_id():
+def get_user_id(request: Request) -> str:
     try:
-        return get_jwt_identity()  # Nombre de usuario JWT
-    except:
-        return get_remote_address()  # Recurrir a IP si no está autenticado
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ")
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])["sub"]  # Nombre de usuario JWT
+    except jwt.InvalidTokenError:
+        return get_remote_address(request)  # Recurrir a IP si no está autenticado
 
 key_func=get_user_id
 ```
@@ -178,14 +186,16 @@ Los endpoints de registro son a menudo objetivo de bots que crean cuentas de spa
 **Encuentra este código en `app.py`:**
 
 ```python
-@app.route('/register', methods=['POST'])
+@app.post("/register", status_code=201)
 @limiter.limit(_____)  # TODO: Agregar límite de tasa
-def register():
+def register(request: Request, response: Response, data: UserCreate):
     # ... lógica de registro
 ```
 
 **Tu tarea:**
-Completa el espacio en blanco con: `"5 per hour"`
+Completa el espacio en blanco con: `"5/hour"`
+
+`@limiter.limit` va justo debajo del decorador de la ruta, y la función debe recibir `request: Request`.
 
 **¿Por qué 5 por hora?**
 - Los usuarios legítimos rara vez necesitan crear múltiples cuentas
@@ -196,7 +206,7 @@ Completa el espacio en blanco con: `"5 per hour"`
 ```bash
 # Intenta registrarte 6 veces en rápida sucesión - la sexta debería fallar
 for i in {1..6}; do
-  curl -X POST http://127.0.0.1:5000/register \
+  curl -X POST http://127.0.0.1:8000/register \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"user$i\",\"password\":\"pass123\"}"
   echo ""
@@ -206,9 +216,9 @@ done
 Windows PowerShell (5.1 y 7):
 ```powershell
 for ($i = 1; $i -le 6; $i++) {
-  $body = @{ username = "user$i"; password = "pass123" } | ConvertTo-Json
+  $body = @{ username = "user$i"; password = "pass1234" } | ConvertTo-Json
   try {
-    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:5000/register" `
+    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:8000/register" `
       -ContentType "application/json" -Body $body
     Write-Host "user$i -> $($r.StatusCode)"
   } catch {
@@ -231,14 +241,14 @@ Los endpoints de login son objetivos principales para **ataques de fuerza bruta*
 **Encuentra este código:**
 
 ```python
-@app.route('/login', methods=['POST'])
+@app.post("/login")
 @limiter.limit(_____)  # TODO: Prevenir fuerza bruta
-def login():
+def login(request: Request, response: Response, data: Credentials):
     # ... lógica de login
 ```
 
 **Tu tarea:**
-Completa con: `"10 per minute"`
+Completa con: `"10/minute"`
 
 **¿Por qué 10 por minuto?**
 - Permite a usuarios legítimos reintentar contraseñas incorrectas
@@ -257,15 +267,14 @@ La mayoría de los endpoints de API necesitan limitación de tasa moderada.
 **Encuentra este código:**
 
 ```python
-@app.route('/api/data', methods=['GET'])
-@jwt_required()
+@app.get("/api/data")
 @limiter.limit(_____)  # TODO: Límite estándar de API
-def get_data():
+def get_data(request: Request, response: Response, creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
     # ... lógica de recuperación de datos
 ```
 
 **Tu tarea:**
-Completa con: `"20 per minute"`
+Completa con: `"20/minute"`
 
 **¿Por qué 20 por minuto?**
 - Permite uso normal de la aplicación
@@ -279,15 +288,14 @@ Algunos endpoints consumen **muchos recursos** (consultas complejas de base de d
 **Encuentra este código:**
 
 ```python
-@app.route('/api/search', methods=['GET'])
-@jwt_required()
+@app.get("/api/search")
 @limiter.limit(_____)  # TODO: Límite estricto para operaciones costosas
-def search():
+def search(request: Request, response: Response, q: Annotated[str, Query(min_length=1)], creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
     # ... operación de búsqueda costosa
 ```
 
 **Tu tarea:**
-Completa con: `"5 per minute"`
+Completa con: `"5/minute"`
 
 **¿Por qué límites más estrictos?**
 - La búsqueda a menudo involucra escaneos de base de datos o llamadas a API externas
@@ -306,10 +314,9 @@ Algunos endpoints **nunca** deberían tener límite de tasa.
 **Encuentra este código:**
 
 ```python
-@app.route('/api/unlimited', methods=['GET'])
-@jwt_required()
-_____  # TODO: Exentar de limitación de tasa
-def unlimited():
+@app.get("/api/unlimited")
+# TODO: Exentar de limitación de tasa (agrega el decorador aquí)
+def unlimited(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
     # ... operación crítica
 ```
 
@@ -330,29 +337,30 @@ Agrega: `@limiter.exempt`
 
 ```bash
 cd exercises/14-rate-limiting
-python app.py
+fastapi dev app.py
 ```
 
-Deberías ver:
+Deberías ver el servidor arrancar en `http://127.0.0.1:8000`. Los endpoints y sus límites:
+
 ```
-Exercise 14: Rate Limiting and API Security
-============================================================
-Endpoints:
-  POST   /register          - Register new user (5 per hour)
-  POST   /login             - Login (10 per minute)
-  GET    /api/data          - Get data (20 per minute)
-  GET    /api/search?q=...  - Search (5 per minute)
-  GET    /api/unlimited     - No rate limit
-  ...
+  POST   /register          - Registrar usuario (5/hour)
+  POST   /login             - Login (10/minute)
+  GET    /api/data          - Obtener datos (20/minute)
+  GET    /api/search?q=...  - Búsqueda (5/minute)
+  GET    /api/unlimited     - Sin límite
+  GET    /api/stats         - Estadísticas (10/minute)
+  GET    /health            - Health check (sin límite)
 ```
+
+Límites predeterminados para cualquier otra ruta: 200/day y 50/hour. Swagger UI está en `http://127.0.0.1:8000/docs`.
 
 ### Tarea 3.2: Probar Límite de Tasa de Registro
 
-> **¿Ya ejecutaste la prueba de la Tarea 2.1?** Esos 6 intentos agotaron los 5 registros de esta hora para tu IP, así que el Paso 1 de abajo devolvería 429 — incluso con otro nombre de usuario, porque el límite es por IP del cliente, no por usuario. Reinicia antes la app (`Ctrl+C` y luego `python app.py`): el almacenamiento `memory://` vuelve a empezar vacío (contadores *y* usuarios registrados).
+> **¿Ya ejecutaste la prueba de la Tarea 2.1?** Esos 6 intentos agotaron los 5 registros de esta hora para tu IP, así que el Paso 1 de abajo devolvería 429 - incluso con otro nombre de usuario, porque el límite es por IP del cliente, no por usuario. Reinicia antes la app (`Ctrl+C` y luego `fastapi dev app.py`): el almacenamiento `memory://` vuelve a empezar vacío (contadores *y* usuarios registrados).
 
 **Paso 1: Registrar un usuario (debería tener éxito):**
 ```bash
-curl -X POST http://127.0.0.1:5000/register \
+curl -X POST http://127.0.0.1:8000/register \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password123"}'
 ```
@@ -360,7 +368,7 @@ curl -X POST http://127.0.0.1:5000/register \
 Windows PowerShell (5.1 y 7):
 ```powershell
 $body = @{ username = "alice"; password = "password123" } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/register" -ContentType "application/json" -Body $body
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/register" -ContentType "application/json" -Body $body
 ```
 
 **Respuesta esperada:**
@@ -375,9 +383,9 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/register" -ContentTyp
 Windows PowerShell (5.1 y 7):
 ```powershell
 for ($i = 1; $i -le 5; $i++) {
-  $body = @{ username = "user$i"; password = "pass123" } | ConvertTo-Json
+  $body = @{ username = "user$i"; password = "pass1234" } | ConvertTo-Json
   try {
-    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:5000/register" `
+    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:8000/register" `
       -ContentType "application/json" -Body $body
     Write-Host "user$i -> $($r.StatusCode)  X-RateLimit-Remaining: $($r.Headers['X-RateLimit-Remaining'])"
   } catch {
@@ -393,7 +401,7 @@ for ($i = 1; $i -le 5; $i++) {
 Mac/Linux:
 ```bash
 for i in {1..5}; do
-  curl -X POST http://127.0.0.1:5000/register \
+  curl -X POST http://127.0.0.1:8000/register \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"user$i\",\"password\":\"pass123\"}"
   echo ""
@@ -421,12 +429,12 @@ Necesitas un token de acceso para `/api/data`: haz primero el **Paso 1 de la Tar
 
 **Hacer una solicitud a un endpoint con límite:**
 ```bash
-curl -i http://127.0.0.1:5000/api/data -H "Authorization: Bearer TU_TOKEN"
+curl -i http://127.0.0.1:8000/api/data -H "Authorization: Bearer TU_TOKEN"
 ```
 
 Windows PowerShell (5.1 y 7), con `$TOKEN` guardado en el Paso 1 de la Tarea 3.4:
 ```powershell
-$r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5000/api/data" -Headers @{ Authorization = "Bearer $TOKEN" }
+$r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8000/api/data" -Headers @{ Authorization = "Bearer $TOKEN" }
 $r.StatusCode
 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'Retry-After' |
   ForEach-Object { "${_}: $($r.Headers[$_])" }
@@ -445,7 +453,7 @@ Retry-After: 60
 - `X-RateLimit-Limit`: Total de solicitudes permitidas en la ventana
 - `X-RateLimit-Remaining`: Solicitudes restantes antes de alcanzar el límite
 - `X-RateLimit-Reset`: Timestamp Unix cuando se reinicia el límite
-- `Retry-After`: Segundos hasta que se reinicia la ventana — en un `429` es lo que el cliente debe esperar
+- `Retry-After`: Segundos hasta que se reinicia la ventana - en un `429` es lo que el cliente debe esperar
 
 **Los clientes deberían usar estas cabeceras para:**
 1. Mostrar la cuota restante a los usuarios
@@ -456,17 +464,17 @@ Retry-After: 60
 
 **Paso 1: Login exitoso:**
 ```bash
-curl -X POST http://127.0.0.1:5000/login \
+curl -X POST http://127.0.0.1:8000/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password123"}'
 ```
 
 Guarda el `access_token` de la respuesta.
 
-Windows PowerShell (5.1 y 7) — esto guarda el token en `$TOKEN` para las siguientes tareas:
+Windows PowerShell (5.1 y 7) - esto guarda el token en `$TOKEN` para las siguientes tareas:
 ```powershell
 $body = @{ username = "alice"; password = "password123" } | ConvertTo-Json
-$TOKEN = (Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/login" -ContentType "application/json" -Body $body).access_token
+$TOKEN = (Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/login" -ContentType "application/json" -Body $body).access_token
 $TOKEN
 ```
 
@@ -477,7 +485,7 @@ Windows PowerShell (5.1 y 7):
 $body = @{ username = "alice"; password = "wrongpassword" } | ConvertTo-Json
 for ($i = 1; $i -le 11; $i++) {
   try {
-    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:5000/login" `
+    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:8000/login" `
       -ContentType "application/json" -Body $body
     Write-Host "Intento $i -> $($r.StatusCode)"
   } catch {
@@ -492,7 +500,7 @@ Mac/Linux:
 ```bash
 for i in {1..11}; do
   echo "Intento $i"
-  curl -X POST http://127.0.0.1:5000/login \
+  curl -X POST http://127.0.0.1:8000/login \
     -H "Content-Type: application/json" \
     -d '{"username":"alice","password":"wrongpassword"}'
   echo ""
@@ -511,7 +519,7 @@ done
 
 Reutiliza el token del Paso 1 de la Tarea 3.4 (es válido durante 1 hora). Si necesitas uno nuevo, **espera antes un minuto**: la Tarea 3.4 agotó los logins de este minuto, así que hacer login ahora mismo devuelve 429.
 ```bash
-curl -X POST http://127.0.0.1:5000/login \
+curl -X POST http://127.0.0.1:8000/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password123"}'
 ```
@@ -527,7 +535,7 @@ Windows PowerShell (5.1 y 7):
 
 for ($i = 1; $i -le 21; $i++) {
   try {
-    $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5000/api/data" `
+    $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8000/api/data" `
       -Headers @{ Authorization = "Bearer $TOKEN" }
     Write-Host "Solicitud $i -> $($r.StatusCode)  X-RateLimit-Remaining: $($r.Headers['X-RateLimit-Remaining'])"
   } catch {
@@ -544,7 +552,7 @@ Mac/Linux:
 TOKEN="YOUR_TOKEN_HERE"
 for i in {1..21}; do
   echo "Solicitud $i"
-  curl http://127.0.0.1:5000/api/data \
+  curl http://127.0.0.1:8000/api/data \
     -H "Authorization: Bearer $TOKEN"
   echo ""
 done
@@ -562,7 +570,7 @@ Windows PowerShell (5.1 y 7):
 ```powershell
 for ($i = 1; $i -le 6; $i++) {
   try {
-    $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5000/api/search?q=test" `
+    $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8000/api/search?q=test" `
       -Headers @{ Authorization = "Bearer $TOKEN" }
     Write-Host "Búsqueda $i -> $($r.StatusCode)  X-RateLimit-Remaining: $($r.Headers['X-RateLimit-Remaining'])"
   } catch {
@@ -578,7 +586,7 @@ Mac/Linux:
 TOKEN="YOUR_TOKEN_HERE"
 for i in {1..6}; do
   echo "Búsqueda $i"
-  curl "http://127.0.0.1:5000/api/search?q=test" \
+  curl "http://127.0.0.1:8000/api/search?q=test" \
     -H "Authorization: Bearer $TOKEN"
   echo ""
 done
@@ -598,7 +606,7 @@ Windows PowerShell (5.1 y 7):
 ```powershell
 $ok = 0
 for ($i = 1; $i -le 100; $i++) {
-  $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5000/api/unlimited" `
+  $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8000/api/unlimited" `
     -Headers @{ Authorization = "Bearer $TOKEN" }
   if ($r.StatusCode -eq 200) { $ok++ }
 }
@@ -609,7 +617,7 @@ Mac/Linux:
 ```bash
 TOKEN="YOUR_TOKEN_HERE"
 for i in {1..100}; do
-  curl http://127.0.0.1:5000/api/unlimited \
+  curl http://127.0.0.1:8000/api/unlimited \
     -H "Authorization: Bearer $TOKEN" -s | head -n 1
 done
 ```
@@ -647,20 +655,17 @@ done
 
 **Ejemplo de implementación:**
 ```python
-from flask_jwt_extended import get_jwt_identity
-
-def get_user_key():
-    """Usar identidad JWT si está disponible, de lo contrario dirección IP"""
+def get_user_key(request: Request) -> str:
+    """Usar el usuario del JWT si el token es válido, de lo contrario la dirección IP"""
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ")
     try:
-        identity = get_jwt_identity()
-        return identity if identity else get_remote_address()
-    except:
-        return get_remote_address()
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])["sub"]
+    except jwt.InvalidTokenError:
+        return get_remote_address(request)
 
 limiter = Limiter(
-    app=app,
     key_func=get_user_key,  # Rastreo por usuario
-    default_limits=["1000 per day", "100 per hour"]
+    default_limits=["1000/day", "100/hour"]
 )
 ```
 
@@ -686,28 +691,24 @@ limiter = Limiter(
 
 **Ejemplo de implementación:**
 ```python
-from flask import g
+def get_rate_limit(key: str) -> str:
+    """Devolver límites diferentes según el rol del usuario.
+    slowapi la llama con la clave del cliente que devolvió key_func (aquí: el usuario, o la IP)."""
+    if key not in users:
+        return "10/hour"  # Usuarios no autenticados (la clave es una dirección IP)
 
-def get_rate_limit():
-    """Devolver límites diferentes según el rol del usuario"""
-    try:
-        # Obtener rol del usuario de las reclamaciones JWT
-        claims = get_jwt()
-        role = claims.get('role', 'free')
+    role = users[key]["role"]
+    if role == "admin":
+        return "1000/hour"
+    elif role == "premium":
+        return "500/hour"
+    else:  # nivel gratuito
+        return "50/hour"
 
-        if role == 'admin':
-            return "1000 per hour"
-        elif role == 'premium':
-            return "500 per hour"
-        else:  # nivel gratuito
-            return "50 per hour"
-    except:
-        return "10 per hour"  # Usuarios no autenticados
-
-# Límite dinámico basado en usuario
-@app.route('/api/data')
+# Límite dinámico basado en usuario (key_func debe ser por usuario, como get_user_key de arriba)
+@app.get("/api/data")
 @limiter.limit(get_rate_limit)
-def get_data():
+def get_data(request: Request, response: Response):
     # ...
 ```
 
@@ -722,23 +723,23 @@ def get_data():
 
 ```python
 # Límite generoso para leer datos
-@app.route('/api/data', methods=['GET'])
-@limiter.limit("100 per minute")
+@app.get("/api/data")
+@limiter.limit("100/minute")
 
 # Límite estricto para crear datos
-@app.route('/api/data', methods=['POST'])
-@limiter.limit("10 per minute")
+@app.post("/api/data")
+@limiter.limit("10/minute")
 
 # Muy estricto para operaciones costosas
-@app.route('/api/export', methods=['GET'])
-@limiter.limit("1 per hour")
+@app.get("/api/export")
+@limiter.limit("1/hour")
 ```
 
 **¿Por qué?** Las operaciones de lectura suelen ser más baratas que las escrituras, y algunas operaciones (exportaciones, informes) son muy costosas.
 
 ### Mejor Práctica 2: Incluir Siempre Cabeceras de Límite de Tasa
 
-¡Los clientes necesitan conocer su cuota! Flask-Limiter envía estas cabeceras **solo con `headers_enabled=True`** (ya activado en `app.py`):
+¡Los clientes necesitan conocer su cuota! slowapi envía estas cabeceras **solo con `headers_enabled=True`** (ya activado en `app.py`):
 - `X-RateLimit-Limit`
 - `X-RateLimit-Remaining`
 - `X-RateLimit-Reset`
@@ -767,15 +768,20 @@ No solo devuelvas "429 Too Many Requests" - ¡explica qué sucedió!
 
 **Buen manejador de errores (ya en `app.py`):**
 ```python
-@app.errorhandler(429)
-def ratelimit_handler(e):
-    current = limiter.current_limit
-    retry_after = max(int(current.reset_at - time.time()), 1) if current else None
-    return jsonify({
-        'error': 'Rate limit exceeded',
-        'message': str(e.description),  # ej., "5 per 1 hour"
-        'retry_after_seconds': retry_after  # mismo valor que la cabecera Retry-After
-    }), 429
+def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    # el manejador propio de slowapi ya construye el 429 y añade las cabeceras
+    default = _rate_limit_exceeded_handler(request, exc)
+    return JSONResponse(
+        {
+            "error": "Rate limit exceeded",
+            "message": str(exc.detail),  # ej., "5 per 1 hour"
+            "retry_after_seconds": int(default.headers["Retry-After"]),  # mismo valor que la cabecera Retry-After
+        },
+        status_code=429,
+        headers={k: v for k, v in default.headers.items() if k.lower().startswith(("retry-after", "x-ratelimit"))},
+    )
+
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 ```
 
 **Ejemplo de respuesta:**
@@ -790,15 +796,14 @@ def ratelimit_handler(e):
 ### Mejor Práctica 4: Exentar Endpoints Críticos
 
 ```python
-@app.route('/health')
+@app.get("/health")
 @limiter.exempt  # Los sistemas de monitoreo necesitan acceso confiable
 def health():
-    return {'status': 'ok'}
+    return {"status": "ok"}
 
-@app.route('/api/emergency-stop')
+@app.post("/api/emergency-stop")
 @limiter.exempt  # Operación de seguridad crítica
-@jwt_required()
-def emergency_stop():
+def emergency_stop(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
     # Detener operación peligrosa
     pass
 ```
@@ -814,7 +819,7 @@ def emergency_stop():
 Para este ejercicio, usamos almacenamiento en memoria:
 ```python
 limiter = Limiter(
-    app=app,
+    key_func=get_remote_address,
     storage_uri="memory://"  # Simple, pero no escala
 )
 ```
@@ -822,7 +827,7 @@ limiter = Limiter(
 **En producción, usa Redis:**
 ```python
 limiter = Limiter(
-    app=app,
+    key_func=get_remote_address,
     storage_uri="redis://localhost:6379"  # Compartido entre múltiples servidores
 )
 ```
@@ -838,21 +843,19 @@ limiter = Limiter(
 Agrega registro para detectar abuso:
 
 ```python
-from flask import request
 import logging
 
-@app.errorhandler(429)
-def ratelimit_handler(e):
+def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     # Registrar la violación
     logging.warning(
-        f"Rate limit exceeded: IP={request.remote_addr}, "
-        f"Path={request.path}, Limit={e.description}"
+        f"Rate limit exceeded: IP={get_remote_address(request)}, "
+        f"Path={request.url.path}, Limit={exc.detail}"
     )
 
-    return jsonify({
-        'error': 'Rate limit exceeded',
-        'message': str(e.description)
-    }), 429
+    return JSONResponse(
+        {"error": "Rate limit exceeded", "message": str(exc.detail)},
+        status_code=429,
+    )
 ```
 
 **Usa registros para:**
@@ -863,16 +866,16 @@ def ratelimit_handler(e):
 ## Lista de Verificación de Pruebas
 
 **Configuración Básica:**
-- [ ] Flask-Limiter instalado (`pip install -r requirements.txt`)
-- [ ] La aplicación se ejecuta sin errores (`python app.py`)
+- [ ] slowapi instalado (`pip install -r requirements.txt`)
+- [ ] La aplicación se ejecuta sin errores (`fastapi dev app.py`)
 - [ ] Endpoint de comprobación de salud accesible (`/health`)
 
 **Implementación de Límite de Tasa:**
 - [ ] Limiter inicializado con `get_remote_address` y límites predeterminados
-- [ ] Endpoint de registro limitado a "5 per hour"
-- [ ] Endpoint de login limitado a "10 per minute"
-- [ ] Endpoint de datos limitado a "20 per minute"
-- [ ] Endpoint de búsqueda limitado a "5 per minute"
+- [ ] Endpoint de registro limitado a "5/hour"
+- [ ] Endpoint de login limitado a "10/minute"
+- [ ] Endpoint de datos limitado a "20/minute"
+- [ ] Endpoint de búsqueda limitado a "5/minute"
 - [ ] Endpoint ilimitado marcado con `@limiter.exempt`
 
 **Pruebas:**
@@ -898,33 +901,35 @@ def ratelimit_handler(e):
 **Síntoma:** Puedes hacer solicitudes ilimitadas sin obtener errores 429.
 
 **Causas posibles:**
-1. **El orden del decorador importa:**
+1. **Decorador mal colocado o falta `request`:**
+   `@limiter.limit` va justo debajo del decorador de la ruta, y la función debe recibir `request: Request`:
    ```python
-   # INCORRECTO - el decorador exterior se ejecuta primero: JWT rechaza las peticiones sin token
-   # o con token inválido ANTES de que el limiter las cuente, así que la fuerza bruta de tokens nunca se limita
-   @jwt_required()
-   @limiter.limit("5 per minute")
-   def endpoint():
+   # INCORRECTO - el limiter decora una función que FastAPI nunca registró
+   # (está encima del decorador de la ruta), así que no se limita nada
+   @limiter.limit("5/minute")
+   @app.get("/endpoint")
+   def endpoint(request: Request, response: Response):
        pass
 
-   # CORRECTO - el limiter se ejecuta primero y cuenta todas las peticiones, con token válido o no
-   @limiter.limit("5 per minute")
-   @jwt_required()
-   def endpoint():
+   # CORRECTO
+   @app.get("/endpoint")
+   @limiter.limit("5/minute")
+   def endpoint(request: Request, response: Response):
        pass
    ```
+   Ten en cuenta también que FastAPI resuelve los parámetros `Depends(...)` ANTES de ejecutar tu función, y el limiter cuenta la petición cuando tu función empieza. Si la comprobación del token fuera una dependencia que lanza `401`, las peticiones sin token o con token inválido se rechazarían antes de que el limiter las cuente, así que adivinar tokens nunca se limitaría. Por eso `app.py` solo recibe el token como parámetro y lo comprueba dentro del cuerpo de la función.
 
 2. **Endpoint marcado como exento:**
    Verifica si `@limiter.exempt` está aplicado (intencionalmente o por error).
 
 3. **Límites demasiado generosos:**
-   "1000 per minute" no se activará durante las pruebas manuales - usa límites pequeños para probar.
+   "1000/minute" no se activará durante las pruebas manuales - usa límites pequeños para probar.
 
 ### Problema 2: El Límite de Tasa se Reinicia Demasiado Rápido
 
 **Síntoma:** Después de alcanzar el límite, se reinicia inmediatamente en lugar de esperar la ventana completa.
 
-**Causa:** Reiniciar la aplicación Flask borra los contadores de límite de tasa en memoria.
+**Causa:** Reiniciar la aplicación (o guardar `app.py`, lo que hace que `fastapi dev` la recargue) borra los contadores de límite de tasa en memoria.
 
 **Solución:** Este es el comportamiento esperado con almacenamiento `memory://`. En producción, usa Redis para contadores persistentes.
 
@@ -941,8 +946,8 @@ def ratelimit_handler(e):
 **Síntoma:** No hay cabeceras `X-RateLimit-*` en las respuestas.
 
 **Causas:**
-1. Flask-Limiter solo las envía si se pasa `headers_enabled=True` a `Limiter(...)` (por defecto está desactivado).
-2. El endpoint está exento (p. ej. `/health`): no tiene límite, así que no hay cabeceras.
+1. slowapi solo las envía si se pasa `headers_enabled=True` a `Limiter(...)` (por defecto está desactivado).
+2. El endpoint está exento (p. ej. `/health`): no tiene límite, así que no hay cabeceras. Una ruta limitada que devuelve un dict también necesita el parámetro `response: Response`, o sus respuestas exitosas no llevan cabeceras.
 3. Tu cliente oculta las cabeceras: usa `curl -i` (`curl.exe -i` en PowerShell) o la pestaña Network de DevTools del navegador.
 
 ### Problema 5: "429 Too Many Requests" para Comprobaciones de Salud
@@ -951,10 +956,10 @@ def ratelimit_handler(e):
 
 **Solución:** Exentar el endpoint de comprobación de salud:
 ```python
-@app.route('/health')
+@app.get("/health")
 @limiter.exempt
 def health():
-    return {'status': 'ok'}
+    return {"status": "ok"}
 ```
 
 ## Ejemplos de Limitación de Tasa del Mundo Real
@@ -1044,7 +1049,7 @@ X-RateLimit-Resource: core
 ## Recursos Adicionales
 
 ### Documentación Oficial
-- **[Documentación de Flask-Limiter](https://flask-limiter.readthedocs.io/)** - Referencia completa de la biblioteca
+- **[Documentación de slowapi](https://slowapi.readthedocs.io/)** - Referencia de la biblioteca (slowapi es un port de [Flask-Limiter](https://flask-limiter.readthedocs.io/))
 - **[RFC 6585](https://tools.ietf.org/html/rfc6585)** - Especificación del código de estado HTTP 429
 - **[Redis](https://redis.io/)** - Almacén de datos en memoria para producción
 

@@ -1,236 +1,254 @@
 """
 Exercise 14: Rate Limiting and API Security - COMPLETE SOLUTION
-Learn to protect your API from abuse using Flask-Limiter
+Learn to protect your API from abuse using slowapi
 """
 
 import os
-import time
 import secrets
-from flask import Flask, jsonify, request
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Annotated
 
-app = Flask(__name__)
+import bcrypt
+import jwt
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field, field_validator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
+
+app = FastAPI(title="Rate Limiting API")
 
 # JWT Configuration
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secrets.token_hex(32)  # from env; random per run if unset
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
-jwt = JWTManager(app)
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)  # from env; random per run if unset
+JWT_ALG = "HS256"
+ACCESS_TOKEN_HOURS = 1
 
-# Initialize Flask-Limiter
+# HTTPBearer reads "Authorization: Bearer <token>". auto_error=False: if the header
+# is missing we get None and answer 401 ourselves (by default FastAPI would answer 403).
+bearer = HTTPBearer(auto_error=False)
+
+# Initialize slowapi
 limiter = Limiter(
-    app=app,
     key_func=get_remote_address,  # Use IP address to identify clients
-    default_limits=["200 per day", "50 per hour"],  # Default limits for all routes
+    default_limits=["200/day", "50/hour"],  # Default limits for routes without their own limit
     headers_enabled=True,  # send X-RateLimit-* and Retry-After headers
-    storage_uri="memory://"  # Use in-memory storage (can use Redis in production)
+    storage_uri="memory://",  # Use in-memory storage (can use Redis in production)
 )
+app.state.limiter = limiter  # slowapi looks the limiter up here
+app.add_middleware(SlowAPIMiddleware)  # applies the default limits (and honours @limiter.exempt)
 
 # In-memory data storage
-users = {}
-api_calls = {}  # Track API usage per user
+users: dict[str, dict[str, str]] = {}  # {username: {"password": bcrypt hash, "role": "user"}}
+api_calls: dict[str, int] = {}  # Track API usage per user
 
 
 # ==================== Helper Functions ====================
 
-def get_user_from_jwt():
-    """Get the current user's username from JWT token"""
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(pw: str, hashed: str) -> bool:
     try:
-        return get_jwt_identity()
-    except:
-        return None
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except ValueError:  # bcrypt only accepts passwords of up to 72 bytes
+        return False
+
+
+# Compared against when the user does not exist, so both failures take the same time
+DUMMY_HASH = hash_password("not-a-real-password")
+
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, pw: str) -> str:
+        if len(pw.encode()) > 72:  # bcrypt counts bytes, not characters
+            raise ValueError("password must be at most 72 bytes")
+        return pw
+
+
+class Credentials(BaseModel):
+    # Plain str: wrong credentials must answer 401, never 422
+    username: str
+    password: str
+
+
+def create_access_token(username: str, role: str) -> str:
+    now = datetime.now(timezone.utc)
+    claims = {"sub": username, "role": role, "iat": now, "exp": now + timedelta(hours=ACCESS_TOKEN_HOURS)}
+    return jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALG)
+
+
+def current_user(creds: HTTPAuthorizationCredentials | None) -> str:
+    """Return the username from the Bearer token, or answer 401."""
+    if creds is None:
+        raise HTTPException(status_code=401, detail="Missing or invalid token", headers={"WWW-Authenticate": "Bearer"})
+    try:
+        claims = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG], options={"require": ["sub", "exp"]})
+    except jwt.InvalidTokenError:  # expired, bad signature, malformed...
+        raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Bearer"})
+    return claims["sub"]
 
 
 # ==================== Routes ====================
 
-@app.route('/health', methods=['GET'])
+@app.get("/health")
 @limiter.exempt  # Health checks should not be rate limited
-def health():
+def health() -> dict[str, str]:
     """Health check endpoint - no rate limiting"""
-    return jsonify({'status': 'ok', 'message': 'API is running'}), 200
+    return {"status": "ok", "message": "API is running"}
 
 
-@app.route('/register', methods=['POST'])
-@limiter.limit("5 per hour")  # Limit registration to prevent spam
-def register():
+@app.post("/register", status_code=201)
+@limiter.limit("5/hour")  # Limit registration to prevent spam
+def register(request: Request, response: Response, data: UserCreate) -> dict[str, str]:
     """
     Register a new user
     Rate limited to prevent automated account creation
     """
-    data = request.get_json()
+    if data.username in users:
+        raise HTTPException(status_code=409, detail="User already exists")
 
-    if not data or 'username' not in data or 'password' not in data:
-        return jsonify({'error': 'Missing username or password'}), 400
+    # Store user with hashed password. The role is never taken from the request body
+    # (prevents self-registering as admin)
+    users[data.username] = {"password": hash_password(data.password), "role": "user"}
 
-    username = data['username']
-    password = data['password']
-    role = 'user'  # never taken from the request body (prevents self-registering as admin)
-
-    if username in users:
-        return jsonify({'error': 'User already exists'}), 409
-
-    # Store user with hashed password
-    users[username] = {
-        'password': generate_password_hash(password),
-        'role': role
-    }
-
-    return jsonify({'message': f'User {username} registered successfully'}), 201
+    return {"message": f"User {data.username} registered successfully"}
 
 
-@app.route('/login', methods=['POST'])
-@limiter.limit("10 per minute")  # Prevent brute force attacks
-def login():
+@app.post("/login")
+@limiter.limit("10/minute")  # Prevent brute force attacks
+def login(request: Request, response: Response, data: Credentials) -> dict[str, str]:
     """
     Login endpoint with rate limiting to prevent brute force attacks
     Limited to 10 attempts per minute per IP address
     """
-    data = request.get_json()
+    user = users.get(data.username)
+    # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
+    password_ok = verify_password(data.password, user["password"] if user else DUMMY_HASH)
+    if user is None or not password_ok:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    if not data or 'username' not in data or 'password' not in data:
-        return jsonify({'error': 'Missing username or password'}), 400
-
-    username = data['username']
-    password = data['password']
-
-    if username not in users:
-        return jsonify({'error': 'Invalid credentials'}), 401
-
-    if not check_password_hash(users[username]['password'], password):
-        return jsonify({'error': 'Invalid credentials'}), 401
-
-    # Create JWT token with user identity and role
-    additional_claims = {'role': users[username]['role']}
-    access_token = create_access_token(identity=username, additional_claims=additional_claims)
-
-    return jsonify({
-        'access_token': access_token,
-        'username': username,
-        'role': users[username]['role']
-    }), 200
+    return {
+        "access_token": create_access_token(data.username, user["role"]),
+        "token_type": "bearer",
+        "username": data.username,
+        "role": user["role"],
+    }
 
 
-@app.route('/api/data', methods=['GET'])
-@limiter.limit("20 per minute")  # General API usage limit
-@jwt_required()  # after the limiter: requests with invalid tokens also count
-def get_data():
+@app.get("/api/data")
+@limiter.limit("20/minute")  # General API usage limit
+def get_data(
+    request: Request,
+    response: Response,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+) -> dict:
     """
     General data endpoint
     Rate limited to 20 requests per minute per client IP
     """
-    current_user = get_jwt_identity()
+    user = current_user(creds)  # checked inside: requests with invalid tokens also count
 
     # Track API usage
-    if current_user not in api_calls:
-        api_calls[current_user] = 0
-    api_calls[current_user] += 1
+    api_calls[user] = api_calls.get(user, 0) + 1
 
-    return jsonify({
-        'message': 'Here is your data',
-        'user': current_user,
-        'total_api_calls': api_calls[current_user],
-        'data': [
-            {'id': 1, 'name': 'Item 1'},
-            {'id': 2, 'name': 'Item 2'},
-            {'id': 3, 'name': 'Item 3'}
-        ]
-    }), 200
+    return {
+        "message": "Here is your data",
+        "user": user,
+        "total_api_calls": api_calls[user],
+        "data": [
+            {"id": 1, "name": "Item 1"},
+            {"id": 2, "name": "Item 2"},
+            {"id": 3, "name": "Item 3"},
+        ],
+    }
 
 
-@app.route('/api/search', methods=['GET'])
-@limiter.limit("5 per minute")  # Strict limit for expensive operations
-@jwt_required()  # after the limiter: requests with invalid tokens also count
-def search():
+@app.get("/api/search")
+@limiter.limit("5/minute")  # Strict limit for expensive operations
+def search(
+    request: Request,
+    response: Response,
+    q: Annotated[str, Query(min_length=1)],
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+) -> dict:
     """
     Expensive search endpoint
     Strictly rate limited to 5 requests per minute
     This simulates a resource-intensive operation (database query, external API call, etc.)
     """
-    query = request.args.get('q', '')
-    current_user = get_jwt_identity()
-
-    if not query:
-        return jsonify({'error': 'Missing search query parameter'}), 400
+    user = current_user(creds)  # checked inside: requests with invalid tokens also count
 
     # Simulate expensive search operation
-    results = [
-        {'id': i, 'title': f'Result {i} for "{query}"'}
-        for i in range(1, 6)
-    ]
+    results = [{"id": i, "title": f'Result {i} for "{q}"'} for i in range(1, 6)]
 
-    return jsonify({
-        'query': query,
-        'results': results,
-        'user': current_user,
-        'note': 'This endpoint is rate limited to 5 requests per minute'
-    }), 200
+    return {
+        "query": q,
+        "results": results,
+        "user": user,
+        "note": "This endpoint is rate limited to 5 requests per minute",
+    }
 
 
-@app.route('/api/unlimited', methods=['GET'])
-@jwt_required()
+@app.get("/api/unlimited")
 @limiter.exempt  # No rate limiting on this endpoint
-def unlimited():
+def unlimited(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> dict[str, str]:
     """
     Unlimited endpoint - no rate limiting
     Use this pattern for critical endpoints that should never be rate limited
     """
-    current_user = get_jwt_identity()
+    user = current_user(creds)
 
-    return jsonify({
-        'message': 'This endpoint has no rate limit',
-        'user': current_user,
-        'note': 'Use exempt endpoints carefully - only for critical operations'
-    }), 200
+    return {
+        "message": "This endpoint has no rate limit",
+        "user": user,
+        "note": "Use exempt endpoints carefully - only for critical operations",
+    }
 
 
-@app.route('/api/stats', methods=['GET'])
-@limiter.limit("10 per minute")
-@jwt_required()  # after the limiter: requests with invalid tokens also count
-def get_stats():
+@app.get("/api/stats")
+@limiter.limit("10/minute")
+def get_stats(
+    request: Request,
+    response: Response,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+) -> dict:
     """Get API usage statistics for current user"""
-    current_user = get_jwt_identity()
+    user = current_user(creds)  # checked inside: requests with invalid tokens also count
 
-    return jsonify({
-        'user': current_user,
-        'total_api_calls': api_calls.get(current_user, 0),
-        'registered_users': len(users)
-    }), 200
+    return {
+        "user": user,
+        "total_api_calls": api_calls.get(user, 0),
+        "registered_users": len(users),
+    }
 
 
 # ==================== Error Handlers ====================
 
-@app.errorhandler(429)
-def ratelimit_handler(e):
+def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     """
     Custom handler for rate limit exceeded errors
-    Returns a JSON response instead of plain text
+    Returns the Flask-style JSON body, keeping the Retry-After and X-RateLimit-* headers
     """
-    current = limiter.current_limit
-    retry_after = max(int(current.reset_at - time.time()), 1) if current else None
-    return jsonify({
-        'error': 'Rate limit exceeded',
-        'message': str(e.description),
-        'retry_after_seconds': retry_after  # same value as the Retry-After header
-    }), 429
+    # slowapi's own handler already builds the 429 and adds the headers
+    default = _rate_limit_exceeded_handler(request, exc)
+    return JSONResponse(
+        {
+            "error": "Rate limit exceeded",
+            "message": str(exc.detail),  # e.g., "5 per 1 hour"
+            "retry_after_seconds": int(default.headers["Retry-After"]),  # same value as the Retry-After header
+        },
+        status_code=429,
+        headers={k: v for k, v in default.headers.items() if k.lower().startswith(("retry-after", "x-ratelimit"))},
+    )
 
 
-if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("Exercise 14: Rate Limiting and API Security - SOLUTION")
-    print("="*60)
-    print("\nEndpoints:")
-    print("  POST   /register          - Register new user (5 per hour)")
-    print("  POST   /login             - Login (10 per minute)")
-    print("  GET    /api/data          - Get data (20 per minute)")
-    print("  GET    /api/search?q=...  - Search (5 per minute)")
-    print("  GET    /api/unlimited     - No rate limit")
-    print("  GET    /api/stats         - Get stats (10 per minute)")
-    print("  GET    /health            - Health check (no limit)")
-    print("\nDefault limits: 200 per day, 50 per hour")
-    print("Rate limit info included in response headers")
-    print("="*60 + "\n")
-
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1", port=5000)
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
