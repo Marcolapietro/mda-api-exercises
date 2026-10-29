@@ -423,7 +423,7 @@ done
 
 ### Task 3.3: Inspect Rate Limit Headers
 
-Every rate-limited response includes the limit information in its headers (the app enables them with `headers_enabled=True`). Exempt endpoints such as `/health` don't have a limit, so they don't send these headers.
+Successful responses and `429` responses carry the limit headers (the `429` also has `Retry-After`). The `401` answers of `/login` do not: slowapi adds the headers only when the route returns normally or when the rate limit is exceeded, so a failed login shows no `X-RateLimit-*`. Exempt endpoints such as `/health` don't have a limit, so they don't send these headers.
 
 You need an access token for `/api/data`: run **Task 3.4 Step 1** first, then come back here.
 
@@ -491,7 +491,12 @@ for ($i = 1; $i -le 11; $i++) {
   } catch {
     $resp = $_.Exception.Response
     if (-not $resp) { throw }
-    Write-Host "Attempt $i -> $($resp.StatusCode.value__)  X-RateLimit-Remaining: $($resp.Headers.GetValues('X-RateLimit-Remaining'))  Retry-After: $($resp.Headers.GetValues('Retry-After'))"
+    $code = $resp.StatusCode.value__
+    if ($code -eq 429) {
+      Write-Host "Attempt $i -> $code  X-RateLimit-Remaining: $($resp.Headers.GetValues('X-RateLimit-Remaining'))  Retry-After: $($resp.Headers.GetValues('Retry-After'))"
+    } else {
+      Write-Host "Attempt $i -> $code"
+    }
   }
 }
 ```

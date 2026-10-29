@@ -423,7 +423,7 @@ done
 
 ### Tarea 3.3: Inspeccionar Cabeceras de Límite de Tasa
 
-Cada respuesta con límite incluye la información del límite en las cabeceras (la app las activa con `headers_enabled=True`). Los endpoints exentos como `/health` no tienen límite, así que no envían estas cabeceras.
+Las respuestas exitosas y las `429` llevan las cabeceras del límite (la `429` incluye además `Retry-After`). Las respuestas `401` de `/login` no: slowapi solo añade las cabeceras cuando la ruta termina con normalidad o cuando se supera el límite, así que un login fallido no muestra `X-RateLimit-*`. Los endpoints exentos como `/health` no tienen límite, así que no envían estas cabeceras.
 
 Necesitas un token de acceso para `/api/data`: haz primero el **Paso 1 de la Tarea 3.4** y vuelve aquí.
 
@@ -491,7 +491,12 @@ for ($i = 1; $i -le 11; $i++) {
   } catch {
     $resp = $_.Exception.Response
     if (-not $resp) { throw }
-    Write-Host "Intento $i -> $($resp.StatusCode.value__)  X-RateLimit-Remaining: $($resp.Headers.GetValues('X-RateLimit-Remaining'))  Retry-After: $($resp.Headers.GetValues('Retry-After'))"
+    $code = $resp.StatusCode.value__
+    if ($code -eq 429) {
+      Write-Host "Intento $i -> $code  X-RateLimit-Remaining: $($resp.Headers.GetValues('X-RateLimit-Remaining'))  Retry-After: $($resp.Headers.GetValues('Retry-After'))"
+    } else {
+      Write-Host "Intento $i -> $code"
+    }
   }
 }
 ```
