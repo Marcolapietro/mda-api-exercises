@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Aprender a implementar **autenticación OAuth** en una API REST con Flask integrándose con un proveedor externo (GitHub), usando el flujo que las buenas prácticas actuales (RFC 9700, OAuth 2.1) recomiendan para todos los clientes: **Authorization Code + PKCE**. Entender el flujo OAuth, manejar redirecciones y callbacks, identificar a los usuarios por el id estable del proveedor y combinar OAuth con JWT para autenticación de API.
+Aprender a implementar **autenticación OAuth** en una API REST con FastAPI integrándose con un proveedor externo (GitHub), usando el flujo que las buenas prácticas actuales (RFC 9700, OAuth 2.1) recomiendan para todos los clientes: **Authorization Code + PKCE**. Entender el flujo OAuth, manejar redirecciones y callbacks, identificar a los usuarios por el id estable del proveedor y combinar OAuth con JWT para autenticación de API.
 
 ## Inicio Rápido
 
@@ -13,8 +13,10 @@ venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 # Configurar GitHub OAuth App (ver sección de Configuración más abajo)
-python app.py
+fastapi dev app.py
 ```
+
+Completa los huecos de `app.py` de arriba abajo. La app arranca cuando el decorador de `/profile` está completo (huecos 7 y 8, ver "TODOs en app.py" más abajo).
 
 ---
 
@@ -85,12 +87,12 @@ Antes de comenzar este ejercicio, completa:
 ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
 │   Cliente    │◄───────►│  Servidor de │◄───────►│  Servidor de │
 │     App      │         │ Autorización │         │   Recursos   │
-│ (Tu Flask)   │         │  (GitHub)    │         │ (API GitHub) │
+│ (Tu FastAPI) │         │  (GitHub)    │         │ (API GitHub) │
 └──────────────┘         └──────────────┘         └──────────────┘
 ```
 
 - **Usuario**: La persona intentando iniciar sesión
-- **Cliente (Tu App)**: Tu aplicación Flask
+- **Cliente (Tu App)**: Tu aplicación FastAPI
 - **Servidor de Autorización**: Servicio OAuth de GitHub (emite tokens)
 - **Servidor de Recursos**: API de GitHub (proporciona datos de usuario)
 
@@ -197,13 +199,13 @@ podría intentar canjearlo por un token. **PKCE** (RFC 7636, se pronuncia "pixy"
 
 La buena práctica actual ([RFC 9700](https://datatracker.ietf.org/doc/rfc9700/), OAuth 2.0 Security Best Current
 Practice, y el borrador OAuth 2.1) es **Authorization Code + PKCE para todos los clientes**: apps de servidor como
-esta, SPAs y apps móviles. En un cliente confidencial como nuestra app Flask, PKCE se usa **además del** client
+esta, SPAs y apps móviles. En un cliente confidencial como nuestra app FastAPI, PKCE se usa **además del** client
 secret, no en su lugar. GitHub soporta PKCE con `S256`.
 
 **Los 6 pasos (como en las diapositivas):**
 
 ```
- Tu app Flask                            Navegador / Usuario            GitHub (servidor de autorización)
+ Tu app FastAPI                          Navegador / Usuario            GitHub (servidor de autorización)
  ────────────                            ───────────────────            ─────────────────────────────────
  1. Crea un code_verifier aleatorio
     code_challenge = BASE64URL(SHA-256(code_verifier))
@@ -256,10 +258,10 @@ code_challenge = base64.urlsafe_b64encode(
 > Error común: enviar el propio `code_verifier` como `code_challenge` (eso es el método `plain`). Con `S256`
 > el challenge tiene que ser el hash; si no, el servidor rechaza el intercambio. Usa siempre `S256`.
 
-> **¿Dónde guarda Authlib el verifier?** En la `session` de Flask. La sesión por defecto de Flask es una cookie
+> **¿Dónde guarda Authlib el verifier?** En la sesión, que `SessionMiddleware` guarda como una cookie
 > firmada en el navegador del propio usuario (ver "Sesión vs JWT" más abajo), así que el verifier nunca aparece
 > en URLs, logs ni en la cabecera `Referer`, que es por donde se filtran los códigos. En producción puedes pasar
-> una `cache` del lado del servidor a `OAuth(app, cache=...)` para que los datos del flujo OAuth se queden en el servidor.
+> una `cache` del lado del servidor a `OAuth(cache=...)` para que los datos del flujo OAuth se queden en el servidor.
 
 **`state` y PKCE son complementarios:** `state` (un valor aleatorio que Authlib guarda en la sesión y comprueba en
 `/callback`) protege a **tu usuario** contra CSRF, es decir, contra acabar logueado con el código de otra persona.
@@ -277,18 +279,18 @@ PKCE protege el **código** para que nadie más pueda canjearlo. Mantén los dos
 
 2. **Completa el formulario:**
    ```
-   Application name: Flask OAuth Exercise
-   Homepage URL: http://127.0.0.1:5000
-   Authorization callback URL: http://127.0.0.1:5000/callback
+   Application name: FastAPI OAuth Exercise
+   Homepage URL: http://127.0.0.1:8000
+   Authorization callback URL: http://127.0.0.1:8000/callback
    ```
 
    > **Usa `127.0.0.1` en todas partes, no `localhost`.** La app construye su `redirect_uri` a partir
-   > del host que escribiste en el navegador (`url_for('callback', _external=True)`). Si abres
-   > `http://localhost:5000/login/github`, la app envía `redirect_uri=http://localhost:5000/callback`,
+   > del host que escribiste en el navegador (`request.url_for("callback")`). Si abres
+   > `http://localhost:8000/login/github`, la app envía `redirect_uri=http://localhost:8000/callback`,
    > y GitHub la compara **carácter a carácter** con la callback URL registrada, así que la rechaza
    > ("redirect_uri MUST match"). Además, el navegador trata `localhost` y `127.0.0.1` como sitios
    > distintos, así que la cookie de sesión que guarda el `state` de OAuth no se enviaría al otro.
-   > Empieza siempre el flujo en **http://127.0.0.1:5000/login/github**.
+   > Empieza siempre el flujo en **http://127.0.0.1:8000/login/github**.
 
 3. **Registra la app:**
    - Haz clic en **"Register application"**
@@ -307,7 +309,7 @@ La app lee las credenciales **solo de variables de entorno** (`GITHUB_CLIENT_ID`
 `GITHUB_CLIENT_SECRET`). **No** las pegues en `app.py`: todo lo que está en el código acaba en Git.
 Si falta alguna de las dos, la app se detiene al arrancar con un mensaje `Missing GITHUB_CLIENT_ID ...`.
 
-Defínelas **en la misma terminal** donde vas a ejecutar `python app.py` (solo duran esa sesión de terminal):
+Defínelas **en la misma terminal** donde vas a ejecutar `fastapi dev app.py` (solo duran esa sesión de terminal):
 
 ```bash
 # Linux / macOS (bash, zsh)
@@ -327,13 +329,16 @@ set GITHUB_CLIENT_ID=Iv1.abc123...
 set GITHUB_CLIENT_SECRET=1a2b3c4d...
 ```
 
-Después arranca la app y abre **http://127.0.0.1:5000/login/github** en el navegador.
+Después arranca la app y abre **http://127.0.0.1:8000/login/github** en el navegador.
 
 El fichero `.env.example` de la raíz del repo lista todas las variables que usan los ejercicios
-(`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` y, opcionalmente, `FLASK_SECRET_KEY` y `JWT_SECRET_KEY`).
+(`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` y `JWT_SECRET_KEY`).
 Es solo una referencia: la app **no** lo carga automáticamente, así que igualmente tienes que definir
-las variables con los comandos de arriba. Si `FLASK_SECRET_KEY` / `JWT_SECRET_KEY` no están definidas,
-la app genera unas aleatorias al arrancar (los tokens dejan de funcionar al reiniciarla).
+las variables con los comandos de arriba.
+
+Otras dos variables son opcionales: `SESSION_SECRET` (firma la cookie de sesión que guarda el `state` de OAuth y el
+verifier PKCE) y `JWT_SECRET_KEY` (firma tus JWT). Si no están definidas, la app genera unas aleatorias al arrancar
+(los tokens dejan de funcionar al reiniciarla).
 
 Así es como la app las usa:
 
@@ -368,51 +373,54 @@ client_secret=os.environ['GITHUB_CLIENT_SECRET'],
 
 ### TODOs en app.py
 
-Necesitas completar **8 huecos** (`_____`). Los secretos (`app.secret_key`, `client_id`,
+Necesitas completar **8 huecos** (`_____`). Los secretos (`SESSION_SECRET`, `client_id`,
 `client_secret`) **no** son huecos: se leen de variables de entorno (ver Parte 2).
 
 | # | Dónde (función / sección) | Qué escribir |
 |---|---------------------------|--------------|
-| 1 | `oauth.register(...)` (línea 32) | Nombre del proveedor: `'github'` |
-| 2 | `login_github()` (línea 94) | Endpoint de la URL de callback: `url_for('callback', _external=True)` |
-| 3 | `login_github()` (línea 98) | Redirigir a GitHub: `github.authorize_redirect(redirect_uri)` |
-| 4 | `callback()` (línea 120) | Intercambiar el código (+ verifier PKCE) por un token: `github.authorize_access_token()` |
-| 5 | `callback()` (línea 124) | Endpoint de la API de GitHub para el perfil: `github.get('user')` |
-| 6 | `callback()` (línea 152) | Crear nuestro JWT: `create_access_token(identity=user_id)` |
-| 7 | `@app.route('/profile', ...)` (línea 175) | Método HTTP: `'GET'` |
-| 8 | `profile()` (línea 191) | Leer el usuario del JWT: `get_jwt_identity()` |
+| 1 | `oauth.register(...)` | Nombre del proveedor: `"github"` |
+| 2 | `login_github()` | Nombre de la ruta de callback para la URL: `request.url_for("callback")` |
+| 3 | `login_github()` | Redirigir a GitHub: `await oauth.github.authorize_redirect(request, redirect_uri)` |
+| 4 | `callback()` | Intercambiar el código (+ verifier PKCE) por un token: `await oauth.github.authorize_access_token(request)` |
+| 5 | `callback()` | Endpoint de la API de GitHub para el perfil: `oauth.github.get("user", token=token)` |
+| 6 | `callback()` | Crear nuestro JWT: `create_access_token(user_id)` |
+| 7 | `@app._____("/profile")` | Método HTTP: `get` |
+| 8 | `profile()` | La dependencia que lee el usuario del JWT: `Depends(get_current_user)` |
 
-PKCE (`'code_challenge_method': 'S256'`) y el id de usuario (`user_id = str(github_id)`) ya están escritos en
+PKCE (`"code_challenge_method": "S256"`) y el id de usuario (`user_id = str(github_id)`) ya están escritos en
 `app.py`: no son huecos, pero léelos, son lo que hace seguro el flujo (ver "PKCE" arriba y "Manejando el
 Callback" abajo).
 
-(Los números de línea se refieren al `app.py` original; busca `_____` si se han desplazado.)
+**¿Qué huecos impiden que la app arranque?** Solo el 7 y el 8. El decorador de `/profile` y el `Depends(...)` de su
+firma se ejecutan cuando Python carga el fichero, así que `fastapi dev app.py` falla ahí hasta que completes ambos.
+Los huecos 1 a 6 están dentro de funciones o argumentos que solo se ejecutan cuando llega una petición, así que la app
+arranca y los notas al probar el login.
 
 ### Conceptos Clave a Implementar
 
 #### 1. Registro del Proveedor OAuth
 
 **¿Qué es Authlib?**
-- **Authlib** es la librería OAuth más popular para Flask
+- **Authlib** es la librería OAuth más popular para frameworks web de Python
 - Maneja OAuth 1.0, OAuth 2.0 y OpenID Connect
 - Simplifica el intercambio de tokens, llamadas a API y gestión de sesiones
 
 **Registrando un proveedor:**
 ```python
-from authlib.integrations.flask_client import OAuth
+from authlib.integrations.starlette_client import OAuth
 
-oauth = OAuth(app)
+oauth = OAuth()
 
-github = oauth.register(
-    name='github',  # Nombre interno para este proveedor
-    client_id='...',  # De GitHub OAuth App
-    client_secret='...',  # De GitHub OAuth App
-    access_token_url='https://github.com/login/oauth/access_token',
-    authorize_url='https://github.com/login/oauth/authorize',
-    api_base_url='https://api.github.com/',
+oauth.register(
+    name="github",  # Nombre interno: después lo usas como oauth.github
+    client_id="...",  # De GitHub OAuth App
+    client_secret="...",  # De GitHub OAuth App
+    access_token_url="https://github.com/login/oauth/access_token",
+    authorize_url="https://github.com/login/oauth/authorize",
+    api_base_url="https://api.github.com/",
     client_kwargs={
-        'scope': 'user:email',            # Permisos solicitados
-        'code_challenge_method': 'S256',  # PKCE activado (OAuth 2.1 / RFC 9700)
+        "scope": "user:email",            # Permisos solicitados
+        "code_challenge_method": "S256",  # PKCE activado (OAuth 2.1 / RFC 9700)
     }
 )
 ```
@@ -426,22 +434,27 @@ github = oauth.register(
 #### 2. Iniciando el Flujo OAuth
 
 ```python
-@app.route('/login/github')
-def login_github():
+@app.get("/login/github")
+async def login_github(request: Request):
     # Generar la URL de callback (donde GitHub redirige de vuelta)
-    redirect_uri = url_for('callback', _external=True)
-    # Resultado: "http://127.0.0.1:5000/callback"
+    redirect_uri = str(request.url_for("callback"))
+    # Resultado: "http://127.0.0.1:8000/callback"
 
     # Redirigir usuario a la página de autorización de GitHub
-    return github.authorize_redirect(redirect_uri)
+    return await oauth.github.authorize_redirect(request, redirect_uri)
 ```
 
+**¿Por qué `async def`?** `authorize_redirect()` y `authorize_access_token()` hablan con GitHub por la red, así que
+Authlib las hace *esperables* y se llaman con `await`. `await` solo se puede usar dentro de `async def`, por eso estas
+dos rutas (`/login/github` y `/callback`) son `async def`. Las rutas que no esperan nada (`/profile`, `/users`,
+`/logout`) siguen siendo `def` normales, como en los ejercicios anteriores.
+
 **¿Qué sucede detrás de escena?**
-1. `authorize_redirect()` construye una URL como:
+1. `authorize_redirect()` guarda `state` y el verifier PKCE en la sesión y construye una URL como:
    ```
    https://github.com/login/oauth/authorize
      ?client_id=Iv1.abc123
-     &redirect_uri=http://127.0.0.1:5000/callback
+     &redirect_uri=http://127.0.0.1:8000/callback
      &scope=user:email
      &state=token_csrf_aleatorio
      &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
@@ -452,40 +465,40 @@ def login_github():
 4. El usuario hace clic en "Authorize"
 5. GitHub redirige de vuelta a tu `redirect_uri` con un código
 
-**¿Por qué `_external=True`?**
-- Genera URL absoluta (`http://127.0.0.1:5000/callback`)
-- Sin esto: URL relativa (`/callback`) a la que GitHub no puede redirigir
-- OAuth requiere **URLs absolutas** para callbacks
+**¿Por qué `request.url_for(...)`?**
+- Genera una URL absoluta (`http://127.0.0.1:8000/callback`) a partir del nombre de la ruta y el host de la petición
+- Una URL relativa (`/callback`) no basta: GitHub no puede redirigir a ella
+- OAuth requiere **URLs absolutas** para callbacks (`str(...)` convierte el objeto URL en texto)
 
 #### 3. Manejando el Callback
 
 ```python
-@app.route('/callback')
-def callback():
+@app.get("/callback")
+async def callback(request: Request):
     # Paso 1: Intercambiar código de autorización por token de acceso
-    token = github.authorize_access_token()
+    token = await oauth.github.authorize_access_token(request)
     # Detrás de escena: comprueba state y hace POST a GitHub con
     # code + code_verifier (PKCE) + client_secret
     # Devuelve: { "access_token": "gho_xxxx...", "scope": "user:email", ... }
 
     # Paso 2: Usar token de acceso para obtener perfil de usuario
-    response = github.get('user')  # GET https://api.github.com/user
+    response = await oauth.github.get("user", token=token)  # GET https://api.github.com/user
     user_info = response.json()
 
     # Paso 3: Extraer datos de usuario
-    github_id = user_info.get('id')        # 12345678 - estable, no cambia
-    username = user_info.get('login')      # "alice"  - se puede renombrar
-    email = user_info.get('email')
-    name = user_info.get('name')
+    github_id = user_info.get("id")        # 12345678 - estable, no cambia
+    username = user_info.get("login")      # "alice"  - se puede renombrar
+    email = user_info.get("email")
+    name = user_info.get("name")
 
     # Paso 4: Almacenar (o actualizar) el usuario, con el id estable como clave
     user_id = str(github_id)
-    users[user_id] = {'github_id': github_id, 'username': username, ...}
+    users[user_id] = {"github_id": github_id, "username": username, ...}
 
     # Paso 5: Crear token JWT para tu API (sub = el id, como string)
-    access_token = create_access_token(identity=user_id)
+    access_token = create_access_token(user_id)
 
-    return jsonify({'access_token': access_token})
+    return {"access_token": access_token}
 ```
 
 **¿Por qué el `id` y no el `login`?**
@@ -524,8 +537,8 @@ Crear JWT        ─────────► Usar token JWT
 #### 5. Gestión de Sesiones
 
 ```python
-# Las sesiones de Flask son necesarias para gestionar el estado de OAuth
-app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
+# SessionMiddleware guarda la sesión en una cookie firmada; Authlib la necesita para el estado de OAuth
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET") or secrets.token_hex(32))
 
 # Authlib guarda datos temporales de OAuth en la sesión:
 # - state (protección CSRF)
@@ -533,17 +546,17 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
 # - redirect_uri (validación)
 
 # Tras un OAuth correcto, la sesión se puede limpiar
-@app.route('/logout', methods=['POST'])
-def logout():
-    session.clear()
-    return jsonify({'message': 'Logged out'})
+@app.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"message": "Logged out"}
 ```
 
 **Sesión vs JWT:**
-- **Sesión**: Temporal, solo para el flujo OAuth. La sesión por defecto de Flask es una **cookie firmada
-  guardada en el navegador** (lado del cliente): `secret_key` impide que se manipule, pero su contenido solo
+- **Sesión**: Temporal, solo para el flujo OAuth. `SessionMiddleware` guarda la sesión en una **cookie firmada
+  en el navegador** (lado del cliente): `secret_key` impide que se manipule, pero su contenido solo
   está codificado en base64, no cifrado, así que nunca guardes secretos en ella.
-- **JWT**: De corta duración (la solución usa `JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)`), lo envía el
+- **JWT**: De corta duración (la solución usa `ACCESS_TOKEN_MINUTES = 60`), lo envía el
   cliente en la cabecera `Authorization`, autenticación de la API
 
 ---
@@ -554,11 +567,11 @@ def logout():
 
 1. **Iniciar el servidor:**
    ```bash
-   python app.py
+   fastapi dev app.py
    ```
 
 2. **Abrir navegador:**
-   - Ir a: http://127.0.0.1:5000/login/github
+   - Ir a: http://127.0.0.1:8000/login/github
 
 3. **Autorizar con GitHub:**
    - Hacer clic en "Authorize [Nombre de Tu App]"
@@ -567,7 +580,7 @@ def logout():
 
 4. **Usar el token en Postman/curl:**
    ```bash
-   curl http://127.0.0.1:5000/profile \
+   curl http://127.0.0.1:8000/profile \
      -H "Authorization: Bearer <TU_TOKEN_JWT>"
    ```
 
@@ -575,14 +588,14 @@ def logout():
 
 **Paso 1: Iniciar OAuth (en navegador)**
 - Como OAuth requiere redirecciones, inicia el flujo en un navegador
-- Visita: http://127.0.0.1:5000/login/github
+- Visita: http://127.0.0.1:8000/login/github
 - Autoriza y copia el token JWT
 
 **Paso 2: Probar endpoints protegidos (en Postman)**
 
 **Obtener tu perfil:**
 ```
-GET http://127.0.0.1:5000/profile
+GET http://127.0.0.1:8000/profile
 Headers:
   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
@@ -604,7 +617,7 @@ Headers:
 
 **Obtener todos los usuarios:**
 ```
-GET http://127.0.0.1:5000/users
+GET http://127.0.0.1:8000/users
 Headers:
   Authorization: Bearer eyJ...
 ```
@@ -629,15 +642,15 @@ Headers:
 TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 # Obtener tu perfil
-curl http://127.0.0.1:5000/profile \
+curl http://127.0.0.1:8000/profile \
   -H "Authorization: Bearer $TOKEN"
 
 # Obtener todos los usuarios
-curl http://127.0.0.1:5000/users \
+curl http://127.0.0.1:8000/users \
   -H "Authorization: Bearer $TOKEN"
 
 # Logout
-curl -X POST http://127.0.0.1:5000/logout
+curl -X POST http://127.0.0.1:8000/logout
 ```
 
 ---
@@ -724,10 +737,10 @@ GitHub → Navegador → App
 7. **Solicitar scopes mínimos**
    ```python
    # ❌ Mal: Solicitar permisos innecesarios
-   client_kwargs={'scope': 'user repo delete_repo admin:org'}
+   client_kwargs={"scope": "user repo delete_repo admin:org"}
 
    # ✅ Bien: Solo lo que necesitas
-   client_kwargs={'scope': 'user:email'}
+   client_kwargs={"scope": "user:email"}
    ```
 
 8. **Validar tokens**
@@ -737,9 +750,9 @@ GitHub → Navegador → App
 9. **Manejar errores con elegancia**
    ```python
    try:
-       token = github.authorize_access_token()
-   except Exception as e:
-       return jsonify({'error': 'OAuth failed'}), 400
+       token = await oauth.github.authorize_access_token(request)
+   except Exception:
+       return JSONResponse(status_code=400, content={"error": "OAuth failed"})
    ```
 
 ### ❌ NO HACER
@@ -780,10 +793,10 @@ GitHub error: The redirect_uri MUST match the registered callback URL for this a
 
 **Solución:**
 - Revisa los ajustes de tu GitHub OAuth App
-- La callback URL debe coincidir **exactamente**: `http://127.0.0.1:5000/callback`
-- Empieza el flujo en `http://127.0.0.1:5000/login/github` (la app construye `redirect_uri` a partir del host que usaste)
+- La callback URL debe coincidir **exactamente**: `http://127.0.0.1:8000/callback`
+- Empieza el flujo en `http://127.0.0.1:8000/login/github` (la app construye `redirect_uri` a partir del host que usaste)
 - Errores comunes:
-  - `http://localhost:5000/callback` ≠ `http://127.0.0.1:5000/callback` (GitHub compara la cadena exacta,
+  - `http://localhost:8000/callback` ≠ `http://127.0.0.1:8000/callback` (GitHub compara la cadena exacta,
     y el navegador los trata como sitios distintos)
   - `https://` vs `http://`
   - Barra final: `/callback/` vs `/callback`
@@ -808,13 +821,13 @@ GitHub error: The redirect_uri MUST match the registered callback URL for this a
 
 **Síntoma:**
 ```
-RuntimeError: The session is unavailable because no secret key was set.
+AssertionError: SessionMiddleware must be installed to access request.session
 ```
 
 **Solución:**
 ```python
 # Añade esto a tu app
-app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET") or secrets.token_hex(32))
 ```
 
 ### Problema 4: "El Callback de OAuth Nunca Llega"
@@ -824,8 +837,8 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
 - El endpoint de callback nunca recibe la petición
 
 **Solución:**
-- Comprueba que Flask está en marcha: http://127.0.0.1:5000
-- Comprueba que ningún firewall bloquea el puerto 5000
+- Comprueba que la app está en marcha: http://127.0.0.1:8000
+- Comprueba que ningún firewall bloquea el puerto 8000
 - Verifica la callback URL en los ajustes de GitHub
 - Revisa la consola del navegador por si hay errores
 
@@ -841,12 +854,12 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
 **Solución:**
 - GitHub solo devuelve el email si pediste el scope `user:email`
 - El usuario puede tener el email configurado como privado
-- Obtén el email por separado: `github.get('user/emails')`
+- Obtén el email por separado: `await oauth.github.get("user/emails", token=token)`
 
 ```python
 # Obtener el email principal si no es público
 if not email:
-    emails_response = github.get('user/emails')
+    emails_response = await oauth.github.get("user/emails", token=token)
     emails = emails_response.json()
     primary_email = next((e['email'] for e in emails if e['primary']), None)
 ```
@@ -864,7 +877,7 @@ Tu implementación debería:
 - ✅ Obtener perfil de usuario de la API de GitHub
 - ✅ Almacenar el usuario con el `id` numérico de GitHub como clave (`login` solo como atributo de visualización)
 - ✅ Generar token JWT después de OAuth exitoso, con `sub` = el id de GitHub como string
-- ✅ Proteger rutas con decorador `@jwt_required()`
+- ✅ Proteger rutas con la dependencia `get_current_user` (`Depends`)
 - ✅ Usar JWT para peticiones posteriores a la API
 - ✅ Manejar errores de OAuth con elegancia
 - ✅ Limpiar sesión al cerrar sesión
@@ -881,23 +894,23 @@ Soporta Google, Facebook o Twitter:
 
 ```python
 # Google OAuth
-google = oauth.register(
-    name='google',
-    client_id=os.getenv('GOOGLE_CLIENT_ID'),
-    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'}
+oauth.register(
+    name="google",
+    client_id=os.getenv("GOOGLE_CLIENT_ID"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"}
 )
 
-@app.route('/login/google')
-def login_google():
-    redirect_uri = url_for('google_callback', _external=True)
-    return google.authorize_redirect(redirect_uri)
+@app.get("/login/google")
+async def login_google(request: Request):
+    redirect_uri = str(request.url_for("google_callback"))
+    return await oauth.google.authorize_redirect(request, redirect_uri)
 
-@app.route('/callback/google')
-def google_callback():
-    token = google.authorize_access_token()
-    user_info = token['userinfo']  # OpenID Connect
+@app.get("/callback/google")
+async def google_callback(request: Request):
+    token = await oauth.google.authorize_access_token(request)
+    user_info = token["userinfo"]  # OpenID Connect
     # ... crear JWT
 ```
 
@@ -916,7 +929,7 @@ users[user_id] = {
 
 # Refrescar cuando expire
 if datetime.now().timestamp() > user['expires_at']:
-    new_token = github.fetch_access_token(
+    new_token = await oauth.github.fetch_access_token(
         refresh_token=user['refresh_token']
     )
     users[user_id]['access_token'] = new_token['access_token']
@@ -927,11 +940,12 @@ if datetime.now().timestamp() > user['expires_at']:
 Deja que los usuarios elijan qué permisos conceden:
 
 ```python
-@app.route('/login/github/full')
-def login_github_full():
+@app.get("/login/github/full")
+async def login_github_full(request: Request):
     # Pedir scopes adicionales
-    redirect_uri = url_for('callback', _external=True)
-    return github.authorize_redirect(
+    redirect_uri = str(request.url_for("callback"))
+    return await oauth.github.authorize_redirect(
+        request,
         redirect_uri,
         scope='user:email read:org repo'  # Más permisos
     )
@@ -952,19 +966,15 @@ users = {
     }
 }
 
-@app.route('/link/github')
-@jwt_required()
-def link_github():
-    current_user = get_jwt_identity()
-    redirect_uri = url_for('link_callback', _external=True)
-    return github.authorize_redirect(redirect_uri)
+@app.get("/link/github")
+async def link_github(request: Request, current_user: Annotated[str, Depends(get_current_user)]):
+    redirect_uri = str(request.url_for("link_callback"))
+    return await oauth.github.authorize_redirect(request, redirect_uri)
 
-@app.route('/link/callback')
-@jwt_required()
-def link_callback():
-    current_user = get_jwt_identity()
-    token = github.authorize_access_token()
-    user_info = github.get('user').json()
+@app.get("/link/callback")
+async def link_callback(request: Request, current_user: Annotated[str, Depends(get_current_user)]):
+    token = await oauth.github.authorize_access_token(request)
+    user_info = (await oauth.github.get("user", token=token)).json()
 
     # Añadir GitHub al usuario existente
     if 'oauth_providers' not in users[current_user]:
@@ -975,7 +985,7 @@ def link_callback():
         'username': user_info['login']
     }
 
-    return jsonify({'message': 'GitHub account linked'})
+    return {"message": "GitHub account linked"}
 ```
 
 ### 5. Obtener Datos Adicionales del Usuario
@@ -983,23 +993,21 @@ def link_callback():
 Obtén repositorios, organizaciones, etc.:
 
 ```python
-@app.route('/profile/repos')
-@jwt_required()
-def get_repos():
-    current_user = get_jwt_identity()
+@app.get("/profile/repos")
+async def get_repos(current_user: Annotated[str, Depends(get_current_user)]):
     user_data = users[current_user]
 
     # Si guardamos el access token de GitHub
     github_token = user_data.get('github_access_token')
 
     # Obtener los repositorios del usuario
-    response = github.get(
-        'user/repos',
-        token={'access_token': github_token}
+    response = await oauth.github.get(
+        "user/repos",
+        token={"access_token": github_token}
     )
     repos = response.json()
 
-    return jsonify({
+    return {
         'username': user_data['username'],
         'repositories': [
             {
@@ -1009,7 +1017,7 @@ def get_repos():
             }
             for repo in repos
         ]
-    })
+    }
 ```
 
 ---
