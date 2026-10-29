@@ -2,7 +2,7 @@
 Notes API - Fundamentals (Starter)
 
 Run it with:  fastapi dev app.py
-Fill the blanks (_____) from top to bottom; the app starts once the decorators are complete.
+Fill the blanks (_____) from top to bottom; the app starts once the decorators and the status_code of POST /notes are complete.
 """
 
 from http import HTTPStatus
@@ -17,10 +17,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 app = FastAPI(title="Notes API")
 
 
-# TODO: A note needs a title with at least one character
-# Hint: Field(min_length=...) rejects shorter strings with a 422
+# Field(min_length=1) rejects an empty title with a 422
 class NoteCreate(BaseModel):
-    title: str = Field(min_length=_____)
+    title: str = Field(min_length=1)
     content: str = ""
 
 
@@ -35,14 +34,15 @@ notes: dict[int, Note] = {}
 next_id = 1
 
 
-def problem(status: int, title: str, detail: str, **extra) -> JSONResponse:
+def problem(request: Request, status: int, title: str, detail: str, **extra) -> JSONResponse:
     """Build an error response in RFC 9457 "problem details" format.
 
     Every error of the API uses this one helper, so clients always get the same shape:
-    {"type": "about:blank", "title": "...", "status": 404, "detail": "..."}
+    {"type": "about:blank", "title": "...", "status": 404, "detail": "...", "instance": "/notes/99"}
     Extra keyword arguments (e.g. errors=[...]) are added as extension members.
     """
-    body = {"type": "about:blank", "title": title, "status": status, "detail": detail, **extra}
+    body = {"type": "about:blank", "title": title, "status": status, "detail": detail,
+            "instance": request.url.path, **extra}
     # TODO: Set the media type for problem details (RFC 9457)
     # Hint: 'application/problem+json'
     return JSONResponse(body, status_code=status, media_type="_____")
@@ -52,7 +52,7 @@ def problem(status: int, title: str, detail: str, **extra) -> JSONResponse:
 # so registering the handler for it covers our own errors and the router's.
 @app.exception_handler(StarletteHTTPException)
 def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    response = problem(exc.status_code, HTTPStatus(exc.status_code).phrase, str(exc.detail))
+    response = problem(request, exc.status_code, HTTPStatus(exc.status_code).phrase, str(exc.detail))
     response.headers.update(exc.headers or {})  # e.g. Allow on a 405
     return response
 
@@ -61,7 +61,9 @@ def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
 # RequestValidationError, and this handler turns it into the same problem format.
 @app.exception_handler(RequestValidationError)
 def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
-    return problem(422, "Unprocessable Content", "Request body or parameters are invalid.",
+    # TODO: Validation failed -> which status code? (the same 422 as the title in the body)
+    # Hint: 422 Unprocessable Content
+    return problem(request, _____, "Unprocessable Content", "Request body or parameters are invalid.",
                    errors=jsonable_encoder(exc.errors()))
 
 

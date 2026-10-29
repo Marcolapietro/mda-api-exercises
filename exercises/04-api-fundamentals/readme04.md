@@ -36,10 +36,10 @@ This exercise introduces core HTTP + JSON API fundamentals using a small Notes A
 
 - Use an in-memory store (Python dict), no database
 - Describe the data with Pydantic models: `NoteCreate` (what the client sends) and `Note` (what the API returns)
-- Every error is RFC 9457 *problem details*, with `Content-Type: application/problem+json`, built by one helper, `problem(status, title, detail, **extra)`:
+- Every error is RFC 9457 *problem details*, with `Content-Type: application/problem+json`, built by one helper, `problem(request, status, title, detail, **extra)`. `instance` is the path of the request that failed:
 
   ```json
-  {"type": "about:blank", "title": "Not Found", "status": 404, "detail": "Note 99 does not exist."}
+  {"type": "about:blank", "title": "Not Found", "status": 404, "detail": "Note 99 does not exist.", "instance": "/notes/99"}
   ```
 
   Validation errors (`422`) add an `errors` extension with the list that Pydantic produces, one entry per problem (`loc` says where the problem is):
@@ -50,13 +50,14 @@ This exercise introduces core HTTP + JSON API fundamentals using a small Notes A
     "title": "Unprocessable Content",
     "status": 422,
     "detail": "Request body or parameters are invalid.",
+    "instance": "/notes",
     "errors": [
       {"type": "missing", "loc": ["body", "title"], "msg": "Field required", "input": {"content": "Hello"}}
     ]
   }
   ```
 
-- Two exception handlers produce these responses: one for `HTTPException` (your `404`s, and also the `404` and `405` that the router raises by itself; a `405` keeps its `Allow` header) and one for `RequestValidationError` (the `422`s)
+- Two exception handlers produce these responses: one for `HTTPException` (your `404`s, and also the `404` and `405` that the router raises by itself;) and one for `RequestValidationError` (the `422`s)
 
 ## How FastAPI answers invalid input
 
@@ -78,7 +79,7 @@ source venv/bin/activate  # Windows: venv\Scripts\Activate.ps1
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the app (fill the blanks from top to bottom; the app starts once the decorators are complete)
+# Run the app (fill the blanks from top to bottom; the app starts once the decorators and the `status_code=` of `POST /notes` are complete)
 fastapi dev app.py
 ```
 
@@ -94,15 +95,14 @@ To add a header to the response, declare a parameter of type `Response`; FastAPI
 
 ## Tasks (fill the blanks in app.py)
 
-1. Model
-   - Give `title` a minimum length of `1` so an empty title is rejected
-2. Problem details
+1. Problem details
    - Set the media type of the `problem()` helper: `application/problem+json`
-3. Routes and methods
+   - Answer `422` in the validation handler
+2. Routes and methods
    - Choose the decorator (`get` or `post`) of each route
-4. Resource creation
+3. Resource creation
    - Answer `201` with the created note and the `Location` header
-5. Not found
+4. Not found
    - Answer `404` when the note does not exist
 
 ## Testing (curl)
@@ -112,7 +112,7 @@ To add a header to the response, declare a parameter of type `Response`; FastAPI
 curl -i http://127.0.0.1:8000/health
 
 # Create note (success) -> 201 + Location: http://127.0.0.1:8000/notes/1
-curl -i -X POST http://127.0.0.1:8000/notes   -H "Content-Type: application/json"   -d '{"title": "First note", "content": "Hello world"}'
+curl -i -X POST http://127.0.0.1:8000/notes \n  -H "Content-Type: application/json" \n  -d '{"title": "First note", "content": "Hello world"}'
 
 # Create note (malformed JSON) -> 422 problem+json
 curl -i -X POST http://127.0.0.1:8000/notes -H "Content-Type: application/json" -d '{"title": '
@@ -127,7 +127,7 @@ curl -i http://127.0.0.1:8000/notes
 curl -i http://127.0.0.1:8000/notes/1
 curl -i http://127.0.0.1:8000/notes/99
 
-# Method not allowed -> 405 (look at the Allow header)
+# Method not allowed -> 405
 curl -i -X DELETE http://127.0.0.1:8000/notes
 ```
 

@@ -26,9 +26,10 @@ notes: dict[int, Note] = {}
 next_id = 1
 
 
-def problem(status: int, title: str, detail: str, **extra) -> JSONResponse:
+def problem(request: Request, status: int, title: str, detail: str, **extra) -> JSONResponse:
     """RFC 9457 problem details: one error format for the whole API."""
-    body = {"type": "about:blank", "title": title, "status": status, "detail": detail, **extra}
+    body = {"type": "about:blank", "title": title, "status": status, "detail": detail,
+            "instance": request.url.path, **extra}
     return JSONResponse(body, status_code=status, media_type="application/problem+json")
 
 
@@ -36,14 +37,14 @@ def problem(status: int, title: str, detail: str, **extra) -> JSONResponse:
 # so registering the handler for it covers our own errors and the router's.
 @app.exception_handler(StarletteHTTPException)
 def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    response = problem(exc.status_code, HTTPStatus(exc.status_code).phrase, str(exc.detail))
+    response = problem(request, exc.status_code, HTTPStatus(exc.status_code).phrase, str(exc.detail))
     response.headers.update(exc.headers or {})  # e.g. Allow on a 405
     return response
 
 
 @app.exception_handler(RequestValidationError)
 def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
-    return problem(422, "Unprocessable Content", "Request body or parameters are invalid.",
+    return problem(request, 422, "Unprocessable Content", "Request body or parameters are invalid.",
                    errors=jsonable_encoder(exc.errors()))
 
 
