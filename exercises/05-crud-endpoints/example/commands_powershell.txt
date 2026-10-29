@@ -1,10 +1,10 @@
 # Exercise 5: CRUD Endpoints - Notes API (Windows PowerShell 5.1)
-# Start the API first: python app.py   (it starts with 3 seed notes: ids 1, 2, 3)
+# Start the API first: fastapi dev app.py   (from exercises/05-crud-endpoints; it starts with 3 seed notes: ids 1, 2, 3)
 # Paste the blocks in order. Step 0 defines a helper used by the other steps.
 
 # 0. Base URL + helper that prints status code, key headers and body.
 #    Windows PowerShell 5.1 THROWS on 4xx/5xx, so the helper uses try/catch to show them too.
-$baseUrl = "http://127.0.0.1:5000"
+$baseUrl = "http://127.0.0.1:8000"
 
 function Show-Http {
     param(
@@ -29,7 +29,6 @@ function Show-Http {
         if ($resp -eq $null) { throw }
         Write-Host ("Status: {0}" -f [int]$resp.StatusCode)
         Write-Host ("Content-Type: {0}" -f $resp.ContentType)
-        if ($resp.Headers["Allow"]) { Write-Host ("Allow: {0}" -f $resp.Headers["Allow"]) }
         Write-Host $_.ErrorDetails.Message
     }
 }
@@ -39,7 +38,7 @@ $list = Invoke-RestMethod -Method Get -Uri "$baseUrl/notes"
 $list.data | Format-Table id, title, updated_at | Out-String | Write-Host
 Write-Host ("page: " + ($list.page | ConvertTo-Json -Compress))
 
-# 2. List with a page size -> 200 (default 20, values above 100 are clamped to 100)
+# 2. List with a page size -> 200 (default 20, between 1 and 100)
 Show-Http -Method Get -Uri "$baseUrl/notes?limit=10"
 
 # 3. Get one note -> 200
@@ -57,8 +56,8 @@ $noteUrl = $r.Headers["Location"]
 $body = @{ title = "Replaced title"; content = "Replaced content" } | ConvertTo-Json
 Show-Http -Method Put -Uri $noteUrl -Body $body
 
-# 6. PUT with only the title -> 422 (PUT needs the complete resource)
-$body = @{ title = "Only the title" } | ConvertTo-Json
+# 6. PUT without the title -> 422 (PUT needs the complete resource)
+$body = @{ content = "No title" } | ConvertTo-Json
 Show-Http -Method Put -Uri $noteUrl -Body $body
 
 # 7. Partial update with PATCH (only content) -> 200, the title stays the same
@@ -73,10 +72,10 @@ Show-Http -Method Get -Uri $noteUrl
 
 # --- Errors (all of them are application/problem+json) ---
 
-# 10. Wrong Content-Type -> 415
+# 10. Wrong Content-Type -> 422
 Show-Http -Method Post -Uri "$baseUrl/notes" -Body "title=bad" -ContentType "text/plain"
 
-# 11. Malformed JSON -> 400
+# 11. Malformed JSON -> 422
 Show-Http -Method Post -Uri "$baseUrl/notes" -Body '{"title": '
 
 # 12. Valid JSON, invalid data (empty title, content is a number) -> 422 with an "errors" list
@@ -86,8 +85,8 @@ Show-Http -Method Post -Uri "$baseUrl/notes" -Body $body
 # 13. Valid JSON that is not an object -> 422
 Show-Http -Method Post -Uri "$baseUrl/notes" -Body '[1,2]'
 
-# 14. Method not allowed -> 405 (look at the Allow header)
+# 14. Method not allowed -> 405
 Show-Http -Method Delete -Uri "$baseUrl/notes"
 
-# 15. Invalid limit -> 400
-Show-Http -Method Get -Uri "$baseUrl/notes?limit=0"
+# 15. limit out of range -> 422 (values above 100 are rejected, not clamped)
+Show-Http -Method Get -Uri "$baseUrl/notes?limit=500"
