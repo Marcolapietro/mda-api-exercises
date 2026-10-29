@@ -29,7 +29,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-DEFAULT_URL = 'http://127.0.0.1:5000/webhooks/github'
+DEFAULT_URL = 'http://127.0.0.1:8000/webhooks/github'
 
 SAMPLE_PUSH = {
     'ref': 'refs/heads/main',

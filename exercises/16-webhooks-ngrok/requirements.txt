@@ -1,2 +1,4 @@
-Flask==3.0.0
-Werkzeug==3.0.1
+# Exercise 16: Webhooks with ngrok - Python Dependencies
+
+# Web framework (includes the "fastapi" command and the dev server)
+fastapi[standard]==0.162.0

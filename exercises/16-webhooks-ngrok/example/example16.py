@@ -1,9 +1,20 @@
 import hashlib
 import hmac
+import json
 import os
-from flask import Flask, request, jsonify
 
-app = Flask(__name__)
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+app = FastAPI(title="GitHub webhook demo")
+
+if not os.environ.get("GITHUB_WEBHOOK_SECRET"):
+    print("WARNING: GITHUB_WEBHOOK_SECRET is not set.")
+    print("   /webhooks/github will answer 503 until you set it and restart.")
+    print('   Generate one with: python -c "import secrets; print(secrets.token_hex(32))"')
 
 # In-memory storage for demonstration
 users = {}
@@ -14,72 +25,71 @@ webhook_events = []
 processed_deliveries = set()
 
 
-@app.route('/health', methods=['GET'])
-def health():
+class UserCreate(BaseModel):
+    username: str
+    email: str | None = None
+
+
+@app.get("/health")
+def health() -> dict:
     """
     Health check endpoint to verify the API is running.
     This is useful for testing that ngrok is working correctly.
     """
-    return jsonify({
-        'status': 'ok',
-        'service': 'github-webhook-demo',
-        'version': '1.0',
-        'message': 'API is running and accessible!'
-    }), 200
+    return {
+        "status": "ok",
+        "service": "github-webhook-demo",
+        "version": "1.0",
+        "message": "API is running and accessible!"
+    }
 
 
-@app.route('/info', methods=['GET'])
-def info():
+@app.get("/info")
+def info(request: Request) -> dict:
     """
     Returns information about the incoming request.
     Useful for debugging ngrok forwarding.
     """
-    return jsonify({
-        'your_ip': request.remote_addr,
-        'your_user_agent': request.headers.get('User-Agent'),
-        'host': request.host,
-        'path': request.path,
-        'method': request.method,
+    return {
+        "your_ip": request.client.host if request.client else None,
+        "your_user_agent": request.headers.get("User-Agent"),
+        "host": request.headers.get("Host"),
+        "path": request.url.path,
+        "method": request.method,
         # Never echo credentials back: this endpoint is public once ngrok is running
-        'headers': {k: v for k, v in request.headers.items()
-                    if k.lower() not in ('authorization', 'cookie', 'x-api-key',
-                                         'x-hub-signature', 'x-hub-signature-256')}
-    }), 200
+        "headers": {k: v for k, v in request.headers.items()
+                    if k.lower() not in ("authorization", "cookie", "x-api-key",
+                                         "x-hub-signature", "x-hub-signature-256")}
+    }
 
 
-@app.route('/users', methods=['GET', 'POST'])
-def users_endpoint():
+@app.get("/users")
+def list_users() -> list[dict]:
     """
     Simple user management for testing team collaboration.
 
     GET: List all users
-    POST: Create a new user
     """
-    if request.method == 'GET':
-        return jsonify(list(users.values())), 200
+    return list(users.values())
 
-    # POST: Create user
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Invalid JSON'}), 400
 
-    username = data.get('username')
-    email = data.get('email')
-
-    if not username:
-        return jsonify({'error': 'username is required'}), 400
-
-    if username in users:
-        return jsonify({'error': 'User already exists'}), 409
+@app.post("/users", status_code=201)
+def create_user(new_user: UserCreate) -> dict:
+    """
+    POST: Create a new user
+    The JSON body is validated by the UserCreate model (a missing username answers 422).
+    """
+    if new_user.username in users:
+        return JSONResponse({"error": "User already exists"}, status_code=409)
 
     user = {
-        'username': username,
-        'email': email,
-        'id': len(users) + 1
+        "username": new_user.username,
+        "email": new_user.email,
+        "id": len(users) + 1
     }
-    users[username] = user
+    users[new_user.username] = user
 
-    return jsonify(user), 201
+    return user
 
 
 # ============================================================================
@@ -93,15 +103,15 @@ def verify_github_signature(payload_body, signature_header, secret):
     GitHub computes HMAC-SHA256(secret, raw request body) and sends it as:
         X-Hub-Signature-256: sha256=<hex digest>
 
-    payload_body:     the RAW bytes of the request body (request.get_data()), not the parsed JSON
+    payload_body:     the RAW bytes of the request body (await request.body()), not the parsed JSON
     signature_header: the value of the X-Hub-Signature-256 header (may be None)
     secret:           the shared secret you typed in GitHub's webhook "Secret" field
     """
     # Only accept the SHA-256 format. Reject a missing header, the legacy "sha1=..." header
     # format, or anything else.
-    if not signature_header or not signature_header.startswith('sha256='):
+    if not signature_header or not signature_header.startswith("sha256="):
         return False
-    received_signature = signature_header[len('sha256='):]
+    received_signature = signature_header[len("sha256="):]
 
     # Recompute the signature over the exact bytes we received
     expected_signature = hmac.new(secret.encode(), payload_body, hashlib.sha256).hexdigest()
@@ -115,13 +125,16 @@ def verify_github_signature(payload_body, signature_header, secret):
 # GITHUB WEBHOOK ENDPOINT - COMPLETE SOLUTION
 # ============================================================================
 
-@app.route('/webhooks/github', methods=['POST'])
-def github_webhook():
+@app.post("/webhooks/github", status_code=200)
+async def github_webhook(request: Request) -> dict:
     """
     Receives REAL push events from GitHub.
 
     When you configure a webhook in GitHub repository settings, it sends POST
     requests to this endpoint with information about repository events.
+
+    This is the only `async def` in the course: reading the raw body is a coroutine,
+    so the function must be `async def` and the call needs `await`.
 
     Security steps, in this order:
     1. Refuse to work without a configured secret (never accept unsigned requests)
@@ -134,82 +147,86 @@ def github_webhook():
     """
     # 1. The secret comes ONLY from the environment. Without it we cannot verify anything,
     #    so we refuse to process instead of silently accepting unsigned requests.
-    secret = os.environ.get('GITHUB_WEBHOOK_SECRET')
+    secret = os.environ.get("GITHUB_WEBHOOK_SECRET")
     if not secret:
-        return jsonify({
-            'error': 'Webhook secret not configured',
-            'message': 'Set the GITHUB_WEBHOOK_SECRET environment variable and restart the app.'
-        }), 503
+        return JSONResponse({
+            "error": "Webhook secret not configured",
+            "message": "Set the GITHUB_WEBHOOK_SECRET environment variable and restart the app."
+        }, status_code=503)
 
     # 2. Verify the signature on the RAW body, before parsing or trusting anything in it.
     #    Re-serialising the parsed JSON would change spaces/key order and break the HMAC.
-    body = request.get_data()
-    signature = request.headers.get('X-Hub-Signature-256')
+    body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256")
     if not verify_github_signature(body, signature, secret):
-        print("⚠️  Invalid or missing X-Hub-Signature-256 - rejecting webhook")
-        return jsonify({
-            'error': 'Unauthorized',
-            'message': 'Missing or invalid X-Hub-Signature-256 signature'
-        }), 401
+        print("WARNING: Invalid or missing X-Hub-Signature-256 - rejecting webhook")
+        return JSONResponse({
+            "error": "Unauthorized",
+            "message": "Missing or invalid X-Hub-Signature-256 signature"
+        }, status_code=401)
 
     # 3. Deduplicate: GitHub may deliver the same event more than once
-    delivery_id = request.headers.get('X-GitHub-Delivery')
+    delivery_id = request.headers.get("X-GitHub-Delivery")
     if not delivery_id:
-        return jsonify({'error': 'Bad Request', 'message': 'Missing X-GitHub-Delivery header'}), 400
+        return JSONResponse({"error": "Bad Request", "message": "Missing X-GitHub-Delivery header"},
+                            status_code=400)
 
     if delivery_id in processed_deliveries:
-        print(f"🔁 Duplicate delivery {delivery_id} - ignored")
-        return jsonify({'status': 'duplicate, ignored', 'delivery_id': delivery_id}), 200
+        print(f"Duplicate delivery {delivery_id} - ignored")
+        return {"status": "duplicate, ignored", "delivery_id": delivery_id}
 
-    # Only now is it safe to parse the payload
-    data = request.get_json(silent=True)
+    # Only now is it safe to parse the payload (a body that is not valid JSON gives None)
+    try:
+        data = json.loads(body)
+    except ValueError:
+        data = None
 
-    if not data:
-        return jsonify({
-            'error': 'Invalid payload',
-            'message': "Expected a JSON body (set Content type to 'application/json' in GitHub)"
-        }), 400
+    if not data or not isinstance(data, dict):
+        return JSONResponse({
+            "error": "Invalid payload",
+            "message": "Expected a JSON body (set Content type to 'application/json' in GitHub)"
+        }, status_code=400)
 
     # Handle GitHub "ping" event (sent when webhook is first created)
     # This confirms your webhook endpoint is reachable
-    if 'zen' in data and 'hook_id' in data:
+    if "zen" in data and "hook_id" in data:
         processed_deliveries.add(delivery_id)
         print(f"\n{'='*60}")
-        print(f"📥 GitHub Webhook Ping Received!")
+        print("GitHub Webhook Ping Received!")
         print(f"   Hook ID: {data.get('hook_id')}")
         print(f"   Zen: {data.get('zen')}")
-        print(f"   ✅ Webhook is configured correctly (and the signature is valid)!")
+        print("   OK: Webhook is configured correctly (and the signature is valid)!")
         print(f"{'='*60}\n")
-        return jsonify({'status': 'pong'}), 200
+        return {"status": "pong"}
 
     # Extract repository info from real GitHub payload
-    repository = data.get('repository', {})
-    repo_name = repository.get('full_name', 'unknown') if repository else 'unknown'
+    repository = data.get("repository", {})
+    repo_name = repository.get("full_name", "unknown") if repository else "unknown"
 
     # Extract pusher info (who pushed the code)
-    pusher = data.get('pusher', {})
-    pusher_name = pusher.get('name', 'unknown') if pusher else 'unknown'
+    pusher = data.get("pusher", {})
+    pusher_name = pusher.get("name", "unknown") if pusher else "unknown"
 
     # Extract commits list
-    commits = data.get('commits', [])
+    commits = data.get("commits", [])
 
     # Extract ref (which branch was pushed)
-    ref = data.get('ref', 'unknown')
+    ref = data.get("ref", "unknown")
 
     # Log the webhook with detailed output
     print(f"\n{'='*60}")
-    print(f"🎉 REAL GitHub Webhook Received!")
-    print(f"🆔 Delivery: {delivery_id}")
-    print(f"📦 Repository: {repo_name}")
-    print(f"👤 Pushed by: {pusher_name}")
-    print(f"🌿 Branch: {ref}")
-    print(f"📝 Commits: {len(commits)}")
+    print("REAL GitHub Webhook Received!")
+    print(f"Delivery: {delivery_id}")
+    print(f"Repository: {repo_name}")
+    print(f"Pushed by: {pusher_name}")
+    print(f"Branch: {ref}")
+    print(f"Commits: {len(commits)}")
 
     # Show details of each commit
     for i, commit in enumerate(commits, 1):
-        commit_msg = commit.get('message', 'No message')
-        commit_id = commit.get('id', 'unknown')[:7]  # Short SHA (first 7 chars)
-        author = commit.get('author', {}).get('name', 'unknown')
+        commit_msg = commit.get("message", "No message")
+        commit_id = commit.get("id", "unknown")[:7]  # Short SHA (first 7 chars)
+        author = commit.get("author", {}).get("name", "unknown")
         print(f"   {i}. [{commit_id}] {commit_msg} (by {author})")
 
     print(f"{'='*60}\n")
@@ -217,13 +234,13 @@ def github_webhook():
     # 4. Store a minimal record (fast). In a real system you would put the event on a
     #    queue here and let a background worker do the slow work (run tests, deploy...).
     webhook_event = {
-        'type': 'github_push',
-        'delivery_id': delivery_id,
-        'repository': repo_name,
-        'pusher': pusher_name,
-        'ref': ref,
-        'commits_count': len(commits),
-        'commit_messages': [c.get('message', '') for c in commits]
+        "type": "github_push",
+        "delivery_id": delivery_id,
+        "repository": repo_name,
+        "pusher": pusher_name,
+        "ref": ref,
+        "commits_count": len(commits),
+        "commit_messages": [c.get("message", "") for c in commits]
     }
     webhook_events.append(webhook_event)
 
@@ -232,131 +249,94 @@ def github_webhook():
 
     # GitHub expects a 2xx status quickly (it times out after 10 seconds)
     # If you return non-2xx, GitHub will mark the webhook as failed
-    return jsonify({'status': 'received', 'commits_processed': len(commits)}), 200
+    return {"status": "received", "commits_processed": len(commits)}
 
 
 # ============================================================================
 # MONITORING AND DEBUGGING
 # ============================================================================
 
-@app.route('/webhooks/events', methods=['GET'])
-def list_webhook_events():
+@app.get("/webhooks/events")
+def list_webhook_events() -> dict:
     """
     Returns all received webhook events.
     Useful for debugging and verifying webhooks were received.
     """
-    return jsonify({
-        'total_events': len(webhook_events),
-        'events': webhook_events
-    }), 200
+    return {
+        "total_events": len(webhook_events),
+        "events": webhook_events
+    }
 
 
-@app.route('/webhooks/events/clear', methods=['POST'])
-def clear_webhook_events():
+@app.post("/webhooks/events/clear")
+def clear_webhook_events() -> dict:
     """
     Clears all stored webhook events and the list of processed delivery IDs.
     Useful for testing - start fresh.
     """
-    global webhook_events
     count = len(webhook_events)
-    webhook_events = []
+    webhook_events.clear()
     processed_deliveries.clear()
-    return jsonify({
-        'message': f'Cleared {count} webhook events',
-        'remaining': 0
-    }), 200
+    return {
+        "message": f"Cleared {count} webhook events",
+        "remaining": 0
+    }
 
 
 # ============================================================================
 # REQUEST LOGGING (for debugging)
 # ============================================================================
 
-@app.before_request
-def log_request():
+@app.middleware("http")
+async def log_request(request: Request, call_next):
     """
     Logs all incoming requests.
     This helps you see traffic coming through ngrok.
     """
     # Skip logging for some paths to reduce noise
-    if request.path in ['/favicon.ico']:
-        return
+    if request.url.path != "/favicon.ico":
+        print(f"\n{'='*60}")
+        print("Incoming Request:")
+        print(f"   Method: {request.method}")
+        print(f"   Path: {request.url.path}")
+        print(f"   From: {request.client.host if request.client else 'unknown'}")
+        print(f"   User-Agent: {request.headers.get('User-Agent', 'Unknown')[:50]}")
+        print(f"{'='*60}\n")
 
-    print(f"\n{'='*60}")
-    print(f"📨 Incoming Request:")
-    print(f"   Method: {request.method}")
-    print(f"   Path: {request.path}")
-    print(f"   From: {request.remote_addr}")
-    print(f"   User-Agent: {request.headers.get('User-Agent', 'Unknown')[:50]}")
-
-    # Show request body for POST/PUT requests
-    # (get_json caches the raw bytes, so request.get_data() still works in the webhook)
-    if request.method in ['POST', 'PUT', 'PATCH']:
-        body = request.get_json(silent=True)
-        if body:
-            print(f"   Body: {body}")
-
-    print(f"{'='*60}\n")
+    return await call_next(request)
 
 
 # ============================================================================
 # ERROR HANDLERS
 # ============================================================================
 
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({
-        'error': 'Not Found',
-        'message': f'The endpoint {request.path} does not exist',
-        'tip': 'Try /health to verify the API is running'
-    }), 404
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        return JSONResponse({
+            "error": "Not Found",
+            "message": f"The endpoint {request.url.path} does not exist",
+            "tip": "Try /health to verify the API is running"
+        }, status_code=404)
+    if exc.status_code == 405:
+        return JSONResponse({
+            "error": "Method Not Allowed",
+            "message": f"{request.method} is not allowed for {request.url.path}"
+        }, status_code=405)
+    return await http_exception_handler(request, exc)
 
 
-@app.errorhandler(405)
-def method_not_allowed(error):
-    return jsonify({
-        'error': 'Method Not Allowed',
-        'message': f'{request.method} is not allowed for {request.path}'
-    }), 405
+@app.exception_handler(Exception)
+async def internal_error(request: Request, exc: Exception):
+    print(f"Internal server error: {exc}")
+    return JSONResponse({
+        "error": "Internal Server Error",
+        "message": "Something went wrong on the server"
+    }, status_code=500)
 
 
-@app.errorhandler(500)
-def internal_error(error):
-    app.logger.error(f'Internal server error: {str(error)}')
-    return jsonify({
-        'error': 'Internal Server Error',
-        'message': 'Something went wrong on the server'
-    }), 500
-
-
-# ============================================================================
-# MAIN
-# ============================================================================
-
-if __name__ == '__main__':
-    print("\n" + "="*70)
-    print("🌐 GitHub Webhook Demo - ngrok Exercise (COMPLETE SOLUTION)")
-    print("="*70)
-    if not os.environ.get('GITHUB_WEBHOOK_SECRET'):
-        print("⚠️  WARNING: GITHUB_WEBHOOK_SECRET is not set.")
-        print("   /webhooks/github will answer 503 until you set it and restart.")
-        print('   Generate one with: python -c "import secrets; print(secrets.token_hex(32))"')
-        print("="*70)
-    print("Running on: http://127.0.0.1:5000")
-    print("\nQuick Start:")
-    print("1. Set GITHUB_WEBHOOK_SECRET in this terminal (see readme16.md, Task 2.2)")
-    print("2. In another terminal, run: ngrok http 5000")
-    print("3. Copy the https://....ngrok-free.app URL")
-    print("4. Configure GitHub webhook with that URL + /webhooks/github and the SAME secret")
-    print("5. Make a commit to trigger the webhook!")
-    print("\nEndpoints available:")
-    print("  GET  /health                - Health check")
-    print("  GET  /info                  - Request debugging info")
-    print("  GET  /users                 - List users")
-    print("  POST /users                 - Create user")
-    print("  POST /webhooks/github       - GitHub push webhook (MAIN ENDPOINT, signed)")
-    print("  GET  /webhooks/events       - List all received webhooks")
-    print("  POST /webhooks/events/clear - Clear webhook history")
-    print("\nFor detailed instructions, see readme16.md")
-    print("="*70 + "\n")
-
-    app.run(debug=os.getenv("FLASK_DEBUG") == "1", port=5000)
+# Start it with:  fastapi dev example/example16.py   (it runs at http://127.0.0.1:8000)
+# Then expose it with:  ngrok http 8000
+# Set GITHUB_WEBHOOK_SECRET in the terminal first (see readme16.md, Task 2.2). Without it,
+# /webhooks/github answers 503. Generate one with:
+#     python -c "import secrets; print(secrets.token_hex(32))"

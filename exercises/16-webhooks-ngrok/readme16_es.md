@@ -2,7 +2,7 @@
 
 ## Introducción
 
-En este ejercicio aprenderás a exponer tu API Flask local a internet usando **ngrok** y a configurar **webhooks reales de GitHub**. Esto es esencial para:
+En este ejercicio aprenderás a exponer tu API local a internet usando **ngrok** y a configurar **webhooks reales de GitHub**. Esto es esencial para:
 - Recibir notificaciones de webhook de GitHub cuando se hace push de código
 - Compartir tu API con compañeros de equipo sin desplegarla
 - Entender cómo se comunican los servicios mediante webhooks
@@ -15,7 +15,7 @@ En cuanto tu API tiene una URL pública, **cualquiera** puede hacerle un POST. P
 Al terminar este ejercicio serás capaz de:
 
 1. Instalar y configurar ngrok en tu sistema (verificado en 2025)
-2. Exponer una API Flask local en una URL pública HTTPS
+2. Exponer una API local en una URL pública HTTPS
 3. Configurar webhooks reales de GitHub en los ajustes del repositorio
 4. Implementar endpoints de webhook que manejen payloads auténticos de GitHub
 5. **Verificar la firma HMAC `X-Hub-Signature-256`** en cada llamada, con una comparación en tiempo constante
@@ -34,7 +34,7 @@ Al terminar este ejercicio serás capaz de:
 **Sitio oficial:** https://ngrok.com
 
 **Casos de Uso:**
-- **Webhooks de GitHub**: Recibir notificaciones de push de GitHub en tu app Flask local
+- **Webhooks de GitHub**: Recibir notificaciones de push de GitHub en tu app local
 - **Colaboración en equipo**: Compartir tu API durante el proyecto ProManage sin desplegarla
 - **Desarrollo CI/CD**: Construir flujos automatizados disparados por eventos de GitHub
 - **Pruebas de microservicios**: Probar la comunicación entre servicios en local
@@ -42,7 +42,7 @@ Al terminar este ejercicio serás capaz de:
 ## Prerrequisitos
 
 Antes de empezar este ejercicio deberías haber completado:
-- **Ejercicio 04**: Fundamentos de APIs (entender apps Flask básicas)
+- **Ejercicio 04**: Fundamentos de APIs (entender apps FastAPI básicas)
 - **Ejercicio 11**: Autenticación JWT (opcional, pero recomendado)
 
 ## Instalación
@@ -111,7 +111,7 @@ Esto guarda tu token en el fichero de configuración de ngrok:
 
 ## Inicio Rápido
 
-### Ejecutar una App Flask Básica
+### Ejecutar la API Inicial
 
 ```bash
 cd exercises/16-webhooks-ngrok
@@ -124,19 +124,25 @@ venv\Scripts\activate
 source venv/bin/activate
 
 pip install -r requirements.txt
-python app.py
+fastapi dev app.py
 ```
 
-Tu app se ejecuta en `http://127.0.0.1:5000`
+Tu app se ejecuta en `http://127.0.0.1:8000`
+
+> **El archivo inicial todavía no arranca.** En FastAPI el método HTTP y el `status_code` van en el decorador,
+> que Python evalúa al cargar el archivo. El decorador de `/webhooks/github` tiene dos huecos
+> (`@app._____("/webhooks/github", status_code=_____)`): rellénalos primero (huecos 4 y 5 de la Tarea 2.3: `post` y `200`)
+> y `fastapi dev app.py` arranca. Los otros 11 huecos están dentro de funciones y solo importan cuando
+> llega un webhook, así que `/health`, `/info` y `/users` ya funcionan.
 
 > Al arrancar, la app muestra un **aviso** si `GITHUB_WEBHOOK_SECRET` no está definida. `/health`, `/info` y `/users`
 > funcionan igualmente, pero `/webhooks/github` responde **503** hasta que definas el secreto (ver Tarea 2.2).
 
 ### Exponer con ngrok
 
-**Abre una terminal nueva** (deja Flask ejecutándose) y ejecuta:
+**Abre una terminal nueva** (deja la API ejecutándose) y ejecuta:
 ```bash
-ngrok http 5000
+ngrok http 8000
 ```
 
 Verás una salida como esta:
@@ -149,7 +155,7 @@ Version                       3.5.0
 Region                        United States (us)
 Latency                       25ms
 Web Interface                 http://127.0.0.1:4040
-Forwarding                    https://abcd-1234-5678-efgh.ngrok-free.app -> http://localhost:5000
+Forwarding                    https://abcd-1234-5678-efgh.ngrok-free.app -> http://localhost:8000
 
 Connections                   ttl     opn     rt1     rt5     p50     p90
                               0       0       0.00    0.00    0.00    0.00
@@ -169,7 +175,7 @@ curl https://abcd-1234-5678-efgh.ngrok-free.app/health
 ## Estructura del Ejercicio
 
 Este ejercicio incluye:
-- `app.py` - App Flask inicial con TODOs para implementar el webhook (comprobación de firma, deduplicación, payload)
+- `app.py` - App inicial con TODOs para implementar el webhook (comprobación de firma, deduplicación, payload)
 - `example/example16.py` - Solución de referencia completa
 - `example/send_signed_webhook.py` - Script auxiliar que envía webhooks de prueba **firmados** a tu app, sin GitHub
 - `readme16.md` / `readme16_es.md` - Este fichero de instrucciones (inglés / español)
@@ -178,19 +184,19 @@ Este ejercicio incluye:
 
 ### Tarea 1.1: Ejecutar la App de Ejemplo
 
-El `app.py` incluido tiene una API básica con endpoints de health check y de usuarios.
+El `app.py` incluido tiene una API básica con endpoints de health check y de usuarios. Recuerda rellenar antes los dos huecos del decorador de `/webhooks/github` (ver la nota de Inicio Rápido); si no, no arranca.
 
 ```bash
-python app.py
+fastapi dev app.py
 ```
 
-Visita `http://localhost:5000/health`: debería devolver `{"status": "ok"}`
+Visita `http://localhost:8000/health`: debería devolver `{"status": "ok"}`
 
 ### Tarea 1.2: Exponer con ngrok
 
 En una **terminal nueva**:
 ```bash
-ngrok http 5000
+ngrok http 8000
 ```
 
 Copia tu URL pública (la dirección `https://....ngrok-free.app`).
@@ -247,7 +253,7 @@ Esto imprime 64 caracteres hexadecimales (32 bytes aleatorios) del generador **c
 > No inventes el secreto tú mismo ni uses generadores no criptográficos (como `Get-Random` de PowerShell
 > o el módulo `random` de Python): su salida se puede predecir.
 
-**Paso 2: Defínelo como variable de entorno** en la **misma terminal** donde vas a ejecutar `python app.py` (solo dura esa sesión de terminal):
+**Paso 2: Defínelo como variable de entorno** en la **misma terminal** donde vas a ejecutar `fastapi dev app.py` (solo dura esa sesión de terminal):
 
 ```bash
 # Linux / macOS (bash, zsh)
@@ -277,9 +283,9 @@ con estado **503**. **Nunca** acepta peticiones sin firmar como alternativa.
 #### Cómo funcionan las firmas (HMAC) de los webhooks de GitHub
 
 ```
-GitHub                                         Tu app Flask
+GitHub                                         Tu API
 ──────                                         ────────────
-body = los bytes JSON en bruto                 body = request.get_data()   (¡bytes en bruto!)
+body = los bytes JSON en bruto                 body = await request.body()   (¡bytes en bruto!)
 sig  = HMAC-SHA256(secret, body)               expected = HMAC-SHA256(secret, body)
 
 POST /webhooks/github                          la cabecera debe empezar por "sha256="
@@ -295,7 +301,7 @@ X-GitHub-Delivery:   <id único>                  ✅ iguales     → continuar
 5. Si coinciden → la petición viene de GitHub y el cuerpo no se ha modificado. Si no → se rechaza con **401**.
 
 **Cuatro detalles importantes:**
-- **Usa el cuerpo EN BRUTO** (`request.get_data()`), nunca `json.dumps(request.get_json())`. Al volver a serializar cambian los espacios y el orden de las claves, y el HMAC deja de coincidir.
+- **Usa el cuerpo EN BRUTO** (`await request.body()`), nunca `json.dumps(json.loads(body))`. Al volver a serializar cambian los espacios y el orden de las claves, y el HMAC deja de coincidir.
 - **Comprueba el prefijo `sha256=`.** Rechaza una cabecera ausente, el formato antiguo `X-Hub-Signature: sha1=...` o cualquier otra cosa. Hacer simplemente un split por `=` aceptaría basura.
 - **Compara en tiempo constante** con `hmac.compare_digest`. Un `==` normal termina en cuanto un carácter es distinto, y esa diferencia de tiempo se puede medir para adivinar la firma byte a byte.
 - **Sin secreto, no se procesa nada.** Si falta `GITHUB_WEBHOOK_SECRET`, el endpoint responde 503. Un endpoint que "verifica solo si hay un secreto configurado" es un endpoint que acepta peticiones falsificadas.
@@ -304,6 +310,10 @@ X-GitHub-Delivery:   <id único>                  ✅ iguales     → continuar
 > `Stripe-Signature` (además firma una marca de tiempo para frenar repeticiones), Slack usa `X-Slack-Signature`, etc.
 > Cambian el nombre y el formato de la cabecera, pero el patrón es siempre el mismo: secreto compartido + HMAC del
 > cuerpo en bruto + comparación en tiempo constante.
+
+#### ¿Por qué `async def` y `await request.body()`?
+
+Hasta ahora todas las operaciones de ruta del curso eran un `def` normal. Leer el cuerpo en bruto es distinto: `request.body()` es una **corrutina**, una función que tiene que esperar a que los bytes lleguen por la red, así que se llama con `await`, y `await` solo se permite dentro de una función `async def`. Por eso `github_webhook` es el **único `async def` del curso**. Todo lo demás sigue siendo `def`: FastAPI lo ejecuta en un pool de hilos, y solo necesitas `async def` cuando el cuerpo de la función espera algo con `await`. ¿Por qué no declarar un modelo de cuerpo como en los ejercicios anteriores? Porque el modelo te da el JSON *ya parseado*, y el HMAC hay que calcularlo sobre los bytes exactos que envió GitHub.
 
 #### Deduplicar por ID de entrega
 
@@ -329,16 +339,18 @@ Abre `app.py` y completa los **13 huecos** (`_____`). El orden de las comprobaci
 | 1 | `verify_github_signature()` | Prefijo obligatorio: `signature_header.startswith('sha256=')` |
 | 2 | `verify_github_signature()` | Calcular el HMAC: `hmac.new(secret.encode(), payload_body, hashlib.sha256).hexdigest()` |
 | 3 | `verify_github_signature()` | Comparación en tiempo constante: `hmac.compare_digest(expected_signature, received_signature)` |
-| 4 | `@app.route('/webhooks/github', ...)` | Método HTTP: `'POST'` |
-| 5 | `github_webhook()` | Cuerpo en bruto: `request.get_data()` |
-| 6 | `github_webhook()` | Comprobación de duplicados: `if delivery_id in processed_deliveries:` |
-| 7 | `github_webhook()` | Parsear el JSON (¡después de verificar!): `request.get_json(silent=True)` |
-| 8 | `github_webhook()` | Repositorio: `data.get('repository', {})` |
-| 9 | `github_webhook()` | Quién hizo push: `data.get('pusher', {})` |
-| 10 | `github_webhook()` | Commits: `data.get('commits', [])` |
-| 11 | `github_webhook()` | Rama: `data.get('ref', 'unknown')` |
-| 12 | `github_webhook()` | Recordar la entrega: `processed_deliveries.add(delivery_id)` |
-| 13 | `github_webhook()` | Código de estado de éxito: `200` |
+| 4 | `@app._____("/webhooks/github", ...)` | Método HTTP (decorador, **impide arrancar**): `post` |
+| 5 | `@app.post("/webhooks/github", status_code=_____)` | Código de estado de éxito (decorador, **impide arrancar**): `200` |
+| 6 | `github_webhook()` | Cuerpo en bruto: `await request.body()` |
+| 7 | `github_webhook()` | Comprobación de duplicados: `if delivery_id in processed_deliveries:` |
+| 8 | `github_webhook()` | Parsear el JSON (¡después de verificar!): `json.loads(body)` |
+| 9 | `github_webhook()` | Repositorio: `data.get('repository', {})` |
+| 10 | `github_webhook()` | Quién hizo push: `data.get('pusher', {})` |
+| 11 | `github_webhook()` | Commits: `data.get('commits', [])` |
+| 12 | `github_webhook()` | Rama: `data.get('ref', 'unknown')` |
+| 13 | `github_webhook()` | Recordar la entrega: `processed_deliveries.add(delivery_id)` |
+
+Solo los huecos 4 y 5 impiden que la app arranque (están en el decorador, que se ejecuta al cargar el archivo). Los demás fallan únicamente cuando un webhook llega a esa línea.
 
 La función de firma que completas:
 
@@ -346,9 +358,9 @@ La función de firma que completas:
 def verify_github_signature(payload_body, signature_header, secret):
     # TODO: Only accept the SHA-256 format
     # Hint: GitHub's header starts with 'sha256='
-    if not signature_header or not signature_header.startswith('_____'):
+    if not signature_header or not signature_header.startswith("_____"):
         return False
-    received_signature = signature_header[len('sha256='):]
+    received_signature = signature_header[len("sha256="):]
 
     # TODO: Recompute the signature over the exact bytes we received
     # Hint: hmac.new(key_bytes, message_bytes, hashlib.sha256).hexdigest()
@@ -362,37 +374,43 @@ def verify_github_signature(payload_body, signature_header, secret):
 Y la parte de seguridad del endpoint:
 
 ```python
-@app.route('/webhooks/github', methods=['_____'])  # TODO: Which HTTP method? Hint: POST
-def github_webhook():
+@app._____("/webhooks/github", status_code=_____)  # TODO: Which HTTP method? Which status code on success?
+# Hint: Webhooks use POST to send data to your server; success is 200
+async def github_webhook(request: Request) -> dict:
     # 1. Sin secreto -> rechazar (nunca aceptar peticiones sin firmar)
-    secret = os.environ.get('GITHUB_WEBHOOK_SECRET')
+    secret = os.environ.get("GITHUB_WEBHOOK_SECRET")
     if not secret:
-        return jsonify({'error': 'Webhook secret not configured', ...}), 503
+        return JSONResponse({"error": "Webhook secret not configured", ...}, status_code=503)
 
-    # 2. TODO: Read the RAW body bytes. Hint: request.get_data()
-    body = request._____()
-    signature = request.headers.get('X-Hub-Signature-256')
+    # 2. TODO: Read the RAW body bytes. Hint: await request.body()
+    body = await request._____()
+    signature = request.headers.get("X-Hub-Signature-256")
     if not verify_github_signature(body, signature, secret):
-        return jsonify({'error': 'Unauthorized', ...}), 401
+        return JSONResponse({"error": "Unauthorized", ...}, status_code=401)
 
     # 3. Deduplicar
-    delivery_id = request.headers.get('X-GitHub-Delivery')
+    delivery_id = request.headers.get("X-GitHub-Delivery")
     ...
     # TODO: If we already processed this delivery ID, ignore it
     if delivery_id in _____:
-        return jsonify({'status': 'duplicate, ignored', 'delivery_id': delivery_id}), 200
+        return {"status": "duplicate, ignored", "delivery_id": delivery_id}
 
-    # TODO: Only now is it safe to parse the JSON. Hint: request.get_json(silent=True)
-    data = _____
+    # TODO: Only now is it safe to parse the JSON. Hint: json.loads(body)
+    try:
+        data = json._____(body)
+    except ValueError:
+        data = None
     ...
     # (extraer repository, pusher, commits y ref, mostrarlos y guardar un registro mínimo)
     ...
     # TODO: Remember this delivery. Hint: processed_deliveries.add(delivery_id)
     processed_deliveries._____(delivery_id)
 
-    # TODO: Return success response. Hint: 200
-    return jsonify({'status': 'received', 'commits_processed': len(commits)}), _____
+    # El código de estado (200) ya se fijó en el decorador: solo devuelve el dict
+    return {"status": "received", "commits_processed": len(commits)}
 ```
+
+Las respuestas de error (503, 401, 400) son `JSONResponse(..., status_code=...)`: devolver un objeto de respuesta permite que una misma función responda con distintos códigos de estado y conserve la forma `{"error": ..., "message": ...}`.
 
 Estructura real del payload de push de GitHub (la parte que leemos):
 ```
@@ -408,9 +426,9 @@ Estructura real del payload de push de GitHub (la parte que leemos):
 
 Antes de meter a GitHub por medio, demuestra que tu endpoint acepta las firmas buenas y rechaza las malas. `example/send_signed_webhook.py` firma un payload de push de ejemplo exactamente igual que GitHub y lo envía a tu app.
 
-**Terminal 1 - Flask** (con `GITHUB_WEBHOOK_SECRET` definida, Tarea 2.2):
+**Terminal 1 - API** (con `GITHUB_WEBHOOK_SECRET` definida, Tarea 2.2):
 ```bash
-python app.py
+fastapi dev app.py
 ```
 
 **Terminal 2 - script auxiliar** (define **el mismo** `GITHUB_WEBHOOK_SECRET` también en esta terminal):
@@ -420,10 +438,10 @@ python example/send_signed_webhook.py
 
 Salida esperada (los IDs de entrega cambiarán):
 ```
-[valid       ] delivery=6f1c... -> HTTP 200 {"commits_processed":1,"status":"received"}
-[valid       ] delivery=0b7e... -> HTTP 200 {"commits_processed":1,"status":"received"}
+[valid       ] delivery=6f1c... -> HTTP 200 {"status":"received","commits_processed":1}
+[valid       ] delivery=0b7e... -> HTTP 200 {"status":"received","commits_processed":1}
    ...sending the same delivery ID again (simulating a GitHub retry):
-[valid       ] delivery=0b7e... -> HTTP 200 {"delivery_id":"0b7e...","status":"duplicate, ignored"}
+[valid       ] delivery=0b7e... -> HTTP 200 {"status":"duplicate, ignored","delivery_id":"0b7e..."}
 [tampered    ] delivery=9a42... -> HTTP 401 {"error":"Unauthorized","message":"Missing or invalid X-Hub-Signature-256 signature"}
 [unsigned    ] delivery=c3d5... -> HTTP 401 {"error":"Unauthorized",...}
 [wrong-prefix] delivery=e8f0... -> HTTP 401 {"error":"Unauthorized",...}
@@ -431,7 +449,7 @@ Salida esperada (los IDs de entrega cambiarán):
 
 Después comprueba que el duplicado **no** se ha guardado dos veces:
 ```bash
-curl http://127.0.0.1:5000/webhooks/events
+curl http://127.0.0.1:8000/webhooks/events
 # total_events: 2  (dos entregas válidas distintas; la repetida cuenta una sola vez)
 ```
 
@@ -444,22 +462,22 @@ Puedes ejecutar un solo caso con `--mode valid|duplicate|tampered|unsigned|wrong
 - **unsigned** → sin cabecera: rechazado, aunque el JSON sea perfectamente válido.
 - **wrong-prefix** → el digest correcto con prefijo `sha1=`: rechazado, solo se acepta `sha256=`.
 
-### Tarea 2.5: Ejecutar tu App Flask y ngrok
+### Tarea 2.5: Ejecutar tu API y ngrok
 
-**Terminal 1 - Flask** (con `GITHUB_WEBHOOK_SECRET` definida):
+**Terminal 1 - API** (con `GITHUB_WEBHOOK_SECRET` definida):
 ```bash
 cd exercises/16-webhooks-ngrok
-python app.py
+fastapi dev app.py
 ```
 
 **Terminal 2 - ngrok:**
 ```bash
-ngrok http 5000
+ngrok http 8000
 ```
 
 **Copia tu URL de ngrok** de la salida:
 ```
-Forwarding    https://abc123-xyz.ngrok-free.app -> http://localhost:5000
+Forwarding    https://abc123-xyz.ngrok-free.app -> http://localhost:8000
               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
               ¡Copia esta URL!
 ```
@@ -495,14 +513,14 @@ ngrok te da una URL **HTTPS**: úsala. Los payloads y las firmas de los webhooks
 
 4. **Verifica la Configuración**
    - GitHub enviará inmediatamente un evento "ping" firmado
-   - Mira tu terminal de Flask: deberías ver `GitHub Webhook Ping Received!`
+   - Mira tu terminal de la API: deberías ver `GitHub Webhook Ping Received!`
    - En GitHub, baja hasta "Recent Deliveries": debería aparecer un check verde ✅
 
 **Problema Común**: Si ves una X roja, comprueba:
-- ¿Está Flask en marcha? ¿Está ngrok en marcha?
+- ¿Está la API en marcha? ¿Está ngrok en marcha?
 - ¿Copiaste la URL de ngrok correcta, incluyendo `/webhooks/github`?
 - **401 Unauthorized** → el Secret de GitHub y `GITHUB_WEBHOOK_SECRET` son distintos (cópialos otra vez, sin espacios de más), o definiste la variable en otra terminal.
-- **503** → `GITHUB_WEBHOOK_SECRET` no está definida en la terminal donde se ejecuta Flask.
+- **503** → `GITHUB_WEBHOOK_SECRET` no está definida en la terminal donde se ejecuta la API.
 - **400 Invalid payload** → el Content type no es `application/json`.
 
 ### Tarea 2.7: Disparar el Webhook con un Push Real
@@ -517,15 +535,15 @@ ngrok te da una URL **HTTPS**: úsala. Los payloads y las firmas de los webhooks
 5. Baja y haz clic en **Commit changes**
 6. Vuelve a hacer clic en **Commit changes**
 
-**Mira tu terminal de Flask**: deberías ver:
+**Mira tu terminal de la API**: deberías ver:
 ```
 ============================================================
-🎉 REAL GitHub Webhook Received!
-🆔 Delivery: 72d3162e-cc78-11e3-81ab-4c9367dc0958
-📦 Repository: tu-usuario/api-webhook-test
-👤 Pushed by: tu-usuario
-🌿 Branch: refs/heads/main
-📝 Commits: 1
+REAL GitHub Webhook Received!
+Delivery: 72d3162e-cc78-11e3-81ab-4c9367dc0958
+Repository: tu-usuario/api-webhook-test
+Pushed by: tu-usuario
+Branch: refs/heads/main
+Commits: 1
    1. [a1b2c3d] Update README.md (by Tu Nombre)
 ============================================================
 ```
@@ -569,7 +587,7 @@ Ahora que entiendes los webhooks, practica compartiendo tu API con tus compañer
 
 ### Tarea 3.1: Compartir tu API
 
-1. Asegúrate de que tu app Flask y ngrok están en marcha
+1. Asegúrate de que tu API y ngrok están en marcha
 2. Comparte tu URL de ngrok con un compañero: `https://tu-url.ngrok-free.app`
 3. Pídele que pruebe tus endpoints `/health` e `/info`
 
@@ -611,7 +629,7 @@ Ahora que entiendes los webhooks, practica compartiendo tu API con tus compañer
    - Usa la URL de tu compañero: `https://url-companero.ngrok-free.app/webhooks/github`
    - Content type `application/json`, y su secreto en el campo **Secret**
 3. Haz un commit en **tu** repo
-4. ¡La app Flask de tu compañero recibe la notificación!
+4. ¡La API de tu compañero recibe la notificación!
 
 **Esto demuestra comunicación entre microservicios**: un servicio notifica a otro sobre eventos, autenticado con un secreto compartido.
 
@@ -625,7 +643,7 @@ Las partes importantes ya las implementaste en la Parte 2. Esta sección las res
 
 | Regla | Por qué | Dónde en tu código |
 |-------|---------|--------------------|
-| **Verificar la firma HMAC sobre el cuerpo en bruto, en tiempo constante** | Cualquiera puede hacer POST a una URL pública; solo GitHub conoce el secreto | `verify_github_signature()` + `request.get_data()` + `hmac.compare_digest` |
+| **Verificar la firma HMAC sobre el cuerpo en bruto, en tiempo constante** | Cualquiera puede hacer POST a una URL pública; solo GitHub conoce el secreto | `verify_github_signature()` + `await request.body()` + `hmac.compare_digest` |
 | **Responder 2xx rápido, procesar después** | GitHub corta a los 10 s y reintenta | Guardado mínimo + `return ..., 200`; el trabajo real va a una cola |
 | **Deduplicar por ID de evento** | Reintentos y reentregas envían el mismo evento otra vez | `X-GitHub-Delivery` + `processed_deliveries` |
 | **Usar HTTPS** | Payloads y firmas no deben viajar en claro | URL `https://` de ngrok, SSL verification activada en GitHub |
@@ -635,7 +653,7 @@ Las partes importantes ya las implementaste en la Parte 2. Esta sección las res
 Con la app en marcha en local (y el secreto definido), prueba:
 1. `python example/send_signed_webhook.py --mode tampered` → **401**
 2. `python example/send_signed_webhook.py --mode unsigned` → **401**
-3. Para la app, **elimina** la variable (`unset GITHUB_WEBHOOK_SECRET` / `Remove-Item Env:GITHUB_WEBHOOK_SECRET` / `set GITHUB_WEBHOOK_SECRET=`), arráncala de nuevo y envía un webhook válido desde otra terminal → **503**, y el aviso de arranque en la terminal de Flask.
+3. Para la app, **elimina** la variable (`unset GITHUB_WEBHOOK_SECRET` / `Remove-Item Env:GITHUB_WEBHOOK_SECRET` / `set GITHUB_WEBHOOK_SECRET=`), arráncala de nuevo y envía un webhook válido desde otra terminal → **503**, y el aviso de arranque en la terminal de la API.
 4. Cambia el secreto en GitHub pero no en tu terminal y haz push → GitHub muestra una X roja con **401** en "Recent Deliveries".
 
 ### Tarea 4.3: Inspección y Repetición de Peticiones
@@ -678,7 +696,7 @@ El panel de ngrok es utilísimo:
 
 5. **Rate limiting**
    - Añade rate limiting para evitar abusos
-   - Usa Flask-Limiter (ver Ejercicio 14)
+   - Usa slowapi (ver Ejercicio 14)
 
 6. **Variables de entorno**
    - Nunca hagas commit de secretos de webhook, URLs de ngrok ni authtokens
@@ -689,16 +707,16 @@ El panel de ngrok es utilísimo:
 ```python
 import os
 
-@app.route('/webhooks/github', methods=['POST'])
-def github_webhook():
+@app.post("/webhooks/github", status_code=200)
+async def github_webhook(request: Request) -> dict:
     # El secreto sale solo del entorno, nunca del código
-    secret = os.environ.get('GITHUB_WEBHOOK_SECRET')
+    secret = os.environ.get("GITHUB_WEBHOOK_SECRET")
     if not secret:
-        return jsonify({'error': 'Webhook secret not configured'}), 503
+        return JSONResponse({"error": "Webhook secret not configured"}, status_code=503)
 
-    signature = request.headers.get('X-Hub-Signature-256')
-    if not verify_github_signature(request.get_data(), signature, secret):
-        return jsonify({'error': 'Unauthorized'}), 401
+    signature = request.headers.get("X-Hub-Signature-256")
+    if not verify_github_signature(await request.body(), signature, secret):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     # Deduplicar, guardar lo mínimo, responder 2xx...
 ```
 
@@ -708,7 +726,7 @@ def github_webhook():
 **Solución:** Crea una cuenta gratuita en ngrok.com y añade el authtoken
 
 ### Problema 2: La URL de ngrok devuelve "Invalid Host header"
-**Solución:** Algunos frameworks comprueban la cabecera Host. Con Flask no debería pasar. En otros frameworks, configura los hosts permitidos.
+**Solución:** Algunos frameworks comprueban la cabecera Host. Con FastAPI (uvicorn) no debería pasar. En otros frameworks, configura los hosts permitidos.
 
 ### Problema 3: No puedo acceder desde el móvil
 **Solución:**
@@ -718,8 +736,8 @@ def github_webhook():
 
 ### Problema 4: Connection timed out
 **Solución:**
-- Asegúrate de que la app Flask está realmente en marcha
-- Confirma que ngrok apunta al puerto correcto (5000)
+- Asegúrate de que la API está realmente en marcha
+- Confirma que ngrok apunta al puerto correcto (8000)
 - Revisa la configuración del firewall
 
 ### Problema 5: "ERR_NGROK_3200 - Tunnel Limit Reached"
@@ -728,18 +746,18 @@ def github_webhook():
 ### Problema 6: Todos los webhooks devuelven 401
 **Solución:**
 - El Secret de GitHub y `GITHUB_WEBHOOK_SECRET` deben ser **idénticos** (sin espacios, sin comillas dentro del valor)
-- La variable debe estar definida en la terminal que ejecuta Flask, **antes** de `python app.py`
-- Asegúrate de verificar `request.get_data()` (bytes en bruto), no el JSON re-serializado
+- La variable debe estar definida en la terminal que ejecuta la API, **antes** de `fastapi dev app.py`
+- Asegúrate de verificar `await request.body()` (bytes en bruto), no el JSON re-serializado
 - Asegúrate de comparar con la parte **después** de `sha256=`
 
 ### Problema 7: El webhook devuelve 503
-**Solución:** `GITHUB_WEBHOOK_SECRET` no está definida en la terminal de Flask. Defínela (Tarea 2.2) y reinicia la app.
+**Solución:** `GITHUB_WEBHOOK_SECRET` no está definida en la terminal de la API. Defínela (Tarea 2.2) y reinicia la app.
 
 ## Lista de Comprobación
 
 **Parte 1: Configuración Básica**
 - [ ] ngrok instalado y autenticado
-- [ ] La app Flask se ejecuta en localhost:5000
+- [ ] La API se ejecuta en localhost:8000
 - [ ] ngrok expone la app correctamente
 - [ ] URL pública accesible desde el navegador
 - [ ] URL pública accesible desde curl
@@ -753,7 +771,7 @@ def github_webhook():
 - [ ] Webhook configurado en los ajustes de GitHub (`application/json`, mismo Secret)
 - [ ] Evento ping de GitHub recibido correctamente (check verde)
 - [ ] Commit hecho para disparar el webhook
-- [ ] Webhook recibido y mostrado en la terminal de Flask
+- [ ] Webhook recibido y mostrado en la terminal de la API
 - [ ] Vistos los detalles completos del commit en el log
 - [ ] Inspeccionados el payload y las cabeceras de firma en el panel de ngrok
 - [ ] Repetida una entrega y visto "duplicate, ignored"
@@ -833,7 +851,7 @@ En el Ejercicio 15 (ProManage) trabajarás en equipos donde:
 - **ngrok te permite compartir tu API sin desplegarla**
 
 Escenario de ejemplo:
-- Estudiante A: Servicio de autenticación de usuarios (puerto 5000)
+- Estudiante A: Servicio de autenticación de usuarios (puerto 8000)
 - Estudiante B: Servicio de gestión de proyectos (puerto 5001)
 - Estudiante C: Servicio de gestión de tareas (puerto 5002)
 
@@ -841,7 +859,7 @@ Cada uno ejecuta su servicio en local, lo expone con ngrok y comparte las URLs c
 
 ```bash
 # Servicio de autenticación del Estudiante A
-ngrok http 5000
+ngrok http 8000
 # Compartir: https://student-a.ngrok-free.app
 
 # Servicio de proyectos del Estudiante B
@@ -864,7 +882,7 @@ curl https://student-b.ngrok-free.app/projects -H "Authorization: Bearer <token>
 - **[Crear Webhooks de GitHub](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks)** - Guía de configuración
 
 ### Tutoriales
-- [Integración ngrok + Flask](https://ngrok.com/docs/integrations/python/flask) - Guía oficial para Flask
+- [Integración ngrok + Python](https://ngrok.com/docs/integrations/python/flask) - Guía oficial para Python (escrita para Flask, misma idea)
 - [Validar entregas de webhooks de GitHub](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries) - Verificación de firmas
 - [Buenas prácticas de webhooks (GitHub)](https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks) - Responder rápido, gestionar reentregas
 - [Stripe: verificar firmas de webhooks](https://docs.stripe.com/webhooks#verify-events) - La misma idea con `Stripe-Signature`
@@ -881,17 +899,17 @@ Al completar este ejercicio deberías tener:
 
 1. **Configuración de ngrok**:
    - ngrok instalado y autenticado
-   - API Flask expuesta correctamente con una URL pública
+   - API expuesta correctamente con una URL pública
 
 2. **Webhook Real y Firmado de GitHub**:
    - Repositorio de GitHub con el webhook configurado (`application/json`, Secret definido)
-   - App Flask recibiendo eventos push reales
+   - App recibiendo eventos push reales
    - TODOs de `app.py` completados: verificación de firma, deduplicación y manejo del payload
 
 3. **Evidencias** (capturas o documentación):
    - Terminal de ngrok mostrando la URL pública
    - Página de ajustes del webhook en GitHub mostrando el webhook activo con check verde
-   - Terminal de Flask mostrando el webhook recibido con los detalles del commit
+   - Terminal de la API mostrando el webhook recibido con los detalles del commit
    - Salida de `send_signed_webhook.py` mostrando 200 / "duplicate, ignored" / 401
    - Panel de ngrok (localhost:4040) mostrando la petición del webhook de GitHub y su cabecera de firma
 
@@ -905,11 +923,11 @@ Tu trabajo se evaluará según:
 
 1. **Configuración de ngrok** (15%):
    - ngrok bien instalado y autenticado
-   - App Flask expuesta correctamente con una URL pública
+   - App expuesta correctamente con una URL pública
 
 2. **Webhook Real de GitHub** (30%):
    - Webhook de GitHub bien configurado
-   - El endpoint Flask maneja correctamente los payloads reales de GitHub
+   - El endpoint del webhook maneja correctamente los payloads reales de GitHub
    - Recibe y procesa eventos push con éxito
    - Extracción correcta de repository, pusher, commits y ref
 
