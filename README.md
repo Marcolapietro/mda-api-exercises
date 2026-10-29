@@ -4,22 +4,29 @@ Hands-on exercises for the API Management course (EDEM MDIA). You build and secu
 
 ## Setup
 
-Python 3.12 or newer. Inside the exercise folder you are working on:
+Python 3.12 or newer. On Windows, clone or copy the repo to a short folder such as `C:\edem` and work there, because pip can hit the long-path limit inside deep OneDrive folders.
+
+Inside the exercise folder you are working on, create the virtual environment:
 
 ```bash
 python -m venv venv
-pip install -r requirements.txt
-fastapi dev app.py
 ```
 
-Activate the virtual environment after creating it and before `pip install`:
+Activate it (do this before installing anything):
 
 - Windows: `venv\Scripts\activate`
 - macOS / Linux: `source venv/bin/activate`
 
-On Windows, keep the folder path short (for example `C:\edem`) when you create the venv, because pip can hit the long-path limit inside deep OneDrive folders.
+Then install the dependencies and run the app:
 
-Then open http://127.0.0.1:8000/docs for the interactive documentation. Each exercise has its own `readme<NN>.md` with the instructions (some also have `readme<NN>_es.md` in Spanish) and a finished solution in `example/`. Exercises 07 and 17 name their own files in their README (07: `documented_api.py` and `undocumented_api.py` in `01-problem-and-solution`; 17: `notes_api.py`), and exercises 01, 02 and 18 have no code.
+```bash
+pip install -r requirements.txt
+fastapi dev app.py
+```
+
+Exercises 07 and 17 name their own files in their README (07: `documented_api.py` and `undocumented_api.py` in `01-problem-and-solution`; 17: `notes_api.py`), and exercises 01, 02 and 18 have no code.
+
+Then open http://127.0.0.1:8000/docs for the interactive documentation. Each exercise has its own `readme<NN>.md` with the instructions (some also have `readme<NN>_es.md` in Spanish) and a finished solution in `example/`.
 
 ## Exercises
 
