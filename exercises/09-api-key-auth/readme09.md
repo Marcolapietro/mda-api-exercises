@@ -15,7 +15,7 @@ pip install -r requirements.txt
 fastapi dev app.py
 ```
 
-Fill the blanks (`_____`) from top to bottom; the app starts once the `auto_error` of `APIKeyHeader`, the decorator of `/api-key/rotate` and the `Depends(...)` of `get_users` are complete. The other blanks (the header names, `401`, `token_urlsafe`, `sha256`, `compare_digest`) are only used when a request reaches them, so you will notice them while testing.
+Fill the blanks (`_____`) from top to bottom; the app starts once the `auto_error` of `APIKeyHeader`, the decorator of `/api-key/rotate` and the `Depends(...)` of `get_users` are complete. The other blanks (the header names, `401`, `token_urlsafe`, `sha256`, `compare_digest`) are only used when a request reaches them, so you will notice them while testing. If you leave `name="_____"` unfilled, the server looks for a header literally called `_____` and every request answers `401` "API key missing".
 
 ---
 
@@ -117,7 +117,7 @@ curl -X POST -H "Content-Type: application/json" \
 }
 ```
 
-The password is hashed with `bcrypt` and validated like in Exercise 08 (8 to 72 characters). Normal requests use the API key; the password is kept to rotate or revoke the key.
+The password is hashed with `bcrypt` and validated like in Exercise 08 (8 to 72 printable ASCII characters; the username cannot contain spaces or `:`, because HTTP Basic sends `username:password` as ASCII). Normal requests use the API key; the password is kept to rotate or revoke the key.
 
 **Client saves this API key** in an environment variable or a secrets manager. Never commit it to Git.
 
@@ -185,7 +185,7 @@ curl -X DELETE -u alice:secret123 http://127.0.0.1:8000/api-key
 You need to fill in **9 strategic blanks** (search for `_____`):
 
 1. **`api_key_header`**: The header name, `X-API-Key`
-2. **`api_key_header`**: `auto_error=False`, so a missing header gives `None` instead of an automatic `403`
+2. **`api_key_header`**: `auto_error=False`, so a missing header gives `None` and we return our own 401 message and `WWW-Authenticate` header (FastAPI's default is a generic `401 Not authenticated`)
 3. **`generate_api_key()`**: Generate the random part with `secrets.token_urlsafe(32)`
 4. **`hash_api_key()`**: Hash the key with `hashlib.sha256(...)`
 5. **`find_user_by_api_key()`**: Compare hashes with `hmac.compare_digest()`
@@ -265,7 +265,7 @@ def find_user_by_api_key(api_key: str) -> str | None:
 
 #### 4. A Dependency that Protects Routes
 
-Exercise 08 introduced `Depends` and `fastapi.security`; this exercise uses a second ready-made class, `APIKeyHeader`. It reads one header (here `X-API-Key`) and hands its value to your dependency. By default it answers **403** by itself when the header is missing; with `auto_error=False` it gives you `None` instead, so `get_current_user` can answer the **401** the course teaches (401 means "I do not know who you are", 403 means "I know you, but you may not") together with a `WWW-Authenticate` header.
+Exercise 08 introduced `Depends` and `fastapi.security`; this exercise uses a second ready-made class, `APIKeyHeader`. It reads one header (here `X-API-Key`) and hands its value to your dependency. With `auto_error=False` it gives you `None` when the header is missing, which lets `get_current_user` return our own **401** message and `WWW-Authenticate` header (FastAPI's default is a generic `401 Not authenticated`). `ApiKey` is not an IANA-registered `WWW-Authenticate` scheme (nor is FastAPI's `APIKey`); it is fine for teaching.
 
 ```python
 from typing import Annotated
@@ -330,13 +330,18 @@ def rotate_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, s
     # Overwriting the hash invalidates the old key immediately
     users[user]["api_key_hash"] = hash_api_key(new_api_key)
 
-    return {"message": "API key rotated", "username": user, "api_key": new_api_key}   # shown once
+    return {
+        "message": "API key rotated. The previous key no longer works.",
+        "username": user,
+        "api_key": new_api_key,   # shown once
+        "warning": "Store this API key now. It will not be shown again.",
+    }
 
 
 @app.delete("/api-key")
 def revoke_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, str]:
     users[user]["api_key_hash"] = None
-    return {"message": "API key revoked", "username": user}
+    return {"message": "API key revoked. Use POST /api-key/rotate to get a new one.", "username": user}
 ```
 
 - **Rotate** regularly, and always when a key may have leaked or someone who knew it leaves the team
@@ -544,7 +549,7 @@ curl -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/users
 ```
 
 **Solution:**
-Make sure you're including the `-H` flag with curl:
+If *every* request fails this way, even with the header, check the `name="_____"` blank of `APIKeyHeader`: left unfilled, the server looks for a header literally called `_____`. Otherwise, make sure you're including the `-H` flag with curl:
 ```bash
 # Wrong (no header)
 curl http://127.0.0.1:8000/users
@@ -750,7 +755,7 @@ def create_user(user: Annotated[str, Depends(require_scope("write"))]):
 ✅ Quick prototypes
 ✅ Key management endpoints (rotate/revoke), as in this exercise
 
-### Use JWT (Next Exercise) When:
+### Use JWT (Exercise 11) When:
 
 ✅ Stateless authentication needed
 ✅ Microservices architecture
@@ -783,7 +788,7 @@ def create_user(user: Annotated[str, Depends(require_scope("write"))]):
 
 4. **Header-based Authentication**
    - Send keys in a header (`X-API-Key`), never in URLs
-   - Use `APIKeyHeader(name="X-API-Key", auto_error=False)` and answer 401 yourself
+   - Use `APIKeyHeader(name="X-API-Key", auto_error=False)` to return your own 401 message and `WWW-Authenticate` header (FastAPI's default is a generic `401 Not authenticated`)
    - Headers are case-insensitive (`x-api-key` is the same header)
 
 5. **Security Best Practices**
@@ -793,8 +798,7 @@ def create_user(user: Annotated[str, Depends(require_scope("write"))]):
    - Always use HTTPS in production
 
 **Next Steps:**
-- **Exercise 11**: JWT Authentication (stateless tokens)
 - **Exercise 10**: Consuming External Public APIs
-- **Exercise 05**: CRUD Operations
+- **Exercise 11**: JWT Authentication (stateless tokens)
 
 Good luck! 🔑

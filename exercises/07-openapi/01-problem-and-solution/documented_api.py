@@ -31,14 +31,6 @@ class Book(BookCreate):
     id: int = Field(description='The book unique identifier', examples=[1])
 
 
-# PUT only changes the fields you send, so every field is optional
-class BookUpdate(BaseModel):
-    title: str | None = Field(default=None, description='Book title', examples=['1984 (Updated)'])
-    author: str | None = Field(default=None, description='Book author', examples=['George Orwell'])
-    year: int | None = Field(default=None, description='Publication year', examples=[1949])
-    isbn: str | None = Field(default=None, description='ISBN number', examples=['978-0451524935'])
-
-
 # In-memory book storage
 books: dict[int, Book] = {
     1: Book(id=1, title='1984', author='George Orwell', year=1949, isbn='978-0451524935'),
@@ -52,7 +44,7 @@ next_id = 4
 def list_books(
     author: Annotated[str | None, Query(description='Filter books by author name (partial match)')] = None,
     page: Annotated[int, Query(ge=1, description='Page number for pagination')] = 1,
-    limit: Annotated[int, Query(ge=1, description='Number of books per page')] = 10
+    limit: Annotated[int, Query(ge=1, le=100, description='Number of books per page')] = 10
 ) -> list[Book]:
     """Returns a list of books with optional filtering and pagination."""
     result = list(books.values())
@@ -87,15 +79,14 @@ def get_book(book_id: int) -> Book:
     return books[book_id]
 
 
-@app.put('/api/books/{book_id}', tags=['books'], summary='Update a book',
+@app.put('/api/books/{book_id}', tags=['books'], summary='Replace a book',
          responses={404: {'description': 'Book not found'}})
-def update_book(book_id: int, data: BookUpdate) -> Book:
-    """All fields are optional - only provided fields will be updated."""
+def update_book(book_id: int, data: BookCreate) -> Book:
+    """PUT replaces the whole book: send every field (year and isbn may be null). The id does not change."""
     if book_id not in books:
         raise HTTPException(status_code=404, detail=f'Book {book_id} not found')
 
-    # exclude_unset keeps only the fields that were actually sent in the request
-    books[book_id] = books[book_id].model_copy(update=data.model_dump(exclude_unset=True))
+    books[book_id] = Book(id=book_id, **data.model_dump())
     return books[book_id]
 
 

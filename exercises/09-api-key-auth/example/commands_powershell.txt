@@ -56,7 +56,7 @@ try {
         Write-Host "New API key issued: $apiKey" -ForegroundColor Green
     } catch {
         Show-HttpError $_ "Could not rotate API key"
-        exit
+        return
     }
     Write-Host ""
 }

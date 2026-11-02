@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field, field_validator
 app = FastAPI(title="API Key Auth")
 
 # APIKeyHeader reads the X-API-Key header and hands its value to our dependency.
-# auto_error=False: if the header is missing we get None and answer 401 ourselves
-# (by default FastAPI would answer 403).
+# auto_error=False lets us return our own 401 message and WWW-Authenticate header
+# (FastAPI's default is a generic 401 Not authenticated).
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 # HTTPBasic (as in Exercise 08) is used only to rotate or revoke a key:
@@ -45,8 +45,9 @@ DUMMY_HASH = hash_password("not-a-real-password")
 
 
 class UserCreate(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=8, max_length=72)
+    # HTTP Basic sends "username:password" as ASCII: printable ASCII only, and no spaces or ':' in the username
+    username: str = Field(min_length=1, max_length=32, pattern=r"^[\x21-\x39\x3b-\x7e]+$")
+    password: str = Field(min_length=8, max_length=72, pattern=r"^[\x20-\x7e]+$")
 
     @field_validator("password")
     @classmethod
@@ -97,6 +98,7 @@ def find_user_by_api_key(api_key: str) -> str | None:
 def get_current_user(api_key: Annotated[str | None, Depends(api_key_header)]) -> str:
     """Dependency: returns the username that owns the key, or answers 401."""
     if api_key is None:
+        # "ApiKey" is not an IANA-registered WWW-Authenticate scheme (nor is FastAPI's "APIKey"); fine for teaching
         raise HTTPException(
             status_code=401,
             detail="API key missing: include the X-API-Key header",
@@ -114,7 +116,7 @@ def get_current_user(api_key: Annotated[str | None, Depends(api_key_header)]) ->
 
 def get_basic_user(creds: Annotated[HTTPBasicCredentials, Depends(basic)]) -> str:
     """Dependency: returns the username if username and password are right, or answers 401."""
-    username = next((u for u in users if secrets.compare_digest(u.encode(), creds.username.encode())), None)
+    username = creds.username if creds.username in users else None
     # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
     stored = users[username]["password"] if username else DUMMY_HASH
     password_ok = verify_password(creds.password, stored)

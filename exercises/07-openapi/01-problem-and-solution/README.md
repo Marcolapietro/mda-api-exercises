@@ -22,7 +22,7 @@ You need to integrate with this API, but you have no documentation.
 ### Setup
 
 ```bash
-cd 01-problem-and-solution
+cd exercises/07-openapi/01-problem-and-solution
 python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
@@ -109,7 +109,8 @@ Explore the Swagger UI and answer these questions:
      - Try with ID 999 (should return 404)
 
    - **PUT /api/books/{id}**
-     - Update a book's title
+     - Replace a book: send the whole book (title, author, year, isbn) with a new title
+     - Try sending only `{"title": "New title"}` (should return 422: PUT replaces, it does not patch)
 
    - **DELETE /api/books/{id}**
      - Delete a book

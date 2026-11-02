@@ -20,9 +20,9 @@ from pydantic import BaseModel, Field, field_validator
 app = FastAPI(title="API Key Auth")
 
 # APIKeyHeader reads the X-API-Key header and hands its value to our dependency.
-# auto_error=False: if the header is missing we get None and answer 401 ourselves
-# (by default FastAPI would answer 403).
-# TODO: Which header carries the key, and which value turns the automatic 403 off?
+# auto_error=False lets us return our own 401 message and WWW-Authenticate header
+# (FastAPI's default is a generic 401 Not authenticated).
+# TODO: Which header carries the key, and which value turns the automatic error off?
 # Hint: the header is X-API-Key; auto_error takes a boolean
 api_key_header = APIKeyHeader(name="_____", auto_error=_____)
 
@@ -56,8 +56,9 @@ DUMMY_HASH = hash_password("not-a-real-password")
 
 
 class UserCreate(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=8, max_length=72)
+    # HTTP Basic sends "username:password" as ASCII: printable ASCII only, and no spaces or ':' in the username
+    username: str = Field(min_length=1, max_length=32, pattern=r"^[\x21-\x39\x3b-\x7e]+$")
+    password: str = Field(min_length=8, max_length=72, pattern=r"^[\x20-\x7e]+$")
 
     @field_validator("password")
     @classmethod
@@ -116,6 +117,7 @@ def get_current_user(api_key: Annotated[str | None, Depends(api_key_header)]) ->
     if api_key is None:
         # TODO: Which status code means "you are not authenticated"?
         # Hint: 401 (the invalid-key case below uses the same one, plus WWW-Authenticate: ApiKey)
+        # "ApiKey" is not an IANA-registered WWW-Authenticate scheme (nor is FastAPI's "APIKey"); fine for teaching
         raise HTTPException(
             status_code=_____,
             detail="API key missing: include the X-API-Key header",
@@ -133,7 +135,7 @@ def get_current_user(api_key: Annotated[str | None, Depends(api_key_header)]) ->
 
 def get_basic_user(creds: Annotated[HTTPBasicCredentials, Depends(basic)]) -> str:
     """Dependency: returns the username if username and password are right, or answers 401."""
-    username = next((u for u in users if secrets.compare_digest(u.encode(), creds.username.encode())), None)
+    username = creds.username if creds.username in users else None
     # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
     stored = users[username]["password"] if username else DUMMY_HASH
     password_ok = verify_password(creds.password, stored)
@@ -216,9 +218,9 @@ def revoke_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, s
 # API KEY PROTECTED ENDPOINT (the main pattern to learn)
 # ============================================================================
 
+# TODO: Protect this route: which dependency reads the key and gives us the user?
+# Hint: get_current_user, defined above. Depends() takes the function itself, without ()
 @app.get("/users")
 def get_users(user: Annotated[str, Depends(_____)]) -> dict[str, object]:
     """List all users. Clients must send a valid X-API-Key header."""
-    # TODO: Protect this route: which dependency reads the key and gives us the user?
-    # Hint: get_current_user, defined above. Depends() takes the function itself, without ()
     return {"users": list(users), "count": len(users)}

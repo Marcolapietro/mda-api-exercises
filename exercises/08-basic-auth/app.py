@@ -5,7 +5,6 @@ Run it with:  fastapi dev app.py
 Fill the blanks (_____) from top to bottom; the app starts once the POST decorator and the Depends(...) of get_users are complete.
 """
 
-import secrets
 from typing import Annotated
 
 import bcrypt
@@ -39,8 +38,9 @@ DUMMY_HASH = hash_password("not-a-real-password")
 
 
 class UserCreate(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=8, max_length=72)
+    # HTTP Basic sends "username:password" as ASCII: printable ASCII only, and no spaces or ':' in the username
+    username: str = Field(min_length=1, max_length=32, pattern=r"^[\x21-\x39\x3b-\x7e]+$")
+    password: str = Field(min_length=8, max_length=72, pattern=r"^[\x20-\x7e]+$")
 
     @field_validator("password")
     @classmethod
@@ -52,9 +52,9 @@ class UserCreate(BaseModel):
 
 def get_current_user(creds: Annotated[HTTPBasicCredentials, Depends(security)]) -> str:
     """Dependency: returns the username, or answers 401 if the credentials are wrong."""
-    username = next((u for u in users if secrets.compare_digest(u.encode(), creds.username.encode())), None)
+    username = creds.username if creds.username in users else None
     # Always run the bcrypt check, even for an unknown user, so timing does not reveal who exists
-    password_ok = verify_password(creds.password, users.get(username, DUMMY_HASH))
+    password_ok = verify_password(creds.password, users[username] if username else DUMMY_HASH)
     if username is None or not password_ok:
         # TODO: Which header tells the client what kind of authentication the server expects?
         # Hint: WWW-Authenticate (the 401 response carries it, with the value 'Basic realm="..."')
@@ -76,8 +76,8 @@ def register_user(data: UserCreate) -> dict[str, str]:
     return {"message": "User registered successfully", "username": data.username}
 
 
+# TODO: Protect this route: which dependency checks the credentials and gives us the user?
+# Hint: get_current_user, defined above. Depends() takes the function itself, without ()
 @app.get("/users")
 def get_users(user: Annotated[str, Depends(_____)]) -> dict[str, list[str]]:
-    # TODO: Protect this route: which dependency checks the credentials and gives us the user?
-    # Hint: get_current_user, defined above. Depends() takes the function itself, without ()
     return {"users": list(users)}

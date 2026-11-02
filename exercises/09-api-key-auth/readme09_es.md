@@ -15,7 +15,7 @@ pip install -r requirements.txt
 fastapi dev app.py
 ```
 
-Completa los huecos (`_____`) de arriba abajo; la app arranca cuando están completos el `auto_error` de `APIKeyHeader`, el decorador de `/api-key/rotate` y el `Depends(...)` de `get_users`. Los demás huecos (los nombres de cabecera, `401`, `token_urlsafe`, `sha256`, `compare_digest`) solo se usan cuando una petición llega hasta ellos, así que los notarás al probar.
+Completa los huecos (`_____`) de arriba abajo; la app arranca cuando están completos el `auto_error` de `APIKeyHeader`, el decorador de `/api-key/rotate` y el `Depends(...)` de `get_users`. Los demás huecos (los nombres de cabecera, `401`, `token_urlsafe`, `sha256`, `compare_digest`) solo se usan cuando una petición llega hasta ellos, así que los notarás al probar. Si dejas `name="_____"` sin rellenar, el servidor busca una cabecera que se llama literalmente `_____` y todas las peticiones responden `401` "API key missing".
 
 ---
 
@@ -118,7 +118,7 @@ curl -X POST -H "Content-Type: application/json" \
 }
 ```
 
-La contraseña se hashea con `bcrypt` y se valida como en el Ejercicio 08 (de 8 a 72 caracteres). Las peticiones normales usan la clave API; la contraseña se conserva para rotar o revocar la clave.
+La contraseña se hashea con `bcrypt` y se valida como en el Ejercicio 08 (de 8 a 72 caracteres ASCII imprimibles; el nombre de usuario no puede contener espacios ni `:`, porque HTTP Basic envía `usuario:contraseña` en ASCII). Las peticiones normales usan la clave API; la contraseña se conserva para rotar o revocar la clave.
 
 **El cliente guarda esta clave API** en una variable de entorno o un gestor de secretos. Nunca la subas a Git.
 
@@ -186,7 +186,7 @@ curl -X DELETE -u alice:secret123 http://127.0.0.1:8000/api-key
 Necesitas completar **9 espacios estratégicos** (busca `_____`):
 
 1. **`api_key_header`**: El nombre de la cabecera, `X-API-Key`
-2. **`api_key_header`**: `auto_error=False`, para que una cabecera ausente dé `None` en lugar de un `403` automático
+2. **`api_key_header`**: `auto_error=False`, para que una cabecera ausente dé `None` y devolvamos nuestro propio mensaje 401 y la cabecera `WWW-Authenticate` (por defecto FastAPI responde un `401 Not authenticated` genérico)
 3. **`generate_api_key()`**: Generar la parte aleatoria con `secrets.token_urlsafe(32)`
 4. **`hash_api_key()`**: Hashear la clave con `hashlib.sha256(...)`
 5. **`find_user_by_api_key()`**: Comparar hashes con `hmac.compare_digest()`
@@ -266,7 +266,7 @@ def find_user_by_api_key(api_key: str) -> str | None:
 
 #### 4. Una Dependencia que Protege Rutas
 
-El Ejercicio 08 introdujo `Depends` y `fastapi.security`; este ejercicio usa una segunda clase ya hecha, `APIKeyHeader`. Lee una cabecera (aquí `X-API-Key`) y entrega su valor a tu dependencia. Por defecto responde ella misma **403** cuando falta la cabecera; con `auto_error=False` te da `None`, y así `get_current_user` puede responder el **401** que enseña el curso (401 significa "no sé quién eres", 403 "sé quién eres, pero no tienes permiso") junto con una cabecera `WWW-Authenticate`.
+El Ejercicio 08 introdujo `Depends` y `fastapi.security`; este ejercicio usa una segunda clase ya hecha, `APIKeyHeader`. Lee una cabecera (aquí `X-API-Key`) y entrega su valor a tu dependencia. Con `auto_error=False` te da `None` cuando falta la cabecera, y así `get_current_user` puede devolver nuestro propio mensaje **401** y la cabecera `WWW-Authenticate` (por defecto FastAPI responde un `401 Not authenticated` genérico). `ApiKey` no es un esquema `WWW-Authenticate` registrado en IANA (tampoco lo es el `APIKey` de FastAPI); para enseñar es suficiente.
 
 ```python
 from typing import Annotated
@@ -331,13 +331,18 @@ def rotate_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, s
     # Sobrescribir el hash invalida la clave anterior inmediatamente
     users[user]["api_key_hash"] = hash_api_key(new_api_key)
 
-    return {"message": "API key rotated", "username": user, "api_key": new_api_key}   # se muestra una vez
+    return {
+        "message": "API key rotated. The previous key no longer works.",
+        "username": user,
+        "api_key": new_api_key,   # se muestra una vez
+        "warning": "Store this API key now. It will not be shown again.",
+    }
 
 
 @app.delete("/api-key")
 def revoke_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, str]:
     users[user]["api_key_hash"] = None
-    return {"message": "API key revoked", "username": user}
+    return {"message": "API key revoked. Use POST /api-key/rotate to get a new one.", "username": user}
 ```
 
 - **Rota** con regularidad, y siempre que una clave pueda haberse filtrado o alguien que la conocía deje el equipo
@@ -545,7 +550,7 @@ curl -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/users
 ```
 
 **Solución:**
-Asegúrate de incluir el flag `-H` con curl:
+Si *todas* las peticiones fallan así, incluso con la cabecera, revisa el hueco `name="_____"` de `APIKeyHeader`: sin rellenar, el servidor busca una cabecera que se llama literalmente `_____`. Si no, asegúrate de incluir el flag `-H` con curl:
 ```bash
 # Incorrecto (sin cabecera)
 curl http://127.0.0.1:8000/users
@@ -751,7 +756,7 @@ def create_user(user: Annotated[str, Depends(require_scope("write"))]):
 ✅ Prototipos rápidos
 ✅ Endpoints de gestión de claves (rotar/revocar), como en este ejercicio
 
-### Usar JWT (Siguiente Ejercicio) Cuando:
+### Usar JWT (Ejercicio 11) Cuando:
 
 ✅ Se necesita autenticación sin estado
 ✅ Arquitectura de microservicios
@@ -784,7 +789,7 @@ def create_user(user: Annotated[str, Depends(require_scope("write"))]):
 
 4. **Autenticación Basada en Cabeceras**
    - Envía las claves en una cabecera (`X-API-Key`), nunca en URLs
-   - Usa `APIKeyHeader(name="X-API-Key", auto_error=False)` y responde tú el 401
+   - Usa `APIKeyHeader(name="X-API-Key", auto_error=False)` para devolver tu propio mensaje 401 y la cabecera `WWW-Authenticate` (por defecto FastAPI responde un `401 Not authenticated` genérico)
    - Las cabeceras son insensibles a mayúsculas (`x-api-key` es la misma cabecera)
 
 5. **Mejores Prácticas de Seguridad**
@@ -794,8 +799,7 @@ def create_user(user: Annotated[str, Depends(require_scope("write"))]):
    - Siempre usa HTTPS en producción
 
 **Próximos Pasos:**
-- **Ejercicio 11**: Autenticación JWT (tokens sin estado)
 - **Ejercicio 10**: Consumir APIs Públicas Externas
-- **Ejercicio 05**: Operaciones CRUD
+- **Ejercicio 11**: Autenticación JWT (tokens sin estado)
 
 ¡Buena suerte! 🔑

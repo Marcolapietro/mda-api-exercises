@@ -14,20 +14,18 @@ You'll create a complete Postman collection automatically from an OpenAPI file.
 
 1. Make sure the documented API from Part 1 is still running (http://127.0.0.1:8000)
 2. Open Postman
-3. Click **Import** button (top left)
-4. Choose **Link** tab
-5. Paste: `http://127.0.0.1:8000/openapi.json`
-6. Click **Continue** and then **Import**
+3. Click **Import** (top left)
+4. Paste `http://127.0.0.1:8000/openapi.json` into the box
+5. Click **Import**
 
 #### Method 2: Import from File
 
 Alternatively, you can import the OpenAPI file directly:
 
 1. Open Postman
-2. Click **Import** button
-3. Choose **File** tab
-4. Select the `books-api-openapi.yaml` file from this directory
-5. Click **Import**
+2. Click **Import**
+3. Drop the `books-api-openapi.yaml` file from this directory into the box (or click to browse for it)
+4. Click **Import**
 
 ### Activity 2: Explore the Generated Collection (5 minutes)
 

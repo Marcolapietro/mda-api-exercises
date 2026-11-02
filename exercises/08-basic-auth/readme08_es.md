@@ -11,12 +11,13 @@ En este ejercicio, desarrollarás una API REST sencilla que maneja recursos de "
 ```bash
 cd exercises/08-basic-auth
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 fastapi dev app.py
 ```
 
-Rellena los huecos (`_____`) de arriba abajo; la app arranca cuando el decorador `POST` y el `Depends(...)` de `get_users` están completos. El hueco del nombre de la cabecera solo se usa cuando una petición falla la autenticación, así que lo notarás al probar una contraseña incorrecta.
+Rellena los huecos (`_____`) de arriba abajo; la app arranca cuando el decorador `POST` y el `Depends(...)` de `get_users` están completos. El hueco del nombre de la cabecera solo se usa cuando una petición falla la autenticación: lanza la petición con contraseña incorrecta con `curl -i` y mira la cabecera `WWW-Authenticate`.
 
 ## Requisitos
 1. **Configuración del Proyecto:**
@@ -51,13 +52,13 @@ El hasheo de contraseñas (`hash_password`, `verify_password`) ya está escrito.
    ```bash
    cd exercises/08-basic-auth
    python -m venv venv
-   source venv/bin/activate  # En Windows usa `venv\Scripts\activate`
+   venv\Scripts\activate  # macOS / Linux: source venv/bin/activate
    pip install -r requirements.txt
    ```
 
-2. **Crea la API:**
-   - Configura la aplicación FastAPI.
-   - Define las rutas para registrar y listar usuarios.
+2. **Lee `app.py`:**
+   - La aplicación FastAPI, el diccionario `users` en memoria y las funciones auxiliares de `bcrypt` ya están ahí.
+   - También las dos rutas: `POST /users` registra un usuario y `GET /users` los lista.
 
 3. **Implementa la Autenticación Básica:**
    - Usa `HTTPBasic` de `fastapi.security` y una dependencia `get_current_user` para comprobar las credenciales.
@@ -77,7 +78,7 @@ Una **dependencia** es una función que FastAPI ejecuta *antes* de tu ruta y cuy
 
 ## Reglas de contraseña
 
-Las contraseñas se guardan como hashes `bcrypt`, nunca en texto plano. `hash_password` y `verify_password` envuelven las dos llamadas a `bcrypt`, y el modelo `UserCreate` exige una contraseña de **8 a 72 caracteres**: `bcrypt` no puede manejar más de 72 bytes, así que el modelo rechaza con `422` las contraseñas más largas. Un login con un usuario desconocido también ejecuta una comparación `bcrypt` contra un hash falso, para que el tiempo de respuesta no revele qué usuarios existen.
+Las contraseñas se guardan como hashes `bcrypt`, nunca en texto plano. `hash_password` y `verify_password` envuelven las dos llamadas a `bcrypt`, y el modelo `UserCreate` exige una contraseña de **8 a 72 caracteres ASCII imprimibles**; el nombre de usuario no puede contener espacios ni `:`, porque HTTP Basic envía `usuario:contraseña` en ASCII. `bcrypt` no puede manejar más de 72 bytes, así que el modelo rechaza con `422` las contraseñas más largas, igual que las que no son ASCII. Un login con un usuario desconocido también ejecuta una comparación `bcrypt` contra un hash falso, para que el tiempo de respuesta no revele qué usuarios existen.
 
 ## Ejemplos de Peticiones con `curl`
 

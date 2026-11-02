@@ -4,8 +4,7 @@ This API has NO documentation - students must figure it out through trial and er
 (FastAPI normally serves /docs and /openapi.json; here they are switched off on purpose.)
 """
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Response
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -27,6 +26,9 @@ def index():
 # Support pagination (but students don't know the param names!)
 @app.get('/api/books')
 def list_books(author: str | None = None, page: int = 1, limit: int = 10):
+    if page < 1 or limit < 1 or limit > 100:
+        raise HTTPException(status_code=422, detail='Validation error')
+
     result = list(books.values())
 
     if author:
@@ -34,15 +36,7 @@ def list_books(author: str | None = None, page: int = 1, limit: int = 10):
 
     # Simple pagination
     start = (page - 1) * limit
-    end = start + limit
-    paginated = result[start:end]
-
-    return {
-        'books': paginated,
-        'total': len(result),
-        'page': page,
-        'limit': limit
-    }
+    return result[start:start + limit]
 
 
 @app.post('/api/books', status_code=201)
@@ -51,7 +45,7 @@ def create_book(data: dict | None = None):
 
     # No validation error messages - students must guess what's wrong
     if not data or 'title' not in data or 'author' not in data:
-        return JSONResponse({'error': 'Bad request'}, status_code=400)
+        raise HTTPException(status_code=422, detail='Validation error')
 
     book = {
         'id': next_id,
@@ -69,36 +63,35 @@ def create_book(data: dict | None = None):
 @app.get('/api/books/{book_id}')
 def get_book(book_id: int):
     if book_id not in books:
-        return JSONResponse({'error': 'Not found'}, status_code=404)
+        raise HTTPException(status_code=404, detail=f'Book {book_id} not found')
     return books[book_id]
 
 
 @app.put('/api/books/{book_id}')
 def update_book(book_id: int, data: dict | None = None):
     if book_id not in books:
-        return JSONResponse({'error': 'Not found'}, status_code=404)
+        raise HTTPException(status_code=404, detail=f'Book {book_id} not found')
 
-    if not data:
-        return JSONResponse({'error': 'Bad request'}, status_code=400)
+    # PUT replaces the whole book (students must guess which fields are required)
+    if not data or 'title' not in data or 'author' not in data:
+        raise HTTPException(status_code=422, detail='Validation error')
 
-    # Update fields
-    book = books[book_id]
-    if 'title' in data:
-        book['title'] = data['title']
-    if 'author' in data:
-        book['author'] = data['author']
-    if 'year' in data:
-        book['year'] = data['year']
-    if 'isbn' in data:
-        book['isbn'] = data['isbn']
+    book = {
+        'id': book_id,
+        'title': data['title'],
+        'author': data['author'],
+        'year': data.get('year'),
+        'isbn': data.get('isbn')
+    }
+    books[book_id] = book
 
     return book
 
 
-@app.delete('/api/books/{book_id}')
+@app.delete('/api/books/{book_id}', status_code=204)
 def delete_book(book_id: int):
     if book_id not in books:
-        return JSONResponse({'error': 'Not found'}, status_code=404)
+        raise HTTPException(status_code=404, detail=f'Book {book_id} not found')
 
-    deleted = books.pop(book_id)
-    return {'message': 'Book deleted', 'book': deleted}
+    del books[book_id]
+    return Response(status_code=204)

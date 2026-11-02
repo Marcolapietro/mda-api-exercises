@@ -44,6 +44,7 @@ paths:
         required: false
         schema:
           type: integer
+          maximum: 100
           minimum: 1
           description: Number of books per page
           default: 10
@@ -122,8 +123,9 @@ paths:
     put:
       tags:
       - books
-      summary: Update a book
-      description: All fields are optional - only provided fields will be updated.
+      summary: Replace a book
+      description: 'PUT replaces the whole book: send every field (year and isbn may
+        be null). The id does not change.'
       operationId: update_book_api_books__book_id__put
       parameters:
       - name: book_id
@@ -137,7 +139,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BookUpdate'
+              $ref: '#/components/schemas/BookCreate'
       responses:
         '200':
           description: Successful Response
@@ -256,42 +258,6 @@ components:
       - title
       - author
       title: BookCreate
-    BookUpdate:
-      properties:
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-          description: Book title
-          examples:
-          - 1984 (Updated)
-        author:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Author
-          description: Book author
-          examples:
-          - George Orwell
-        year:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Year
-          description: Publication year
-          examples:
-          - 1949
-        isbn:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Isbn
-          description: ISBN number
-          examples:
-          - 978-0451524935
-      type: object
-      title: BookUpdate
     HTTPValidationError:
       properties:
         detail:

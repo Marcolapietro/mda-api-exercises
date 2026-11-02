@@ -1,4 +1,3 @@
-
 # Part 3: Real-World APIs - Industry Standards
 
 ## How Real Companies Use OpenAPI
@@ -12,7 +11,7 @@ Major tech companies and platforms use OpenAPI to document their APIs. Let's exp
 Visit these real-world OpenAPI specifications and explore them:
 
 #### 1. **Stripe API** (Payment Processing)
-- Swagger UI: https://stripe.com/docs/api
+- Docs: https://docs.stripe.com/api
 - OpenAPI Spec: https://github.com/stripe/openapi
 - **What to notice:**
   - Comprehensive documentation for every endpoint
