@@ -13,7 +13,7 @@ import json
 import os
 import sys
 
-from mcp import Client, StdioServerParameters
+from mcp import Client, MCPError, StdioServerParameters
 
 SERVER_FILE = sys.argv[1] if len(sys.argv) > 1 else 'mcp_server.py'
 
@@ -55,8 +55,11 @@ async def main():
             show(await client.call_tool('get_note', {'note_id': 999}))
 
         print('\nresources/read notes://1')
-        contents = (await client.read_resource('notes://1')).contents
-        print(' ', ' '.join(contents[0].text.split())[:300])
+        try:
+            contents = (await client.read_resource('notes://1')).contents
+            print(' ', ' '.join(contents[0].text.split())[:300])
+        except MCPError as exc:  # a resource error arrives as a JSON-RPC error, not as is_error
+            print(f'  ERROR: {exc}')
 
         print('\ndelete_note is', 'exposed' if 'delete_note' in names else 'NOT exposed (NOTES_ALLOW_DELETE is off)')
 

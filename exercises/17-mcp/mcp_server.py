@@ -8,12 +8,13 @@ Complete the blanks (_____). Then test it (the Notes API must be running: fastap
     python client.py
     npx @modelcontextprotocol/inspector python mcp_server.py
 """
+import json
 import os
 import sys
 
 import httpx
 from mcp.server.mcpserver import MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ResourceError, ResourceNotFoundError, ToolError
 from mcp.types import ToolAnnotations
 
 NOTES_API_URL = os.getenv('NOTES_API_URL', 'http://127.0.0.1:8000')
@@ -36,15 +37,20 @@ def call_api(method, path, **kwargs):
     headers = {'_____': NOTES_API_KEY} if NOTES_API_KEY else {}
     try:
         response = httpx.request(method, NOTES_API_URL + path, headers=headers, timeout=10, **kwargs)
-    except httpx.ConnectError:
-        raise ToolError(f'The Notes API is not running at {NOTES_API_URL}. Start it with: fastapi dev notes_api.py')
+    except httpx.HTTPError as exc:  # connection refused, timeout, DNS... (every httpx transport error)
+        raise ToolError(f'Cannot reach the Notes API at {NOTES_API_URL}: {exc}. Start it with: fastapi dev notes_api.py')
 
     if response.is_error:
         # The API answers with RFC 9457 problem+json: pass the readable "detail" back to the model
+        detail = response.text
         try:
-            detail = response.json().get('detail', response.text)
+            body = response.json()
         except ValueError:
-            detail = response.text
+            body = None
+        if isinstance(body, dict):
+            detail = body.get('detail', detail)
+            if body.get('errors'):  # 422: the field-level errors say WHAT is invalid
+                detail += ' ' + json.dumps(body['errors'])
         raise ToolError(f'{response.status_code}: {detail}')
 
     return response.json() if response.content else None
@@ -92,7 +98,13 @@ if ALLOW_DELETE:
 @mcp.resource('notes://{note_id}', mime_type='application/json')
 def note_resource(note_id: int) -> dict:
     """One note as a resource, e.g. notes://1"""
-    return call_api('GET', f'/notes/{note_id}')
+    # A resource handler must raise ResourceError (ToolError here would count as a crash)
+    try:
+        return call_api('GET', f'/notes/{note_id}')
+    except ToolError as exc:
+        if str(exc).startswith('404'):
+            raise ResourceNotFoundError(str(exc))
+        raise ResourceError(str(exc))
 
 
 if __name__ == '__main__':

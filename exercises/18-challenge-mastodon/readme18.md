@@ -58,7 +58,7 @@ Now you need to obtain your access token. Here's what the application dashboard 
 2. **Copy the Access Token**
    - You will see a field labeled **Your access token**.
    - **CRITICAL**: Copy this token. This is the only credential you need for this challenge.
-   - Unlike X API, Mastodon (by default) only requires this single Bearer token for simple status posting.
+   - Mastodon only requires this single Bearer token for simple status posting: no OAuth flow or extra keys are needed.
 
 ### Step 4: Save your credentials securely
 
@@ -80,7 +80,7 @@ MASTODON_INSTANCE_URL=https://mastodon.social  # Replace with your instance
 Your solution **MUST**:
 
 1. **Authenticate** with the Mastodon API using your Access Token.
-2. **Publish a status** successfully (minimum 1 character, maximum 500 characters by default).
+2. **Publish a status** successfully (minimum 1 character, maximum 500 characters by default; the real limit of your instance is `configuration.statuses.max_characters` in `GET /api/v2/instance`).
 3. **Handle errors** gracefully (invalid tokens, rate limits, network errors).
 4. **Protect secrets** - Use environment variables or secure configuration files.
 5. **Include documentation** - README with setup instructions.
@@ -94,7 +94,7 @@ You're encouraged to extend your solution! All suggestions below are compatible 
 ### Basic enhancements
 
 **Input Validation & Error Handling**
-- Validate status length before sending (1-500 characters).
+- Validate status length before sending (1-500 characters by default; read the instance's limit from `GET /api/v2/instance` → `configuration.statuses.max_characters`).
 - Check for empty or whitespace-only statuses.
 - Handle Mastodon API rate limit errors (HTTP 429) gracefully.
 - Provide meaningful error messages.
@@ -139,7 +139,7 @@ You're encouraged to extend your solution! All suggestions below are compatible 
 - **Public APIs**: Fetch data from free APIs (Weather, News, Quotes) and post updates to Mastodon.
 
 **Media Support**
-- **Image uploads**: Use the `POST /api/v1/media` endpoint to upload an image first, then attach its ID to your status.
+- **Image uploads**: Use the `POST /api/v2/media` endpoint to upload an image first (`/api/v1/media` is deprecated since Mastodon 3.1.3). Processing is asynchronous: poll `GET /api/v1/media/:id` until it returns a `url`, then pass the id in `media_ids[]` when you create the status.
 
 ---
 
@@ -153,8 +153,11 @@ You're encouraged to extend your solution! All suggestions below are compatible 
 
 ### Example: Loading environment variables in Python
 
+The snippet needs `pip install requests python-dotenv`.
+
 ```python
 import os
+import uuid
 from dotenv import load_dotenv
 import requests
 
@@ -167,11 +170,14 @@ def post_status(text):
     url = f"{INSTANCE}/api/v1/statuses"
     headers = {
         "Authorization": f"Bearer {TOKEN}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        # Optional: if the request is retried with the same key, Mastodon does not create a duplicate
+        "Idempotency-Key": str(uuid.uuid4())
     }
     data = {"status": text}
     
     response = requests.post(url, headers=headers, json=data)
+    response.raise_for_status()  # 401 (bad token), 422 (invalid status), 429 (rate limit) become exceptions
     return response.json()
 ```
 
@@ -184,13 +190,15 @@ Include:
 2. **README.md** with installation and usage steps.
 3. **.env.example** template.
 
+Deadline and submission channel: announced in class.
+
 ---
 
 ## 📚 Helpful resources
 
 - [Mastodon API Documentation](https://docs.joinmastodon.org/api/)
 - [Post a Status (Endpoint Docs)](https://docs.joinmastodon.org/methods/statuses/#create)
-- [Mastodon OAuth Scopes](https://docs.joinmastodon.org/api/oauth/scopes/)
+- [Mastodon OAuth Scopes](https://docs.joinmastodon.org/api/oauth-scopes/)
 
 ---
 

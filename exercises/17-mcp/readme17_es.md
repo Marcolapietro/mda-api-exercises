@@ -32,7 +32,7 @@ fastapi dev notes_api.py
 python client.py
 ```
 
-> Necesitas **Python 3.10 o superior** (el paquete `mcp` no funciona con versiones anteriores).
+> Necesitas **Python 3.12 o superior** (el mismo que el resto del curso; el paquete `mcp` no funciona con versiones antiguas).
 
 ## Ficheros
 
@@ -106,7 +106,7 @@ python client.py
    delete_note is NOT exposed (NOTES_ALLOW_DELETE is off)
    ```
 
-   > Si `client.py` solo dice `Connection closed`, tu servidor ha fallado al arrancar. Ejecuta `python mcp_server.py` solo para ver el error de Python (si arranca bien, se queda esperando JSON-RPC por stdin: páralo con `Ctrl+C`).
+   > Si `client.py` solo dice `Connection closed`, tu servidor ha fallado al arrancar. Ejecuta `python mcp_server.py` solo para ver el error de Python (si arranca bien, se queda esperando JSON-RPC por stdin: páralo con `Ctrl+C`). Si la API de Notas no está en marcha, cada llamada a una tool o a un resource imprime una línea `ERROR` (`Cannot reach the Notes API at http://127.0.0.1:8000: ...`): arráncala en la Terminal 1 y vuelve a ejecutar el cliente.
 
 4. **Prueba con el MCP Inspector** (necesita [Node.js](https://nodejs.org/)): una interfaz web donde listas las tools, las llamas a mano y ves cada mensaje JSON-RPC.
 
@@ -114,7 +114,7 @@ python client.py
    npx @modelcontextprotocol/inspector python mcp_server.py
    ```
 
-   Se abre en el navegador. Pulsa **Connect**, luego **Tools → List Tools**, elige `create_note`, rellena el formulario y pulsa **Run Tool**. Comprueba en la Terminal 1 que la API de Notas recibió un `POST /notes` de verdad.
+   Ejecútalo con el venv activado: el `python` de ese comando tiene que ser el del venv (en Windows, un `python` a secas apunta si no a un intérprete global sin `mcp` y el Inspector muestra `Connection Error`). Se abre en el navegador. Pulsa **Connect**, luego **Tools → List Tools**, elige `create_note`, rellena el formulario y pulsa **Run Tool**. Comprueba en la Terminal 1 que la API de Notas recibió un `POST /notes` de verdad.
 
 ## Resultados Esperados
 
@@ -164,6 +164,16 @@ Conecta el servidor a un asistente y pide en lenguaje natural: *"Crea una nota l
   }
   ```
 
+- **Claude Code:** un solo comando, ejecutado en la carpeta en la que trabajes (`-e` pasa la key al entorno del servidor):
+
+  ```bash
+  claude mcp add notes -e NOTES_API_KEY=la-misma-key-que-la-api -- C:\ruta\a\17-mcp\venv\Scripts\python.exe C:\ruta\a\17-mcp\mcp_server.py
+  ```
+
+  Escribe el mismo JSON `mcpServers` que Claude Desktop; también puedes poner ese JSON en un fichero `.mcp.json` en la raíz del proyecto. Compruébalo con `claude mcp list`.
+
+- **Cursor:** el mismo JSON `mcpServers` que Claude Desktop, en `.cursor/mcp.json` (Settings → MCP).
+
 - **VS Code (modo agente de Copilot):** crea `.vscode/mcp.json` en la carpeta que abras:
 
   ```json
@@ -178,7 +188,7 @@ Conecta el servidor a un asistente y pide en lenguaje natural: *"Crea una nota l
   }
   ```
 
-La API de Notas tiene que seguir en marcha en su propia terminal: el asistente solo arranca el servidor MCP.
+El bloque `env` (o `-e`) solo hace falta si arrancaste la API de Notas con `NOTES_API_KEY` (reto 1). La API de Notas tiene que seguir en marcha en su propia terminal: el asistente solo arranca el servidor MCP.
 
 ### 4. Añade un prompt o una tool nueva
 
