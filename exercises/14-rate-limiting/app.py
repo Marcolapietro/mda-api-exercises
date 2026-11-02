@@ -26,8 +26,8 @@ JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)  # from e
 JWT_ALG = "HS256"
 ACCESS_TOKEN_HOURS = 1
 
-# HTTPBearer reads "Authorization: Bearer <token>". auto_error=False: if the header
-# is missing we get None and answer 401 ourselves (by default FastAPI would answer 403).
+# HTTPBearer reads "Authorization: Bearer <token>". auto_error=False lets us return our own
+# 401 message and WWW-Authenticate header (FastAPI's default is a generic "401 Not authenticated").
 bearer = HTTPBearer(auto_error=False)
 
 # TODO: Initialize slowapi
@@ -248,12 +248,13 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse
     Returns a custom JSON error body, keeping the Retry-After and X-RateLimit-* headers
     """
     # slowapi's own handler already builds the 429 and adds the headers
+    # (this handler relies on headers_enabled=True in Limiter(...): without it there is no Retry-After)
     default = _rate_limit_exceeded_handler(request, exc)
     return JSONResponse(
         {
             "error": "Rate limit exceeded",
             "message": str(exc.detail),  # e.g., "5 per 1 hour"
-            "retry_after_seconds": int(default.headers["Retry-After"]),  # same value as the Retry-After header
+            "retry_after_seconds": int(default.headers.get("Retry-After", "0")),  # same value as the Retry-After header
         },
         status_code=429,
         headers={k: v for k, v in default.headers.items() if k.lower().startswith(("retry-after", "x-ratelimit"))},

@@ -24,7 +24,7 @@ Aprende a proteger tu API del abuso usando **limitación de tasa** con slowapi:
 
 La **limitación de tasa** restringe el número de solicitudes que un cliente puede hacer a tu API dentro de una ventana de tiempo específica.
 
-**Ejemplos del mundo real:**
+**Ejemplos del mundo real** (en el momento de escribir esto, consulta la documentación de cada proveedor):
 - **Twitter API**: 300 solicitudes por 15 minutos (nivel gratuito)
 - **GitHub API**: 60 solicitudes por hora (no autenticado), 5000/hora (autenticado)
 - **Stripe API**: 100 solicitudes por segundo
@@ -37,7 +37,7 @@ La **limitación de tasa** restringe el número de solicitudes que un cliente pu
 4. **Asegura disponibilidad**: Protege la API para todos los usuarios legítimos
 5. **Cumplimiento**: Algunas regulaciones requieren limitación de tasa (ej., APIs de pago)
 
-## Prerequisitos
+## Prerrequisitos
 
 Antes de comenzar este ejercicio, completa:
 - **Ejercicio 11**: Autenticación JWT (este ejercicio se basa en conceptos JWT)
@@ -138,9 +138,13 @@ Abre `app.py` y examina la configuración:
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+# TODO: Initialize slowapi
+# Hint: limiter = Limiter(key_func=get_remote_address, default_limits=["200/day", "50/hour"])
 limiter = Limiter(
-    key_func=_____,  # TODO: ¿Qué identifica al cliente?
-    default_limits=_____  # TODO: Establecer límites predeterminados razonables
+    key_func=_____,  # TODO: What function determines who is making the request?
+    default_limits=_____,  # TODO: Set default limits (e.g., ["200/day", "50/hour"])
+    headers_enabled=True,  # send X-RateLimit-* and Retry-After headers
+    storage_uri="memory://",  # in-memory storage (use Redis in production)
 )
 ```
 
@@ -187,8 +191,10 @@ Los endpoints de registro son a menudo objetivo de bots que crean cuentas de spa
 
 ```python
 @app.post("/register", status_code=201)
-@limiter.limit(_____)  # TODO: Agregar límite de tasa
-def register(request: Request, response: Response, data: UserCreate):
+# TODO: Add rate limit to prevent spam registrations
+# Hint: @limiter.limit("5/hour")
+@limiter.limit(_____)
+def register(request: Request, response: Response, data: UserCreate) -> dict[str, str]:
     # ... lógica de registro
 ```
 
@@ -242,8 +248,10 @@ Los endpoints de login son objetivos principales para **ataques de fuerza bruta*
 
 ```python
 @app.post("/login")
-@limiter.limit(_____)  # TODO: Prevenir fuerza bruta
-def login(request: Request, response: Response, data: Credentials):
+# TODO: Add rate limit to prevent brute force attacks
+# Hint: @limiter.limit("10/minute")
+@limiter.limit(_____)
+def login(request: Request, response: Response, data: Credentials) -> dict[str, str]:
     # ... lógica de login
 ```
 
@@ -255,7 +263,7 @@ Completa con: `"10/minute"`
 - Previene adivinación automática de contraseñas
 - Estándar de la industria para endpoints de autenticación
 
-**Comparación del mundo real:**
+**Comparación del mundo real** (en el momento de escribir esto, consulta la documentación de cada proveedor):
 - **GitHub**: 5 intentos fallidos activan CAPTCHA
 - **AWS**: Ralentiza después de 5 intentos fallidos
 - **Google**: Usa limitación de tasa adaptativa (ralentiza después de fallas)
@@ -268,8 +276,14 @@ La mayoría de los endpoints de API necesitan limitación de tasa moderada.
 
 ```python
 @app.get("/api/data")
-@limiter.limit(_____)  # TODO: Límite estándar de API
-def get_data(request: Request, response: Response, creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
+# TODO: Add rate limit for general API usage
+# Hint: @limiter.limit("20/minute")
+@limiter.limit(_____)
+def get_data(
+    request: Request,
+    response: Response,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+) -> dict:
     # ... lógica de recuperación de datos
 ```
 
@@ -289,8 +303,15 @@ Algunos endpoints consumen **muchos recursos** (consultas complejas de base de d
 
 ```python
 @app.get("/api/search")
-@limiter.limit(_____)  # TODO: Límite estricto para operaciones costosas
-def search(request: Request, response: Response, q: Annotated[str, Query(min_length=1)], creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
+# TODO: Add strict rate limit for expensive operations
+# Hint: @limiter.limit("5/minute")
+@limiter.limit(_____)
+def search(
+    request: Request,
+    response: Response,
+    q: Annotated[str, Query(min_length=1)],
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+) -> dict:
     # ... operación de búsqueda costosa
 ```
 
@@ -302,7 +323,7 @@ Completa con: `"5/minute"`
 - Previene el agotamiento de recursos
 - Fomenta el almacenamiento en caché eficiente del lado del cliente
 
-**Ejemplos reales:**
+**Ejemplos reales** (en el momento de escribir esto, consulta la documentación de cada proveedor):
 - **Algolia Search**: 10,000 solicitudes/mes (nivel gratuito)
 - **Elasticsearch**: A menudo limitado a 5-10 búsquedas concurrentes
 - **OpenAI GPT-4**: 3 solicitudes/minuto (nivel gratuito)
@@ -315,8 +336,8 @@ Algunos endpoints **nunca** deberían tener límite de tasa.
 
 ```python
 @app.get("/api/unlimited")
-# TODO: Exentar de limitación de tasa (agrega el decorador aquí)
-def unlimited(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
+# TODO: Exempt this endpoint from rate limiting by adding the @limiter.exempt decorator above this line
+def unlimited(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> dict[str, str]:
     # ... operación crítica
 ```
 
@@ -352,7 +373,9 @@ Deberías ver el servidor arrancar en `http://127.0.0.1:8000`. Los endpoints y s
   GET    /health            - Health check (sin límite)
 ```
 
-Límites predeterminados para cualquier otra ruta: 200/day y 50/hour. Swagger UI está en `http://127.0.0.1:8000/docs`.
+Límites predeterminados para cualquier otra ruta: 200/day y 50/hour. Swagger UI está en `http://127.0.0.1:8000/docs`. `/docs` y
+`/openapi.json` también son "otras rutas", así que consumen ese cupo predeterminado de 50/hour (Swagger UI pide
+`/openapi.json` en cada recarga): recarga `/docs` unas 50 veces en una hora y responderá 429.
 
 ### Tarea 3.2: Probar Límite de Tasa de Registro
 
@@ -453,7 +476,9 @@ Retry-After: 60
 - `X-RateLimit-Limit`: Total de solicitudes permitidas en la ventana
 - `X-RateLimit-Remaining`: Solicitudes restantes antes de alcanzar el límite
 - `X-RateLimit-Reset`: Timestamp Unix cuando se reinicia el límite (slowapi puede incluir decimales)
-- `Retry-After`: Segundos hasta que se reinicia la ventana - en un `429` es lo que el cliente debe esperar
+- `Retry-After`: Segundos hasta que se reinicia la ventana - en un `429` es lo que el cliente debe esperar. slowapi
+  también la envía en las respuestas exitosas, pero según la RFC 9110 solo tiene significado en un `429` (y en
+  `503`/`3xx`), así que los clientes estándar la ignoran en un `200`
 
 **Los clientes deberían usar estas cabeceras para:**
 1. Mostrar la cuota restante a los usuarios
@@ -647,6 +672,12 @@ done
 - No distingue entre usuarios autenticados de la misma IP
 - Puede bloquear usuarios legítimos en redes compartidas (oficinas, universidades)
 
+> **Detrás de un proxy:** si la app corre detrás de nginx, Railway, Render, ngrok... `get_remote_address` ve la IP del
+> proxy, así que *todos* los usuarios comparten un mismo cupo. Ejecuta uvicorn (o `fastapi run`) con
+> `--proxy-headers --forwarded-allow-ips=<ip del proxy>` para que `request.client.host` sea el cliente real, o escribe
+> una función clave que lea `X-Forwarded-For` solo cuando la petición venga de tu proxy de confianza. `get_ipaddr` de
+> slowapi se fía de esa cabecera a ciegas, y cualquier cliente puede falsificarla.
+
 **Casos de uso:**
 - Endpoints públicos (registro, login)
 - APIs anónimas
@@ -683,6 +714,8 @@ limiter = Limiter(
 - Requiere autenticación
 - No protege endpoints no autenticados
 - Los usuarios pueden crear múltiples cuentas para eludir los límites
+- La clave recurre a la IP cuando el token no es válido, así que un cliente que envía tokens basura sale del cupo
+  por usuario y cae en el de la IP; en producción rechaza los tokens inválidos antes de limitar, o usa IP + token como clave
 
 **Casos de uso:**
 - APIs SaaS con cuentas de usuario
@@ -758,8 +791,10 @@ def get_data(request: Request, response: Response):
 response = make_request()
 
 if response.status == 429:
-    retry_after = response.headers['Retry-After']
-    sleep(retry_after)
+    retry_after = int(response.headers['Retry-After'])
+    # Limita la espera y añade jitter: si todos los clientes reintentaran en el mismo segundo exacto,
+    # volverían a chocar con el límite a la vez (thundering herd)
+    sleep(min(retry_after, 60) + random.uniform(0, 1))
     retry_request()
 
 remaining = response.headers['X-RateLimit-Remaining']
@@ -775,12 +810,13 @@ No solo devuelvas "429 Too Many Requests" - ¡explica qué sucedió!
 ```python
 def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     # el manejador propio de slowapi ya construye el 429 y añade las cabeceras
+    # (este manejador depende de headers_enabled=True en Limiter(...): sin él no hay Retry-After)
     default = _rate_limit_exceeded_handler(request, exc)
     return JSONResponse(
         {
             "error": "Rate limit exceeded",
             "message": str(exc.detail),  # ej., "5 per 1 hour"
-            "retry_after_seconds": int(default.headers["Retry-After"]),  # mismo valor que la cabecera Retry-After
+            "retry_after_seconds": int(default.headers.get("Retry-After", "0")),  # mismo valor que la cabecera Retry-After
         },
         status_code=429,
         headers={k: v for k, v in default.headers.items() if k.lower().startswith(("retry-after", "x-ratelimit"))},
@@ -857,9 +893,16 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse
         f"Path={request.url.path}, Limit={exc.detail}"
     )
 
+    # Misma respuesta que el manejador de app.py (conserva las cabeceras Retry-After y X-RateLimit-*)
+    default = _rate_limit_exceeded_handler(request, exc)
     return JSONResponse(
-        {"error": "Rate limit exceeded", "message": str(exc.detail)},
+        {
+            "error": "Rate limit exceeded",
+            "message": str(exc.detail),
+            "retry_after_seconds": int(default.headers.get("Retry-After", "0")),
+        },
         status_code=429,
+        headers={k: v for k, v in default.headers.items() if k.lower().startswith(("retry-after", "x-ratelimit"))},
     )
 ```
 
@@ -922,7 +965,7 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse
    def endpoint(request: Request, response: Response):
        pass
    ```
-   Ten en cuenta también que FastAPI resuelve los parámetros `Depends(...)` ANTES de ejecutar tu función, y el limiter cuenta la petición cuando tu función empieza. Si la comprobación del token fuera una dependencia que lanza `401`, las peticiones sin token o con token inválido se rechazarían antes de que el limiter las cuente, así que adivinar tokens nunca se limitaría. Por eso `app.py` solo recibe el token como parámetro y lo comprueba dentro del cuerpo de la función.
+   Ten en cuenta también que FastAPI resuelve los parámetros `Depends(...)` ANTES de ejecutar tu función, y el limiter cuenta la petición cuando tu función empieza. Si la comprobación del token fuera una dependencia que lanza `401`, las peticiones sin token o con token inválido se rechazarían antes de que el limiter las cuente, así que adivinar tokens nunca se limitaría. Por eso `app.py` solo recibe el token como parámetro y lo comprueba dentro del cuerpo de la función. Por la misma razón, las peticiones que no pasan la validación del body o de la query (`422`) las rechaza FastAPI antes de que el limiter las cuente, así que una avalancha de JSON malformado a `/login` no queda limitada por estos decoradores.
 
 2. **Endpoint marcado como exento:**
    Verifica si `@limiter.exempt` está aplicado (intencionalmente o por error).
@@ -942,9 +985,9 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse
 
 **Síntoma:** Dos usuarios en la misma red (oficina, universidad) comparten el mismo límite de tasa.
 
-**Causa:** Usar `get_remote_address()` (basado en IP) en lugar de rastreo por usuario.
+**Causa:** Usar `get_remote_address()` (basado en IP) en lugar de rastreo por usuario. Lo mismo le pasa a *todo el mundo* cuando la app corre detrás de un proxy inverso (nginx, Railway, Render, ngrok): la app solo ve la IP del proxy.
 
-**Solución:** Implementar limitación de tasa por usuario (ver Parte 4, Estrategia 2).
+**Solución:** Implementar limitación de tasa por usuario (ver Parte 4, Estrategia 2). Detrás de un proxy, ejecuta uvicorn con `--proxy-headers --forwarded-allow-ips=<ip del proxy>`, o lee `X-Forwarded-For` solo desde tu proxy de confianza (ver la nota de la Estrategia 1).
 
 ### Problema 4: Las Cabeceras de Límite de Tasa No Se Muestran
 
@@ -989,6 +1032,8 @@ X-RateLimit-Resource: core
 ```
 
 ### Ejemplo 2: API de Twitter v2
+
+Cifras en el momento de escribir esto (consulta la documentación del proveedor, estos niveles cambian a menudo).
 
 **Nivel gratuito:**
 - 500,000 Tweets leídos por mes

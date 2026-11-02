@@ -27,8 +27,8 @@ JWT_ALG = "HS256"
 ACCESS_TOKEN_MINUTES = 60
 
 # HTTPBearer reads "Authorization: Bearer <token>" and hands us the token.
-# auto_error=False: if the header is missing we get None and answer 401 ourselves
-# (by default FastAPI would answer 403).
+# auto_error=False lets us return our own 401 message and WWW-Authenticate header
+# (FastAPI's default is a generic "401 Not authenticated").
 bearer = HTTPBearer(auto_error=False)
 
 # OAuth Configuration

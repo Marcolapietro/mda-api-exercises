@@ -35,8 +35,8 @@ JWT_ALG = "HS256"
 ACCESS_TOKEN_MINUTES = 60
 
 # HTTPBearer reads "Authorization: Bearer <token>" and hands us the token.
-# auto_error=False: if the header is missing we get None and answer 401 ourselves
-# (by default FastAPI would answer 403).
+# auto_error=False lets us return our own 401 message and WWW-Authenticate header
+# (FastAPI's default is a generic "401 Not authenticated").
 bearer = HTTPBearer(auto_error=False)
 
 # OAuth Configuration
@@ -63,7 +63,6 @@ oauth.register(
     # 'code_challenge_method': 'S256' turns PKCE on: Authlib creates a random code_verifier,
     # sends SHA-256(code_verifier) as code_challenge in the redirect, keeps the verifier in the
     # session and sends it with the code in the token request (OAuth 2.1 / RFC 9700)
-    # "scope": request email scope
     client_kwargs={"scope": "user:email", "code_challenge_method": "S256"},
 )
 

@@ -167,7 +167,7 @@ Antes de comenzar este ejercicio, completa:
                   │                               │
 6. Tu app crea token JWT                         │
                   │                               │
-   jwt_token = create_access_token(identity="12345678")
+   jwt_token = create_access_token("12345678")
                   │                               │
                   ▼                               │
    ┌─────────────────────────────────┐            │
@@ -260,8 +260,11 @@ code_challenge = base64.urlsafe_b64encode(
 
 > **¿Dónde guarda Authlib el verifier?** En la sesión, que `SessionMiddleware` guarda como una cookie
 > firmada en el navegador del propio usuario (ver "Sesión vs JWT" más abajo), así que el verifier nunca aparece
-> en URLs, logs ni en la cabecera `Referer`, que es por donde se filtran los códigos. En producción puedes pasar
-> una `cache` del lado del servidor a `OAuth(cache=...)` para que los datos del flujo OAuth se queden en el servidor.
+> en URLs, logs ni en la cabecera `Referer`, que es por donde se filtran los códigos. Esa cookie está **firmada, no
+> cifrada**, y es `httponly`, así que guardar en ella el `code_verifier` (y la URL de autorización), que duran poco,
+> es aceptable en un cliente confidencial como este; nunca guardes en ella el access token de GitHub ni el client
+> secret. En producción puedes pasar una `cache` del lado del servidor a `OAuth(cache=...)` para que los datos del
+> flujo OAuth se queden en el servidor.
 
 **`state` y PKCE son complementarios:** `state` (un valor aleatorio que Authlib guarda en la sesión y comprueba en
 `/callback`) protege a **tu usuario** contra CSRF, es decir, contra acabar logueado con el código de otra persona.
@@ -295,7 +298,7 @@ PKCE protege el **código** para que nadie más pueda canjearlo. Mantén los dos
 3. **Registra la app:**
    - Haz clic en **"Register application"**
    - Verás:
-     - **Client ID**: `Iv1.abc123def456...` (público, seguro para commit)
+     - **Client ID**: `Ov23liabc123def456...` (público, seguro para commit)
      - **Client Secret**: `1a2b3c4d5e6f...` (secreto, ¡nunca hacer commit!)
 
 4. **Guarda tus credenciales:**
@@ -313,26 +316,26 @@ Defínelas **en la misma terminal** donde vas a ejecutar `fastapi dev app.py` (s
 
 ```bash
 # Linux / macOS (bash, zsh)
-export GITHUB_CLIENT_ID="Iv1.abc123..."
+export GITHUB_CLIENT_ID="Ov23liabc123..."
 export GITHUB_CLIENT_SECRET="1a2b3c4d..."
 ```
 
 ```powershell
 # Windows PowerShell
-$env:GITHUB_CLIENT_ID="Iv1.abc123..."
+$env:GITHUB_CLIENT_ID="Ov23liabc123..."
 $env:GITHUB_CLIENT_SECRET="1a2b3c4d..."
 ```
 
 ```bat
 :: Windows CMD (sin comillas, sin espacios alrededor del =)
-set GITHUB_CLIENT_ID=Iv1.abc123...
+set GITHUB_CLIENT_ID=Ov23liabc123...
 set GITHUB_CLIENT_SECRET=1a2b3c4d...
 ```
 
 Después arranca la app y abre **http://127.0.0.1:8000/login/github** en el navegador.
 
 El fichero `.env.example` de la raíz del repo lista todas las variables que usan los ejercicios
-(`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` y `JWT_SECRET_KEY`).
+(`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `SESSION_SECRET` y `JWT_SECRET_KEY`).
 Es solo una referencia: la app **no** lo carga automáticamente, así que igualmente tienes que definir
 las variables con los comandos de arriba.
 
@@ -394,7 +397,8 @@ Callback" abajo).
 **¿Qué huecos impiden que la app arranque?** Solo el 7 y el 8. El decorador de `/profile` y el `Depends(...)` de su
 firma se ejecutan cuando Python carga el fichero, así que `fastapi dev app.py` falla ahí hasta que completes ambos.
 Los huecos 1 a 6 están dentro de funciones o argumentos que solo se ejecutan cuando llega una petición, así que la app
-arranca y los notas al probar el login.
+arranca y los notas al probar el login. Por ejemplo, si rellenas los huecos 2 y 3 pero dejas el 1 sin rellenar,
+`/login/github` responde un 500 y el log de la terminal dice `AttributeError: No such client: github`.
 
 ### Conceptos Clave a Implementar
 
@@ -444,8 +448,9 @@ async def login_github(request: Request):
     return await oauth.github.authorize_redirect(request, redirect_uri)
 ```
 
-**¿Por qué `async def`?** `authorize_redirect()` y `authorize_access_token()` hablan con GitHub por la red, así que
-Authlib las hace *esperables* y se llaman con `await`. `await` solo se puede usar dentro de `async def`, por eso estas
+**¿Por qué `async def`?** El cliente Starlette de Authlib es asíncrono: `authorize_access_token()` y `oauth.github.get()`
+sí llaman a GitHub por la red (`authorize_redirect()` solo construye la redirección en el caso de GitHub, pero también
+es esperable), así que se llaman con `await`. `await` solo se puede usar dentro de `async def`, por eso estas
 dos rutas (`/login/github` y `/callback`) son `async def`. Las rutas que no esperan nada (`/profile`, `/users`,
 `/logout`) siguen siendo `def` normales, como en los ejercicios anteriores.
 
@@ -453,7 +458,7 @@ dos rutas (`/login/github` y `/callback`) son `async def`. Las rutas que no espe
 1. `authorize_redirect()` guarda `state` y el verifier PKCE en la sesión y construye una URL como:
    ```
    https://github.com/login/oauth/authorize
-     ?client_id=Iv1.abc123
+     ?client_id=Ov23liabc123
      &redirect_uri=http://127.0.0.1:8000/callback
      &scope=user:email
      &state=token_csrf_aleatorio
@@ -555,7 +560,9 @@ def logout(request: Request):
 **Sesión vs JWT:**
 - **Sesión**: Temporal, solo para el flujo OAuth. `SessionMiddleware` guarda la sesión en una **cookie firmada
   en el navegador** (lado del cliente): `secret_key` impide que se manipule, pero su contenido solo
-  está codificado en base64, no cifrado, así que nunca guardes secretos en ella.
+  está codificado en base64, no cifrado, así que nunca guardes en ella secretos de larga duración (el access token
+  de GitHub, el client secret). El `code_verifier`, que Authlib guarda ahí solo durante el login, sí es aceptable
+  (ver "¿Dónde guarda Authlib el verifier?").
 - **JWT**: De corta duración (la solución usa `ACCESS_TOKEN_MINUTES = 60`), lo envía el
   cliente en la cabecera `Authorization`, autenticación de la API
 
@@ -710,7 +717,9 @@ GitHub → Navegador → App
 
 1. **Usar HTTPS en producción**
    - Los tokens OAuth pueden ser interceptados en HTTP
-   - GitHub rechaza callbacks no-HTTPS en producción
+   - Usa una callback URL HTTPS en producción
+   - Pasa `https_only=True` a `SessionMiddleware` (si no, la cookie de sesión se envía sin el flag `Secure`)
+     y plantéate un `max_age` más corto que los 14 días por defecto
 
 2. **Almacenar secretos de forma segura**
    ```python
@@ -918,23 +927,34 @@ async def google_callback(request: Request):
 
 ### 2. Implementar Refresco de Tokens
 
-Guarda los refresh tokens de OAuth para acceso a la API a largo plazo:
+Las **OAuth Apps** de GitHub (las que registraste en la Parte 1) emiten access tokens que **no caducan** y **sin
+refresh token**: `token.get('refresh_token')` y `token.get('expires_at')` son siempre `None`. Solo las GitHub Apps
+con "expiring user tokens" activado, y los proveedores OIDC como Google, devuelven uno. Así que con la app de este
+ejercicio no hay nada que refrescar: si necesitas acceso a largo plazo a la API de GitHub, guarda
+`token['access_token']` y úsalo hasta que el usuario lo revoque.
+
+Para un proveedor que sí devuelve refresh token, guárdalo junto con la caducidad y refresca con
+`grant_type='refresh_token'` (sin él Authlib supone `client_credentials` y la petición falla):
 
 ```python
 # Al guardar el usuario
 users[user_id] = {
     'github_id': github_id,
-    'access_token': token['access_token'],
-    'refresh_token': token.get('refresh_token'),
-    'expires_at': token.get('expires_at')
+    'github_access_token': token['access_token'],
+    'refresh_token': token.get('refresh_token'),  # None en una GitHub OAuth App
+    'expires_at': token.get('expires_at'),        # None en una GitHub OAuth App
 }
 
-# Refrescar cuando expire
-if datetime.now().timestamp() > user['expires_at']:
+# Refrescar cuando caduque (solo si el proveedor nos dio caducidad y refresh token)
+user = users[user_id]
+if user['expires_at'] is not None and datetime.now(timezone.utc).timestamp() > user['expires_at']:
     new_token = await oauth.github.fetch_access_token(
-        refresh_token=user['refresh_token']
+        grant_type='refresh_token',
+        refresh_token=user['refresh_token'],
     )
-    users[user_id]['access_token'] = new_token['access_token']
+    user['github_access_token'] = new_token['access_token']
+    user['refresh_token'] = new_token.get('refresh_token', user['refresh_token'])  # algunos proveedores lo rotan
+    user['expires_at'] = new_token.get('expires_at')
 ```
 
 ### 3. Gestionar los Scopes OAuth
@@ -1131,7 +1151,8 @@ async def get_repos(current_user: Annotated[str, Depends(get_current_user)]):
 
 **Siguientes Pasos:**
 - **Objetivos Extendidos**: Agregar Google OAuth, implementar actualización de tokens
-- **Ejercicio 12**: Combinar OAuth con Roles y Permisos
+- **Ejercicio 14**: Limitación de tasa, el siguiente ejercicio
+- **Combina OAuth con el RBAC que construiste en el Ejercicio 12** (p. ej. añade un claim `role` al JWT)
 - **Proyecto Real**: Construir una integración OAuth completa con múltiples proveedores
 
 ¡Buena suerte! 🚀
