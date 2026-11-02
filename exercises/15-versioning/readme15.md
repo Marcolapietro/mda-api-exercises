@@ -509,6 +509,8 @@ Open http://127.0.0.1:8000/docs: the routes are grouped by tag (`auth`, `v1 (dep
 
 ### Step 5.2: Register and Login
 
+> The commands in this section use `curl` with `bash` syntax (`\` line continuation, single-quoted JSON, `$TOKEN`). In **Windows PowerShell 5.1** `curl` is an alias of `Invoke-WebRequest`: use `curl.exe`, write each command on one line, escape the quotes inside the JSON (`-d '{\"username\":\"alice\",\"password\":\"password123\"}'`) and save the token with `$TOKEN = "..."`. In **CMD** use double quotes with `\"` inside (`-d "{\"username\":\"alice\",\"password\":\"password123\"}"`).
+
 ```bash
 # Register a user
 curl -X POST http://127.0.0.1:8000/auth/register \

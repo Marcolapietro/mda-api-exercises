@@ -479,6 +479,8 @@ Abre http://127.0.0.1:8000/docs: las rutas aparecen agrupadas por tag (`auth`, `
 
 ### Paso 5.2: Registrarse e Iniciar Sesión
 
+> Los comandos de esta sección usan `curl` con sintaxis de `bash` (continuación con `\`, JSON entre comillas simples, `$TOKEN`). En **Windows PowerShell 5.1** `curl` es un alias de `Invoke-WebRequest`: usa `curl.exe`, escribe cada comando en una sola línea, escapa las comillas dentro del JSON (`-d '{\"username\":\"alice\",\"password\":\"password123\"}'`) y guarda el token con `$TOKEN = "..."`. En **CMD** usa comillas dobles con `\"` dentro (`-d "{\"username\":\"alice\",\"password\":\"password123\"}"`).
+
 ```bash
 # Registrar un usuario
 curl -X POST http://127.0.0.1:8000/auth/register \

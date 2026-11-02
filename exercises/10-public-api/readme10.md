@@ -285,6 +285,8 @@ Errors use FastAPI's default `{"detail": "..."}` body.
 
 `/weather` is public, but `/profile` needs a token (passwords need 8 to 72 characters):
 
+> The commands below use `curl` with `bash` quoting. In **Windows CMD** use `example/commands_cmd.txt`, and in **PowerShell** use `example/commands_powershell.txt` (with `curl.exe` the quotes inside the JSON must be escaped as `\"`, otherwise the server answers `422`).
+
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"username":"alice","password":"secret123"}' http://127.0.0.1:8000/register
 curl -X POST -H "Content-Type: application/json" -d '{"username":"alice","password":"secret123"}' http://127.0.0.1:8000/login

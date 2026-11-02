@@ -453,6 +453,8 @@ curl http://127.0.0.1:8000/webhooks/events
 # total_events: 2  (two different valid deliveries, the repeated one counted once)
 ```
 
+> **Windows PowerShell 5.1:** `curl` is an alias of `Invoke-WebRequest`. Use `curl.exe` for every `curl` command in this README, and write multi-line commands on one line (the `\` continuation is `bash` syntax).
+
 You can run a single case with `--mode valid|duplicate|tampered|unsigned|wrong-prefix`, or point it at your public URL with `--url https://YOUR-NGROK-URL.ngrok-free.app/webhooks/github`.
 
 **What each case proves:**

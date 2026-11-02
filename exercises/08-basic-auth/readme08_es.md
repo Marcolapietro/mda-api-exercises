@@ -99,7 +99,7 @@ Las contraseñas se guardan como hashes `bcrypt`, nunca en texto plano. `hash_pa
    ```
    Debe devolver `401 Unauthorized` con la cabecera `WWW-Authenticate: Basic realm="Authentication Required"`: así el servidor le indica al cliente qué tipo de autenticación espera.
 
-> **Windows:** en PowerShell usa `curl.exe` en lugar de `curl`. En CMD las comillas simples no funcionan; tienes los comandos listos en `example/commands_cmd.txt` y `example/commands_powershell.txt`.
+> **Windows:** en PowerShell 5.1 `curl` es un alias de `Invoke-WebRequest`, así que usa `curl.exe`, escribe el comando en una sola línea y escapa las comillas dentro del JSON (si no, el servidor responde `422`): `curl.exe -X POST -H "Content-Type: application/json" -d '{\"username\":\"user1\",\"password\":\"password123\"}' http://127.0.0.1:8000/users`. En CMD las comillas simples no funcionan. Tienes los comandos listos para ambas consolas en `example/commands_cmd.txt` y `example/commands_powershell.txt`.
 
 ## Puntos a Considerar
 

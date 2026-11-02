@@ -584,6 +584,8 @@ def logout(request: Request):
      -H "Authorization: Bearer <YOUR_JWT_TOKEN>"
    ```
 
+   > **Windows PowerShell 5.1:** `curl` is an alias of `Invoke-WebRequest`. Use `curl.exe` and write the command on one line (the `\` continuation is `bash` syntax).
+
 ### Method 2: Postman Testing
 
 **Step 1: Initiate OAuth (in browser)**
