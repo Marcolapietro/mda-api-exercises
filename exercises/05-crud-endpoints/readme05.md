@@ -4,7 +4,7 @@
 Implement full CRUD (Create, Read, Update, Delete) for one resource, `/notes`, in a REST API using Python and FastAPI, with the right status codes, headers and error format.
 
 ## Description
-In exercise 04 you built `GET /notes` and `POST /notes`. Here you complete the Notes API: read one note, replace it (`PUT`), update part of it (`PATCH`) and delete it (`DELETE`). There is **no authentication** in this exercise (auth comes later in the course): the focus is on HTTP methods, status codes, headers and validation. Complete the blanks (`_____`) in `app.py`.
+In exercise 04 you built `GET /notes` and `POST /notes`. Here you complete the Notes API: replace a note (`PUT`), update part of it (`PATCH`) and delete it (`DELETE`). There is **no authentication** in this exercise (auth comes later in the course): the focus is on HTTP methods, status codes, headers and validation. Complete the blanks (`_____`) in `app.py`.
 
 ## Quick Start
 
@@ -13,7 +13,7 @@ cd exercises/05-crud-endpoints
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-# Fill the blanks from top to bottom; the app starts once the PUT, PATCH and DELETE decorators and the `le=` of the limit are complete
+# Fill the blanks from top to bottom; the app starts once the PUT, PATCH and DELETE decorators (with the `status_code=` of DELETE) and the `le=` of the limit are complete
 fastapi dev app.py
 ```
 
@@ -76,7 +76,8 @@ The API runs at `http://127.0.0.1:8000` (automatic documentation at `/docs`) and
    # PATCH: only the fields the client sent
    changes = data.model_dump(_____=True, exclude_none=True)
 
-   # DELETE: success, nothing to send back
+   # DELETE: success, nothing to send back (in the decorator and in the Response)
+   @app._____("/notes/{note_id}", status_code=_____)
    return Response(status_code=_____)
 
    # GET /notes: the biggest page size
@@ -191,6 +192,7 @@ The API runs at `http://127.0.0.1:8000` (automatic documentation at `/docs`) and
      ```bash
      curl -i -X DELETE http://127.0.0.1:8000/notes
      ```
+     Note: the `Allow` header is incomplete here (`POST` only) because FastAPI registers `POST /notes` and `GET /notes` as two separate routes.
 
 ## Response models, `Response` and `Query`
 

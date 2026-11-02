@@ -33,6 +33,7 @@ Las APIs son fundamentales en el desarrollo moderno de software por varias razon
 - **Documentación:** [Stripe API Reference](https://stripe.com/docs/api)
 
 ## Frameworks de desarrollo de APIs
-- Flask - Python 
+- FastAPI, Flask, Django REST Framework - Python
+- Express - Node.js
 
 

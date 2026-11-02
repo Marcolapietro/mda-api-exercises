@@ -2,7 +2,7 @@
 Notes API - CRUD (Starter)
 
 Run it with:  fastapi dev app.py
-Fill the blanks (_____) from top to bottom; the app starts once the PUT, PATCH and DELETE decorators and the le= of the limit are complete.
+Fill the blanks (_____) from top to bottom; the app starts once the PUT, PATCH and DELETE decorators (with the status_code of DELETE) and the le= of the limit are complete.
 """
 
 from datetime import datetime, timezone
@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 app = FastAPI(title="Notes API")
@@ -28,6 +28,13 @@ class NoteCreate(BaseModel):
 class NoteUpdate(BaseModel):
     title: str | None = Field(None, min_length=1)
     content: str | None = None
+
+    # Runs after the fields are validated: an empty body (or only nulls) is a 422
+    @model_validator(mode="after")
+    def at_least_one_field(self):
+        if self.title is None and self.content is None:
+            raise ValueError("Send at least one of: title, content")
+        return self
 
 
 class Note(BaseModel):
@@ -139,18 +146,15 @@ def update_note(note_id: int, data: NoteUpdate) -> Note:
     # TODO: Keep only the fields the client really sent (the others stay as they are)
     # Hint: exclude_unset=True  (exclude_none=True makes a null count as "not sent")
     changes = data.model_dump(_____=True, exclude_none=True)
-    if not changes:
-        raise RequestValidationError([{"type": "value_error", "loc": ("body",),
-                                       "msg": "Send at least one of: title, content", "input": {}}])
     for field, value in changes.items():
         setattr(note, field, value)
     note.updated_at = now_iso()
     return note
 
 
-# TODO: Which method removes a resource?
-# Hint: DELETE
-@app._____("/notes/{note_id}", status_code=204)
+# TODO: Which method removes a resource? And which status code says "done, nothing to send back"?
+# Hint: DELETE; the decorator's status_code is the same one the function returns below
+@app._____("/notes/{note_id}", status_code=_____)
 def delete_note(note_id: int) -> Response:
     get_or_404(note_id)
     del notes[note_id]

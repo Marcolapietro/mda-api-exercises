@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 app = FastAPI(title="Notes API")
@@ -29,6 +29,13 @@ class NoteCreate(BaseModel):
 class NoteUpdate(BaseModel):
     title: str | None = Field(None, min_length=1)
     content: str | None = None
+
+    # Runs after the fields are validated: an empty body (or only nulls) is a 422
+    @model_validator(mode="after")
+    def at_least_one_field(self):
+        if self.title is None and self.content is None:
+            raise ValueError("Send at least one of: title, content")
+        return self
 
 
 class Note(BaseModel):
@@ -178,7 +185,8 @@ def offset_page(request: Request, ordered: list[Note], offset: int, limit: int) 
     # Hint: ordered[offset:offset + limit]
     data = ordered[_____:_____]
     next_url = page_url(request, offset=offset + limit, limit=limit) if offset + limit < total else None
-    prev_url = page_url(request, offset=max(offset - limit, 0), limit=limit) if offset > 0 else None
+    # min(offset, total): an offset past the end still gets a prev that points at the last real page
+    prev_url = page_url(request, offset=max(min(offset, total) - limit, 0), limit=limit) if offset > 0 else None
     return OffsetNoteList(data=data, page=OffsetPage(mode="offset", offset=offset, limit=limit, total=total,
                                                      next=next_url, prev=prev_url))
 
@@ -268,9 +276,6 @@ def update_note(note_id: int, data: NoteUpdate) -> Note:
     note = get_or_404(note_id)
     # exclude_unset: only the fields the client really sent (exclude_none: a null means "not sent")
     changes = data.model_dump(exclude_unset=True, exclude_none=True)
-    if not changes:
-        raise RequestValidationError([{"type": "value_error", "loc": ("body",),
-                                       "msg": "Send at least one of: title, content", "input": {}}])
     for field, value in changes.items():
         setattr(note, field, value)
     note.updated_at = now_iso()

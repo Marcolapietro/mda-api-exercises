@@ -4,7 +4,7 @@
 Implementar un CRUD completo (Crear, Leer, Actualizar, Eliminar) para un recurso, `/notes`, en una API REST con Python y FastAPI, usando los códigos de estado, las cabeceras y el formato de error correctos.
 
 ## Descripción
-En el ejercicio 04 construiste `GET /notes` y `POST /notes`. Aquí completas la API de notas: leer una nota, sustituirla (`PUT`), modificar parte de ella (`PATCH`) y eliminarla (`DELETE`). En este ejercicio **no hay autenticación** (se ve más adelante en el curso): el foco está en los métodos HTTP, los códigos de estado, las cabeceras y la validación. Completa los espacios en blanco (`_____`) de `app.py`.
+En el ejercicio 04 construiste `GET /notes` y `POST /notes`. Aquí completas la API de notas: sustituir una nota (`PUT`), modificar parte de ella (`PATCH`) y eliminarla (`DELETE`). En este ejercicio **no hay autenticación** (se ve más adelante en el curso): el foco está en los métodos HTTP, los códigos de estado, las cabeceras y la validación. Completa los espacios en blanco (`_____`) de `app.py`.
 
 ## Inicio Rápido
 
@@ -13,7 +13,7 @@ cd exercises/05-crud-endpoints
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-# Completa los huecos de arriba abajo; la app arranca cuando están completos los decoradores de PUT, PATCH y DELETE y el `le=` del límite
+# Completa los huecos de arriba abajo; la app arranca cuando están completos los decoradores de PUT, PATCH y DELETE (con el `status_code=` de DELETE) y el `le=` del límite
 fastapi dev app.py
 ```
 
@@ -71,12 +71,13 @@ La API arranca en `http://127.0.0.1:8000` (documentación automática en `/docs`
    response.headers["_____"] = str(request.url_for("get_note", note_id=note.id))
 
    # PUT vs PATCH vs DELETE: el decorador se llama como el método HTTP
-   @app._____("/notes/{note_id}")  # which method REPLACES a resource?
+   @app._____("/notes/{note_id}")  # ¿qué método SUSTITUYE un recurso?
 
    # PATCH: solo los campos que envió el cliente
    changes = data.model_dump(_____=True, exclude_none=True)
 
-   # DELETE: éxito, sin nada que devolver
+   # DELETE: éxito, sin nada que devolver (en el decorador y en la Response)
+   @app._____("/notes/{note_id}", status_code=_____)
    return Response(status_code=_____)
 
    # GET /notes: el tamaño de página máximo
@@ -191,6 +192,7 @@ La API arranca en `http://127.0.0.1:8000` (documentación automática en `/docs`
      ```bash
      curl -i -X DELETE http://127.0.0.1:8000/notes
      ```
+     Nota: la cabecera `Allow` está incompleta aquí (solo `POST`) porque FastAPI registra `POST /notes` y `GET /notes` como dos rutas separadas.
 
 ## Modelos de respuesta, `Response` y `Query`
 

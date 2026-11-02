@@ -46,7 +46,7 @@ In this exercise, you will research the concept of API (Application Programming 
    - Identify benefits such as modularity, scalability, and code reusability.
 
 4. **Select and Describe Popular APIs:**
-   - Choose 1 API that is relevant and widely recognized, such as:
+   - Choose three APIs that are relevant and widely recognized, such as:
      - **Google Maps API**
      - **Twitter API**
      - **Stripe API**
@@ -75,4 +75,4 @@ In this exercise, you will research the concept of API (Application Programming 
 
 ## Solution (Optional)
 
-You can check the `solution/` folder to see a possible implementation of this exercise.
+You can check `example/example_sol.md` to see a possible implementation of this exercise.

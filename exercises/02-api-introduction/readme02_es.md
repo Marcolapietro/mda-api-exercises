@@ -1,5 +1,10 @@
 # Ejercicio 2: Introducción a las APIs
 
+## Inicio Rápido
+
+- Este es un ejercicio de teoría/repaso. No hay ninguna app que ejecutar.
+- Lee los conceptos y continúa con el ejercicio 03 (introducción a FastAPI). Si te lo saltaste, el ejercicio 01 muestra cómo llamar a APIs con Postman.
+
 ## Objetivo
 Comprender qué es una API y su importancia en el desarrollo de software. Identificar ejemplos de APIs populares y sus usos.
 
@@ -42,7 +47,7 @@ En este ejercicio, investigarás el concepto de API (Interfaz de Programación d
    - Identifica beneficios como la modularidad, escalabilidad y reutilización de código.
 
 4. **Seleccionar y Describir APIs Populares:**
-   - Elige 1 API que sea relevantes y ampliamente reconocida, como:
+   - Elige tres APIs que sean relevantes y ampliamente reconocidas, como:
      - **Google Maps API**
      - **Twitter API**
      - **Stripe API**
@@ -71,5 +76,5 @@ En este ejercicio, investigarás el concepto de API (Interfaz de Programación d
 
 ## Solución (Opcional)
 
-Puedes consultar la carpeta `solucion/` para ver una posible implementación de este ejercicio.
+Puedes consultar `example/example_sol.md` para ver una posible implementación de este ejercicio.
 

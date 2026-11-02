@@ -74,7 +74,7 @@ In HTTP, `400` means "I could not understand the request" and `415` means "I do 
 ```bash
 # (Optional) Create and activate a virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\Activate.ps1
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -132,6 +132,8 @@ curl -i http://127.0.0.1:8000/notes/99
 # Method not allowed -> 405
 curl -i -X DELETE http://127.0.0.1:8000/notes
 ```
+
+Note: the `Allow` header is incomplete here (`GET` only) because FastAPI registers `GET /notes` and `POST /notes` as two separate routes.
 
 > **Windows:** in PowerShell use `curl.exe` (in PowerShell 5.1 `curl` is an alias of `Invoke-WebRequest`). Windows PowerShell 5.1 also removes the inner quotes of `-d '{...}'`, so the JSON arrives broken: run the JSON examples from CMD, or use `Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/notes -ContentType "application/json" -Body (@{title="First note"; content="Hello world"} | ConvertTo-Json)`. In CMD, single quotes don't work: use double quotes and escape the inner ones, e.g. `-d "{\"title\": \"First note\", \"content\": \"Hello world\"}"`.
 

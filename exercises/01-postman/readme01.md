@@ -1,4 +1,3 @@
-
 # Exercise 1: Exploring a Public API with Postman
 
 ## Quick Start

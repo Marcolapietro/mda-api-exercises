@@ -19,8 +19,6 @@ class GreetRequest(BaseModel):
     _____: str = "Guest"
 
 
-# TODO: Create a route for the root path '/' that returns a welcome message
-# Hint: Use @app.get('/'); response_class=PlainTextResponse sends plain text instead of JSON
 @app.get("/", response_class=PlainTextResponse)
 def index():
     return "Welcome to my first FastAPI application!"

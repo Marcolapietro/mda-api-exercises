@@ -235,7 +235,6 @@ def search(q: str = ""):
 
 ### Useful Tools
 - Postman (for testing APIs)
-- SQLite Browser (for databases)
 - Git (for version control)
 
 ### Best Practices

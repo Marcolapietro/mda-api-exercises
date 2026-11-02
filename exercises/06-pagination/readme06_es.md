@@ -13,7 +13,7 @@ fastapi dev app.py
 
 La API arranca en `http://127.0.0.1:8000` (documentación automática en `/docs`) con **95 notas de ejemplo** (ids del 1 al 95), para que haya algo que paginar.
 
-Mientras el decorador `GET` esté en blanco verás un `AttributeError` que apunta a `@app._____`. Cuando lo arregles, un `ge=`/`le=` sin completar también detiene el arranque, con un error que apunta a la línea de `limit` de `list_notes` (el mensaje exacto depende de tu versión de Python), porque FastAPI lee las reglas de `Query(...)` al registrar la ruta. Los demás espacios están dentro de funciones, así que solo fallan cuando una petición llega hasta ellos (un `500` o una respuesta incorrecta).
+Mientras el decorador `GET` esté en blanco verás un `AttributeError` que apunta a `@app._____`. Cuando lo arregles, un `ge=`/`le=` sin completar también detiene el arranque: la importación falla con un error que termina en `'le' must be coercible to an integer` (en Python 3.13 o anterior, un `NameError` que apunta a la línea de `limit` de `list_notes`), porque FastAPI lee las reglas de `Query(...)` al registrar la ruta. Los demás espacios están dentro de funciones, así que solo fallan cuando una petición llega hasta ellos (un `500` o una respuesta incorrecta).
 
 ## Objetivo
 
