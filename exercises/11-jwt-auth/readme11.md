@@ -305,7 +305,7 @@ def login(data: Credentials) -> LoginResponse:
 
 > **Login with JSON, not the password form.** The FastAPI tutorial logs in with `OAuth2PasswordRequestForm`, a form that implements the OAuth **password grant**. OAuth 2.1 removed that grant (you will see why in Exercise 13), so here `/login` takes a plain JSON body and the tokens travel with `HTTPBearer`. Swagger UI (`/docs`) still shows an "Authorize" button for the token.
 
-**Why the dummy hash?** `bcrypt.checkpw` is deliberately slow (around 100 ms). If an unknown username returned immediately, an attacker could measure the response time and find out **which usernames exist** (user enumeration). Checking against a dummy hash makes both failures take the same time, and both return the same message. `Credentials` uses plain `str` fields (no length limits), so wrong credentials always answer `401`, never `422`.
+**Why the dummy hash?** `bcrypt.checkpw` is deliberately slow (a few hundred milliseconds). If an unknown username returned immediately, an attacker could measure the response time and find out **which usernames exist** (user enumeration). Checking against a dummy hash makes both failures take the same time, and both return the same message. `Credentials` uses plain `str` fields (no length limits), so wrong credentials always answer `401`, never `422`.
 
 **Key Differences from Exercise 08:**
 - ❌ NO `HTTPBasic` dependency
@@ -315,7 +315,7 @@ def login(data: Credentials) -> LoginResponse:
 
 ### 4. Protected Endpoints (JWT Required)
 
-`HTTPBearer` reads `Authorization: Bearer <token>`. With `auto_error=False` a missing header gives us `None` and we answer `401` ourselves (by default FastAPI would answer `403`). Two small dependencies, one on top of the other, replace a "login required" decorator:
+`HTTPBearer` reads `Authorization: Bearer <token>`. With `auto_error=False` a missing header gives us `None` and we return our own `401` message and `WWW-Authenticate` header (FastAPI's default is a generic `401 Not authenticated`). Two small dependencies, one on top of the other, replace a "login required" decorator:
 
 ```python
 bearer = HTTPBearer(auto_error=False)
@@ -578,7 +578,7 @@ Online decoders such as jwt.io are fine for **throwaway tokens** you create for 
 3. **Use refresh tokens** - For longer sessions without re-login, and revoke them on logout
 4. **Verify everything** - Signature, `exp`, `iss` and `aud` (`jwt.decode` with `issuer=` and `audience=`, as above)
 5. **Store tokens securely**:
-   - Web: `httpOnly` cookies (prevents XSS)
+   - Web: `httpOnly` cookies (JavaScript cannot read the token, so an XSS cannot steal it)
    - Mobile: Secure storage (Keychain, KeyStore)
    - NOT in localStorage (vulnerable to XSS)
 6. **Use strong secret keys** - Random, long, from an environment variable or secrets manager
@@ -732,12 +732,12 @@ Once you complete the basic implementation:
 
 ## Next Steps
 
-**Exercise 10:** Learn to consume external APIs (weather, GitHub, etc.)
-
-**Exercise 12:** Add **Authorization** (roles and permissions) to your JWT tokens
+**Exercise 12:** Roles and Permissions: add **Authorization** to your JWT tokens
 - Current exercise: **Authentication** (who you are)
 - Exercise 12: **Authorization** (what you can do)
 - JWT will include role claims (admin, user, etc.)
+
+**Exercise 13:** OAuth with GitHub (Authorization Code + PKCE): let users log in with an external identity provider
 
 ---
 

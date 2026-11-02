@@ -306,7 +306,7 @@ def login(data: Credentials) -> LoginResponse:
 
 > **Login con JSON, no con el formulario de contraseña.** El tutorial de FastAPI hace el login con `OAuth2PasswordRequestForm`, un formulario que implementa el **password grant** de OAuth. OAuth 2.1 eliminó ese grant (verás por qué en el Ejercicio 13), así que aquí `/login` recibe un cuerpo JSON normal y los tokens viajan con `HTTPBearer`. Swagger UI (`/docs`) sigue mostrando un botón "Authorize" para el token.
 
-**¿Por qué el hash ficticio?** `bcrypt.checkpw` es lento a propósito (unos 100 ms). Si un usuario desconocido respondiera al instante, un atacante podría medir el tiempo de respuesta y averiguar **qué usuarios existen** (enumeración de usuarios). Comprobar contra un hash ficticio hace que ambos fallos tarden lo mismo, y ambos devuelven el mismo mensaje. `Credentials` usa campos `str` simples (sin límites de longitud), así que unas credenciales incorrectas siempre responden `401`, nunca `422`.
+**¿Por qué el hash ficticio?** `bcrypt.checkpw` es lento a propósito (unos cientos de milisegundos). Si un usuario desconocido respondiera al instante, un atacante podría medir el tiempo de respuesta y averiguar **qué usuarios existen** (enumeración de usuarios). Comprobar contra un hash ficticio hace que ambos fallos tarden lo mismo, y ambos devuelven el mismo mensaje. `Credentials` usa campos `str` simples (sin límites de longitud), así que unas credenciales incorrectas siempre responden `401`, nunca `422`.
 
 **Diferencias Clave con el Ejercicio 08:**
 - ❌ NO hay dependencia `HTTPBasic`
@@ -316,7 +316,7 @@ def login(data: Credentials) -> LoginResponse:
 
 ### 4. Endpoints Protegidos (Requieren JWT)
 
-`HTTPBearer` lee `Authorization: Bearer <token>`. Con `auto_error=False`, si falta el header recibimos `None` y respondemos `401` nosotros (por defecto FastAPI respondería `403`). Dos dependencias pequeñas, una sobre otra, sustituyen a un decorador de "login requerido":
+`HTTPBearer` lee `Authorization: Bearer <token>`. Con `auto_error=False`, si falta el header recibimos `None` y devolvemos nuestro propio mensaje `401` y la cabecera `WWW-Authenticate` (por defecto FastAPI responde un `401 Not authenticated` genérico). Dos dependencias pequeñas, una sobre otra, sustituyen a un decorador de "login requerido":
 
 ```python
 bearer = HTTPBearer(auto_error=False)
@@ -579,7 +579,7 @@ Los decodificadores online como jwt.io valen para **tokens desechables** que cre
 3. **Usar refresh tokens** - Para sesiones largas sin re-login, y revocarlos en el logout
 4. **Verificarlo todo** - Firma, `exp`, `iss` y `aud` (`jwt.decode` con `issuer=` y `audience=`, como arriba)
 5. **Almacenar tokens de forma segura**:
-   - Web: Cookies `httpOnly` (previene XSS)
+   - Web: Cookies `httpOnly` (JavaScript no puede leer el token, así que un XSS no puede robarlo)
    - Móvil: Almacenamiento seguro (Keychain, KeyStore)
    - NO en localStorage (vulnerable a XSS)
 6. **Usar claves secretas fuertes** - Aleatorias, largas, desde una variable de entorno o un gestor de secretos
@@ -733,12 +733,12 @@ Una vez completes la implementación básica:
 
 ## Próximos Pasos
 
-**Ejercicio 10:** Aprende a consumir APIs externas (clima, GitHub, etc.)
-
-**Ejercicio 12:** Añade **Autorización** (roles y permisos) a tus tokens JWT
+**Ejercicio 12:** Roles y Permisos: añade **Autorización** a tus tokens JWT
 - Ejercicio actual: **Autenticación** (quién eres)
 - Ejercicio 12: **Autorización** (qué puedes hacer)
 - JWT incluirá claims de roles (admin, usuario, etc.)
+
+**Ejercicio 13:** OAuth con GitHub (Authorization Code + PKCE): deja que los usuarios inicien sesión con un proveedor de identidad externo
 
 ---
 

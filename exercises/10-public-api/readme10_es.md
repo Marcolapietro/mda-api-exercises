@@ -21,7 +21,7 @@ Rellena los huecos (`_____`) de arriba abajo; la app arranca cuando el decorador
 
 ## Lo Que Aprenderás
 
-Este ejercicio se basa en el Ejercicio 11 (autenticación JWT) y añade:
+El login con JWT (`/register`, `/login`, `/profile`) te lo damos hecho: es una copia de lo que el Ejercicio 11 explica en profundidad, y aquí solo lo consumes. Este ejercicio añade:
 
 1. **Consumir APIs Externas** con la librería `httpx`
 2. **Trabajar con Múltiples Endpoints de API** (Geocodificación + Clima)
@@ -106,7 +106,7 @@ set OPENWEATHER_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 
 ## Estructura de la API
 
-### Endpoints de Autenticación (del Ejercicio 11)
+### Endpoints de Autenticación (dados; se explican en profundidad en el Ejercicio 11)
 
 | Método | Endpoint | Auth Requerida | Descripción |
 |--------|----------|----------------|-------------|
@@ -127,11 +127,11 @@ set OPENWEATHER_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 
 ### Cómo funciona JWT en FastAPI (concepto nuevo)
 
-FastAPI no tiene un decorador `@jwt_required()`; usamos la librería `PyJWT` directamente:
+El código del login te lo damos hecho; solo necesitas saber qué hace (el Ejercicio 11 lo explica en profundidad). Usa la librería `PyJWT` directamente:
 
 - `create_access_token(username)` firma un token con `jwt.encode(...)`. Lleva `sub` (el usuario) y `exp` (caduca en 15 minutos).
-- `HTTPBearer` lee la cabecera `Authorization: Bearer <token>` y se la pasa a una **dependencia**, `get_current_user`, que la comprueba con `jwt.decode(...)`. Un token ausente, caducado o manipulado responde `401` con la cabecera `WWW-Authenticate: Bearer`. `HTTPBearer(auto_error=False)` existe porque por defecto FastAPI respondería 403 cuando falta la cabecera.
-- Una ruta se protege pidiendo esa dependencia: `user: Annotated[str, Depends(get_current_user)]`. Sustituye a `@jwt_required()`, y `user` sustituye a `get_jwt_identity()`.
+- `HTTPBearer` lee la cabecera `Authorization: Bearer <token>` y se la pasa a una **dependencia**, `get_current_user`, que la comprueba con `jwt.decode(...)`. Un token ausente, caducado o manipulado responde `401` con la cabecera `WWW-Authenticate: Bearer`. `HTTPBearer(auto_error=False)` nos permite devolver nuestro propio mensaje `401` y la cabecera `WWW-Authenticate` cuando falta la cabecera (por defecto FastAPI responde un `401 Not authenticated` genérico).
+- Una ruta se protege pidiendo esa dependencia: `user: Annotated[str, Depends(get_current_user)]`. FastAPI ejecuta `get_current_user` antes que la ruta y pone en `user` el nombre de usuario que devuelve; si el token no es válido, la ruta nunca se ejecuta.
 - `/login` recibe las credenciales como **JSON** (no como formulario): el flujo con formulario del tutorial de FastAPI es el password grant de OAuth, que OAuth 2.1 eliminó. Swagger UI (`/docs`) sigue mostrando un botón "Authorize" para el token.
 
 ---
@@ -209,10 +209,10 @@ GET https://api.openweathermap.org/data/2.5/weather?lat=40.4165&lon=-3.7026&appi
 
 ### TODOs en app.py
 
-Necesitas completar **9 TODOs** (13 huecos `_____`; los dos diccionarios de parámetros tienen varios cada uno).
+Necesitas completar **10 TODOs** (13 huecos `_____`; los dos diccionarios de parámetros tienen varios cada uno).
 Los números de línea pueden desplazarse mientras escribes, así que busca `_____`:
 
-#### TODOs de Configuración y Autenticación (del Ejercicio 11):
+#### TODOs de Configuración y Autenticación (en el código JWT dado):
 1. `OPENWEATHER_API_KEY` (línea 43): El nombre de la variable de entorno: `OPENWEATHER_API_KEY`
 2. `@app._____("/login")` (línea 118): El método HTTP que envía credenciales en un cuerpo: `post`
 3. `login()` (línea 131): Crear el token de acceso JWT: `create_access_token(data.username)`
@@ -220,12 +220,13 @@ Los números de línea pueden desplazarse mientras escribes, así que busca `___
 #### TODOs de API de Geocodificación (en `weather()`, paso 1):
 4. `geo_params` (línea 187): Rellenar `"q"` con `query` y `"appid"` con `OPENWEATHER_API_KEY`
 5. `geo_response` (línea 192): Hacer la petición GET: `client.get(GEOCODING_API_URL, params=geo_params)`
-6. `geo_response.status_code` (línea 197): El código de estado que significa éxito: `200`
-7. `geo_data` (línea 205): Parsear la respuesta JSON: `geo_response.json()`
+6. `geo_response.status_code` (línea 202): El código de estado que significa éxito: `200`
+7. `geo_data` (línea 210): Parsear la respuesta JSON: `geo_response.json()`
 
 #### TODOs de API del Clima (en `weather()`, paso 2):
-8. `weather_params` (líneas 238-240): Rellenar `"lat"`, `"lon"` y `"appid"`
-9. `weather_response` (línea 248) y `weather_data` (línea 258): Hacer la petición GET, `client.get(WEATHER_API_URL, params=weather_params)`, y parsearla con `weather_response.json()`
+8. `weather_params` (líneas 243-245): Rellenar `"lat"`, `"lon"` y `"appid"`
+9. `weather_response` (línea 253): Hacer la petición GET: `client.get(WEATHER_API_URL, params=weather_params)`
+10. `weather_data` (línea 267): Parsear la respuesta JSON: `weather_response.json()`
 
 ### Conceptos Clave a Implementar
 
@@ -236,7 +237,7 @@ geo_params = {"q": query, "appid": OPENWEATHER_API_KEY, "limit": 1}
 
 # API del Clima: GET {WEATHER_API_URL}?lat=...&lon=...&appid=...&units=metric&lang=en
 weather_params = {"lat": latitude, "lon": longitude, "appid": OPENWEATHER_API_KEY,
-                  "units": "metric", "lang": "en"}   # "es" para descripciones en español
+                  "units": "metric", "lang": "en"}
 ```
 
 **¿Por qué un diccionario `params` y no una URL con f-string?** `httpx` codifica (URL-encode) cada
@@ -254,6 +255,9 @@ with httpx.Client(timeout=10) as client:
     if response.status_code == 200:
         data = response.json()
         # Procesar datos
+    elif response.status_code == 401:
+        # NUESTRA clave es incorrecta o aún no está activa (503: el servidor está mal configurado, no el cliente)
+        raise HTTPException(status_code=503, detail="Weather service is not configured correctly")
     else:
         # Manejar error (502 Bad Gateway: ha fallado la API externa, no tu cliente)
         raise HTTPException(status_code=502, detail="Geocoding API request failed")
@@ -478,10 +482,10 @@ except ValueError:
 
 ### Problema 1: Clave API No Activada
 
-**Síntoma** (OpenWeatherMap responde `401 Invalid API key`; tu API lo traslada como un 502):
+**Síntoma** (OpenWeatherMap responde `401 Invalid API key`; tu API responde `503`, porque una clave incorrecta es un error de configuración del servidor, no del cliente; el motivo está en el log del servidor):
 ```json
 {
-  "detail": "Geocoding API request failed (upstream status 401)"
+  "detail": "Weather service is not configured correctly"
 }
 ```
 
@@ -723,14 +727,13 @@ httpx.get('https://api.openweathermap.org/data/2.5/weather',
    - Extracción comprehensiva de datos
 
 5. **Construyendo sobre Conocimiento Previo**
-   - Autenticación JWT (Ejercicio 11)
+   - Autenticación JWT (dada aquí; el Ejercicio 11 la explica en profundidad)
    - Enrutamiento FastAPI y manejo de errores
    - Respuestas JSON
    - ¡Ahora añadiendo: Consumo de APIs externas!
 
 **Próximos Pasos:**
-- **Ejercicio 05**: Operaciones CRUD (Crear, Leer, Actualizar, Eliminar)
-- **Ejercicio 06**: Paginación de API
-- **Ejercicio 12**: Control de Acceso Basado en Roles (RBAC)
+- **Ejercicio 11**: Autenticación JWT
+- **Ejercicio 12**: Roles y Permisos
 
 ¡Buena suerte! 🌤️

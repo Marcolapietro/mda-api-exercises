@@ -30,8 +30,8 @@ JWT_ALG = "HS256"
 ACCESS_TOKEN_MINUTES = 15
 
 # HTTPBearer reads "Authorization: Bearer <token>" and hands us the token.
-# auto_error=False: if the header is missing we get None and answer 401 ourselves
-# (by default FastAPI would answer 403).
+# auto_error=False: if the header is missing we get None and return our own 401 message
+# and WWW-Authenticate header (FastAPI's default is a generic "401 Not authenticated").
 bearer = HTTPBearer(auto_error=False)
 
 # In-memory database: {username: bcrypt hash}
@@ -191,6 +191,11 @@ def weather(
             # Hint: client.get(GEOCODING_API_URL, params=geo_params)
             geo_response = client._____(GEOCODING_API_URL, params=geo_params)
 
+            # 401 means OUR key is wrong or not active yet: a server misconfiguration, not an upstream failure
+            if geo_response.status_code == 401:
+                logger.error("OpenWeatherMap rejected the API key: check OPENWEATHER_API_KEY (new keys take up to 2 hours to activate)")
+                raise HTTPException(status_code=503, detail="Weather service is not configured correctly")
+
             # Check if the request was successful
             # TODO: Which status code means success?
             # Hint: 200
@@ -246,6 +251,10 @@ def weather(
             # TODO: Make the GET request to the weather API
             # Hint: client.get(WEATHER_API_URL, params=weather_params)
             weather_response = client._____(WEATHER_API_URL, params=weather_params)
+
+            if weather_response.status_code == 401:  # same rule as above: our key, our problem
+                logger.error("OpenWeatherMap rejected the API key: check OPENWEATHER_API_KEY")
+                raise HTTPException(status_code=503, detail="Weather service is not configured correctly")
 
             if weather_response.status_code != 200:
                 raise HTTPException(

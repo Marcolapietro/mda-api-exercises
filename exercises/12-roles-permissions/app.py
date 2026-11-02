@@ -19,21 +19,21 @@ from typing import Annotated, Callable
 
 import bcrypt
 import jwt
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
 
 app = FastAPI(title="Roles and Permissions API")
 
 # JWT configuration for token-based authentication
-# WARNING: In production, use environment variables for secrets!
+# The secret never lives in the code: it comes from the environment, or is random for this run
 JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)  # from env; random per run if unset
 JWT_ALG = "HS256"
 ACCESS_TOKEN_MINUTES = 15
 
 # HTTPBearer reads "Authorization: Bearer <token>" and hands us the token.
-# auto_error=False: if the header is missing we get None and answer 401 ourselves
-# (by default FastAPI would answer 403).
+# auto_error=False: if the header is missing we get None and return our own 401 message
+# and WWW-Authenticate header (FastAPI's default is a generic "401 Not authenticated").
 bearer = HTTPBearer(auto_error=False)
 
 VALID_ROLES = ("admin", "student")
@@ -220,16 +220,14 @@ def profile(user: Annotated[dict[str, str], Depends(get_current_user)]) -> dict[
 @app.get("/users")
 def get_users(
     admin: Annotated[dict[str, str], Depends(require_role("admin"))],
-    page: int = 1,
-    per_page: int = 10,
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 10,
 ) -> dict[str, list[str] | int]:
-    """Returns a list of users with pagination (admins only)"""
-    per_page = min(max(per_page, 1), 100)  # clamp to 1..100
-
+    """Returns a list of users with pagination (admins only). page=0 or per_page=500 answer 422."""
     total_users = len(users)
     total_pages = math.ceil(total_users / per_page)
 
-    if page > total_pages or page < 1:
+    if page > total_pages:
         raise HTTPException(status_code=404, detail="Page not found.")
 
     start = (page - 1) * per_page
@@ -253,12 +251,17 @@ def update_user(
         200: User updated successfully
         403: Permission denied (not an admin)
         404: User not found
+        409: An admin cannot change their own role
         422: Invalid role or password
     """
     # The admin check is a dependency, so it runs BEFORE this body: answering 404
     # to a non-admin would reveal which usernames exist
     if username not in users:
         raise HTTPException(status_code=404, detail="User not found.")
+
+    # An admin cannot demote themselves: that could leave the API without any admin
+    if data.role is not None and username == admin["username"]:
+        raise HTTPException(status_code=409, detail="You cannot change your own role")
 
     if data.password is not None:
         users[username]["password"] = hash_password(data.password)
@@ -283,9 +286,14 @@ def delete_user(
         200: User deleted successfully
         403: Permission denied (not an admin)
         404: User not found
+        409: An admin cannot delete their own account
     """
     if username not in users:
         raise HTTPException(status_code=404, detail="User not found.")
+
+    # An admin cannot delete themselves: that could leave the API without any admin
+    if username == admin["username"]:
+        raise HTTPException(status_code=409, detail="You cannot delete your own account")
 
     # TODO: Delete the user from the database
     # Hint: dict method that removes a key and returns its value (3 letters)

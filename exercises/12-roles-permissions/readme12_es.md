@@ -46,7 +46,7 @@ Rellena los huecos (`_____`) de arriba abajo. Ningún hueco impide que la app ar
 ## Funcionalidades
 
 ### **Registro de Usuarios**
-Los usuarios nuevos se registran **siempre** como `student`. El rol nunca se lee del cuerpo de la petición: aceptarlo permitiría que cualquiera se registrase como admin (una vulnerabilidad de *mass assignment*). Solo un admin puede cambiar el rol de un usuario, con `PUT /users/<username>`.
+Los usuarios nuevos se registran **siempre** como `student`. El rol nunca se lee del cuerpo de la petición: aceptarlo permitiría que cualquiera se registrase como admin (una vulnerabilidad de *mass assignment*). Solo un admin puede cambiar el rol de un usuario, con `PUT /users/{username}`.
 
 ### **Cuenta de Administrador**
 Al arrancar, la app crea un usuario `admin`. Su contraseña se toma de la variable de entorno `ADMIN_PASSWORD`; si no está definida, se genera una aleatoria y se muestra en la consola (la terminal donde se ejecuta `fastapi dev`):
@@ -58,7 +58,7 @@ Admin user created -> username: admin  password: Xy3...
 La línea se muestra una sola vez, aunque `fastapi dev` carga tu archivo dos veces (una para encontrar la app y otra en el proceso de recarga): la primera carga guarda la contraseña generada en la variable de entorno `ADMIN_PASSWORD` y la segunda la reutiliza. Para elegir tu propia contraseña, define `ADMIN_PASSWORD` antes de arrancar el servidor.
 
 ### **Inicio de Sesión**
-Autentica a los usuarios y les proporciona un token JWT que será necesario para acceder a las rutas protegidas. El token incluye el rol del usuario como *claim*, pero ese *claim* es solo informativo. En cada petición se vuelve a buscar al usuario a partir del *claim* `sub` del token, así que los permisos nunca dependen de una cookie de sesión ni de lo que diga el token.
+Autentica a los usuarios y les proporciona un token JWT que será necesario para acceder a las rutas protegidas. El token incluye el rol del usuario como *claim*, pero ese *claim* es solo informativo. En cada petición se vuelve a buscar al usuario a partir del *claim* `sub` del token, así que los permisos nunca dependen de lo que diga el token: el rol se lee del almacén del servidor en cada petición.
 
 ### **Roles Disponibles**
 1. **Admin:**
@@ -95,19 +95,19 @@ El acceso a las rutas está restringido según el rol del usuario. Esto se gesti
 4. **Listar Usuarios**
    - **Método:** `GET`
    - **Ruta:** `/users`
-   - **Descripción:** Devuelve una lista paginada de usuarios registrados.
+   - **Descripción:** Devuelve una lista paginada de usuarios registrados (`page` >= 1, `per_page` 1-100; cualquier otro valor responde `422`, y una página más allá del final `404`).
    - **Requiere:** Rol de administrador.
 
 5. **Actualizar Usuario**
    - **Método:** `PUT`
-   - **Ruta:** `/users/<username>`
-   - **Descripción:** Actualiza información del usuario (contraseña o rol). El rol debe ser `admin` o `student`; cualquier otro responde `422`.
+   - **Ruta:** `/users/{username}`
+   - **Descripción:** Actualiza información del usuario (contraseña o rol). El rol debe ser `admin` o `student`; cualquier otro responde `422`. Un admin no puede cambiar su propio rol (`409 Conflict`), así que la API nunca se queda sin admins.
    - **Requiere:** Rol de administrador.
 
 6. **Eliminar Usuario**
    - **Método:** `DELETE`
-   - **Ruta:** `/users/<username>`
-   - **Descripción:** Elimina a un usuario.
+   - **Ruta:** `/users/{username}`
+   - **Descripción:** Elimina a un usuario. Un admin no puede eliminar su propia cuenta (`409 Conflict`).
    - **Requiere:** Rol de administrador.
 
 7. **Dashboard de Administrador**
@@ -133,13 +133,14 @@ El acceso a las rutas está restringido según el rol del usuario. Esto se gesti
 1. Inicia sesión como `admin` (contraseña mostrada al arrancar) y como un estudiante que hayas registrado.
 2. Intenta acceder a rutas restringidas con cada token y verifica que las restricciones se aplican correctamente (`/admin/dashboard` debe devolver `403` a un estudiante).
 3. Intenta registrar un usuario enviando `"role": "admin"` en el cuerpo: debe crearse igualmente como `student`.
-4. Como admin, asciende a ese usuario con `PUT /users/<username>` y `{"role": "admin"}` y comprueba el nuevo acceso con el token que ya tiene: no hace falta volver a iniciar sesión, porque el rol se lee del servidor en cada petición (el *claim* `role` dentro del token es solo informativo).
+4. Como admin, asciende a ese usuario con `PUT /users/{username}` y `{"role": "admin"}` y comprueba el nuevo acceso con el token que ya tiene: no hace falta volver a iniciar sesión, porque el rol se lee del servidor en cada petición (el *claim* `role` dentro del token es solo informativo).
 
 Comandos listos para usar: `example/commands_cmd.txt` y `example/commands_powershell.txt`.
 
 ### **Errores Comunes**
 - **Token Inválido:** Asegúrate de incluir el token JWT en el encabezado `Authorization` con el formato `Bearer <token>`.
 - **Acceso Denegado:** Verifica que el usuario tiene el rol correcto para acceder a la ruta.
+- **"Ya funciona" antes de rellenar los huecos:** con los huecos sin rellenar, todo usuario nuevo recibe el rol `"_____"` y los dos endpoints con `require_role("_____")` le dejan pasar (el rol coincide con el hueco), así que `/admin/dashboard` y `/student/data` responden `200` a cualquier usuario nuevo. Es lo esperado; rellena los huecos y vuelve a probar.
 
 ---
 

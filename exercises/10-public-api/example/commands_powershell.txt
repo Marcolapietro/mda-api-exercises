@@ -5,6 +5,12 @@ $headers = @{
     "Content-Type" = "application/json"
 }
 
+# Helper: show the HTTP status code and body of a failed request
+function Show-HttpError($err, $label) {
+    $status = [int]$err.Exception.Response.StatusCode
+    Write-Host "$label -> HTTP $status $($err.ErrorDetails.Message)" -ForegroundColor Yellow
+}
+
 Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host "Exercise 10: Public API Consumption - Weather API Tests" -ForegroundColor Cyan
 Write-Host ("=" * 70) -ForegroundColor Cyan
@@ -87,7 +93,7 @@ try {
     $weatherParis = Invoke-RestMethod -Method Get -Uri "$baseUrl/weather?city=Paris&country=FR"
     Write-Host "Weather data for Paris:" -ForegroundColor Green
     Write-Host "City: $($weatherParis.location.city), $($weatherParis.location.country)" -ForegroundColor White
-    Write-Host "Temperature: $($weatherParis.weather.temperature)°C" -ForegroundColor White
+    Write-Host "Temperature: $($weatherParis.weather.temperature) degC" -ForegroundColor White
     Write-Host "Description: $($weatherParis.weather.description)" -ForegroundColor White
     Write-Host "Humidity: $($weatherParis.weather.humidity)%" -ForegroundColor White
     Write-Host ""
@@ -101,7 +107,7 @@ try {
     $weatherLondon = Invoke-RestMethod -Method Get -Uri "$baseUrl/weather?city=London&country=GB"
     Write-Host "Weather data for London:" -ForegroundColor Green
     Write-Host "City: $($weatherLondon.location.city), $($weatherLondon.location.country)" -ForegroundColor White
-    Write-Host "Temperature: $($weatherLondon.weather.temperature)°C" -ForegroundColor White
+    Write-Host "Temperature: $($weatherLondon.weather.temperature) degC" -ForegroundColor White
     Write-Host "Description: $($weatherLondon.weather.description)" -ForegroundColor White
     Write-Host ""
 } catch {
@@ -114,7 +120,7 @@ try {
     $weatherNY = Invoke-RestMethod -Method Get -Uri "$baseUrl/weather?city=New%20York&country=US"
     Write-Host "Weather data for New York:" -ForegroundColor Green
     Write-Host "City: $($weatherNY.location.city), $($weatherNY.location.country)" -ForegroundColor White
-    Write-Host "Temperature: $($weatherNY.weather.temperature)°C" -ForegroundColor White
+    Write-Host "Temperature: $($weatherNY.weather.temperature) degC" -ForegroundColor White
     Write-Host "Description: $($weatherNY.weather.description)" -ForegroundColor White
     Write-Host ""
 } catch {
@@ -127,7 +133,7 @@ try {
     $weatherTokyo = Invoke-RestMethod -Method Get -Uri "$baseUrl/weather?city=Tokyo&country=JP"
     Write-Host "Weather data for Tokyo:" -ForegroundColor Green
     Write-Host "City: $($weatherTokyo.location.city), $($weatherTokyo.location.country)" -ForegroundColor White
-    Write-Host "Temperature: $($weatherTokyo.weather.temperature)°C" -ForegroundColor White
+    Write-Host "Temperature: $($weatherTokyo.weather.temperature) degC" -ForegroundColor White
     Write-Host "Description: $($weatherTokyo.weather.description)" -ForegroundColor White
     Write-Host ""
 } catch {
@@ -140,7 +146,7 @@ try {
     $weatherInvalid = Invoke-RestMethod -Method Get -Uri "$baseUrl/weather?city=InvalidCityXYZ123"
     Write-Host "Unexpected success!" -ForegroundColor Red
 } catch {
-    Write-Host "Expected error - City not found: $($_.Exception.Message)" -ForegroundColor Magenta
+    Show-HttpError $_ "Expected error (404 city not found; 503 means the API key is not set)"
     Write-Host ""
 }
 
@@ -152,6 +158,6 @@ Write-Host ""
 Write-Host "Summary:" -ForegroundColor Cyan
 Write-Host "- Authentication: Pure JWT (credentials in JSON body)" -ForegroundColor White
 Write-Host "- Weather endpoint: PUBLIC (no authentication required)" -ForegroundColor White
-Write-Host "- API flow: City name → Geocoding API → Coordinates → Weather API" -ForegroundColor White
+Write-Host "- API flow: City name -> Geocoding API -> Coordinates -> Weather API" -ForegroundColor White
 Write-Host "- Uses HTTPS and coordinates (modern approach)" -ForegroundColor White
 Write-Host ""

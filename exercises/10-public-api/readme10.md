@@ -21,7 +21,7 @@ Fill the blanks (`_____`) from top to bottom; the app starts once the decorator 
 
 ## What You'll Learn
 
-This exercise builds on Exercise 11 (JWT authentication) and adds:
+The JWT login (`/register`, `/login`, `/profile`) is given to you here: it is a copy of what Exercise 11 explains in depth, and you only consume it. This exercise adds:
 
 1. **Consuming External APIs** with the `httpx` library
 2. **Working with Multiple API Endpoints** (Geocoding + Weather)
@@ -106,7 +106,7 @@ set OPENWEATHER_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 
 ## API Structure
 
-### Authentication Endpoints (from Exercise 11)
+### Authentication Endpoints (given; explained in depth in Exercise 11)
 
 | Method | Endpoint | Auth Required | Description |
 |--------|----------|---------------|-------------|
@@ -127,11 +127,11 @@ set OPENWEATHER_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 
 ### How JWT works in FastAPI (new concept)
 
-FastAPI has no `@jwt_required()` decorator; we use the `PyJWT` library directly:
+The login code is given to you; you only need to know what it does (Exercise 11 explains it in depth). It uses the `PyJWT` library directly:
 
 - `create_access_token(username)` signs a token with `jwt.encode(...)`. It carries `sub` (the user) and `exp` (expires in 15 minutes).
-- `HTTPBearer` reads the `Authorization: Bearer <token>` header and gives it to a **dependency**, `get_current_user`, which checks it with `jwt.decode(...)`. A missing, expired or tampered token answers `401` with a `WWW-Authenticate: Bearer` header. `HTTPBearer(auto_error=False)` is there because by default FastAPI would answer 403 when the header is missing.
-- A route is protected by asking for that dependency: `user: Annotated[str, Depends(get_current_user)]`. It replaces `@jwt_required()`, and `user` replaces `get_jwt_identity()`.
+- `HTTPBearer` reads the `Authorization: Bearer <token>` header and gives it to a **dependency**, `get_current_user`, which checks it with `jwt.decode(...)`. A missing, expired or tampered token answers `401` with a `WWW-Authenticate: Bearer` header. `HTTPBearer(auto_error=False)` lets us return our own `401` message and `WWW-Authenticate` header when the header is missing (FastAPI's default is a generic `401 Not authenticated`).
+- A route is protected by asking for that dependency: `user: Annotated[str, Depends(get_current_user)]`. FastAPI runs `get_current_user` before the route and puts the username it returns in `user`; if the token is bad, the route never runs.
 - `/login` takes the credentials as **JSON** (not a form): the form-based password flow in the FastAPI tutorial is the OAuth password grant, which OAuth 2.1 removed. Swagger UI (`/docs`) still shows an "Authorize" button for the token.
 
 ---
@@ -209,10 +209,10 @@ GET https://api.openweathermap.org/data/2.5/weather?lat=40.4165&lon=-3.7026&appi
 
 ### TODOs in app.py
 
-You need to complete **9 TODOs** (13 `_____` blanks; the two params dicts have several each).
+You need to complete **10 TODOs** (13 `_____` blanks; the two params dicts have several each).
 Line numbers can shift as you type, so search for `_____`:
 
-#### Setup and Authentication TODOs (from Exercise 11):
+#### Setup and Authentication TODOs (in the given JWT code):
 1. `OPENWEATHER_API_KEY` (line 43): The name of the environment variable: `OPENWEATHER_API_KEY`
 2. `@app._____("/login")` (line 118): The HTTP method that sends credentials in a body: `post`
 3. `login()` (line 131): Create the JWT access token: `create_access_token(data.username)`
@@ -220,12 +220,13 @@ Line numbers can shift as you type, so search for `_____`:
 #### Geocoding API TODOs (in `weather()`, step 1):
 4. `geo_params` (line 187): Fill `"q"` with `query` and `"appid"` with `OPENWEATHER_API_KEY`
 5. `geo_response` (line 192): Make the GET request: `client.get(GEOCODING_API_URL, params=geo_params)`
-6. `geo_response.status_code` (line 197): The status code that means success: `200`
-7. `geo_data` (line 205): Parse the JSON response: `geo_response.json()`
+6. `geo_response.status_code` (line 202): The status code that means success: `200`
+7. `geo_data` (line 210): Parse the JSON response: `geo_response.json()`
 
 #### Weather API TODOs (in `weather()`, step 2):
-8. `weather_params` (lines 238-240): Fill `"lat"`, `"lon"` and `"appid"`
-9. `weather_response` (line 248) and `weather_data` (line 258): Make the GET request, `client.get(WEATHER_API_URL, params=weather_params)`, and parse it with `weather_response.json()`
+8. `weather_params` (lines 243-245): Fill `"lat"`, `"lon"` and `"appid"`
+9. `weather_response` (line 253): Make the GET request: `client.get(WEATHER_API_URL, params=weather_params)`
+10. `weather_data` (line 267): Parse the JSON response: `weather_response.json()`
 
 ### Key Concepts to Implement
 
@@ -254,6 +255,9 @@ with httpx.Client(timeout=10) as client:
     if response.status_code == 200:
         data = response.json()
         # Process data
+    elif response.status_code == 401:
+        # OUR key is wrong or not active yet (503: the server is misconfigured, not the client)
+        raise HTTPException(status_code=503, detail="Weather service is not configured correctly")
     else:
         # Handle error (502 Bad Gateway: the upstream API failed, not your client)
         raise HTTPException(status_code=502, detail="Geocoding API request failed")
@@ -477,10 +481,10 @@ except ValueError:
 
 ### Issue 1: API Key Not Activated
 
-**Symptom** (OpenWeatherMap answers `401 Invalid API key`; your API passes it on as a 502):
+**Symptom** (OpenWeatherMap answers `401 Invalid API key`; your API answers `503`, because a bad key is a server misconfiguration, not the client's fault; the reason is in the server log):
 ```json
 {
-  "detail": "Geocoding API request failed (upstream status 401)"
+  "detail": "Weather service is not configured correctly"
 }
 ```
 
@@ -722,14 +726,13 @@ httpx.get('https://api.openweathermap.org/data/2.5/weather',
    - Comprehensive data extraction
 
 5. **Building on Previous Knowledge**
-   - JWT authentication (Exercise 11)
+   - JWT authentication (given here; Exercise 11 explains it in depth)
    - FastAPI routing and error handling
    - JSON responses
    - Now adding: External API consumption!
 
 **Next Steps:**
-- **Exercise 05**: CRUD Operations (Create, Read, Update, Delete)
-- **Exercise 06**: API Pagination
-- **Exercise 12**: Role-Based Access Control (RBAC)
+- **Exercise 11**: JWT Authentication
+- **Exercise 12**: Roles and Permissions
 
 Good luck! 🌤️

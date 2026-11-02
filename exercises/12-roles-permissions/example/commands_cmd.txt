@@ -39,3 +39,6 @@ curl -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer %TOKEN
 
 REM 11. Delete a user (admins only)
 curl -X DELETE -H "Authorization: Bearer %TOKEN_ADMIN%" http://127.0.0.1:8000/users/mallory
+
+REM 12. Try to delete your own admin account (expected: 409)
+curl -i -X DELETE -H "Authorization: Bearer %TOKEN_ADMIN%" http://127.0.0.1:8000/users/admin
