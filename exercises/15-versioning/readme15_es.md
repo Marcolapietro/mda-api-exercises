@@ -36,7 +36,7 @@ El **versionado de APIs** es la práctica de gestionar múltiples versiones de t
 **Ejemplos del mundo real:**
 - **Twitter API**: v1.1 → v2 (rediseño mayor, ~2 años de migración)
 - **Stripe API**: Usa versiones con fechas (2023-10-16, 2024-06-20)
-- **GitHub API**: v3 → v4 (REST → GraphQL)
+- **GitHub API**: versiones con fecha elegidas con una cabecera (`X-GitHub-Api-Version: 2022-11-28`)
 - **Google Maps API**: v3 (estable), con advertencias de deprecación
 
 ## Prerequisitos
@@ -62,7 +62,7 @@ Antes de comenzar este ejercicio, completa:
 
 **Agregar nuevos endpoints:**
 - `POST /api/v1/notes` (existente)
-- `DELETE /api/v1/notes/<id>` (nuevo)
+- `DELETE /api/v1/notes/{note_id}` (nuevo)
 
 ✅ Los clientes antiguos no usan el nuevo endpoint - ¡sin problema!
 
@@ -175,6 +175,15 @@ def get_notes_v2():
 - ❌ Más difícil de probar
 - ❌ Caché más complejo
 
+**Ejemplo:**
+```python
+@app.get('/api/notes')
+def get_notes(api_version: Annotated[str, Header()] = 'v1'):  # lee la cabecera API-Version
+    if api_version == 'v2':
+        return {'data': [...]}
+    return [...]
+```
+
 **Usado por:** API de GitHub, API de Azure
 
 ### 3. Versionado por Parámetro de Consulta
@@ -188,7 +197,26 @@ def get_notes_v2():
 - ❌ No es RESTful
 - ❌ Puede olvidarse/omitirse
 
+**Ejemplo:**
+```bash
+GET /api/notes?version=2&page=1&per_page=10
+```
+
 **Usado por:** Algunas APIs internas, raramente en APIs públicas
+
+### 4. Negociación de Contenido
+
+**Formato:** `Accept: application/json; version=2`
+
+**Pros:**
+- ✅ Mecanismo HTTP estándar
+- ✅ Flexible
+
+**Cons:**
+- ❌ Complejo de implementar
+- ❌ Poco intuitivo
+
+**Usado por:** Algunas APIs empresariales
 
 ## Este Ejercicio: Versionado por Ruta URL
 
@@ -239,8 +267,8 @@ Quieres agregar:
       "content": "...",
       "tags": ["trabajo", "importante"],
       "owner": "alice",
-      "created_at": "2024-01-01T10:00:00Z",
-      "updated_at": "2024-01-01T10:00:00Z"
+      "created_at": "2026-11-02T11:12:05.580221+00:00",
+      "updated_at": "2026-11-02T11:12:05.580221+00:00"
     }
   ],
   "count": 1,
@@ -429,6 +457,7 @@ def create_note_v2(data: NoteCreateV2, user: Annotated[str, Depends(get_current_
     """Versión 2: Crear nota con timestamps y tags"""
     global note_id_counter
 
+    now = datetime.now(timezone.utc).isoformat()  # calculado una vez, así los dos timestamps son idénticos
     # TODO: Crear nota con campos v2
     note = {
         'id': note_id_counter,
@@ -448,8 +477,8 @@ def create_note_v2(data: NoteCreateV2, user: Annotated[str, Depends(get_current_
 ```
 
 **Tus tareas:**
-1. Agregar timestamp `created_at` usando `datetime.now(timezone.utc).isoformat()`
-2. Agregar timestamp `updated_at`
+1. Agregar timestamp `created_at`: `now`, la cadena `datetime.now(timezone.utc).isoformat()` calculada justo arriba
+2. Agregar timestamp `updated_at`: el mismo `now` (llamar dos veces a `datetime.now()` daría dos valores distintos)
 3. Envolver la respuesta: `{'data': note, 'message': 'Note created successfully'}`
 
 `get_note_v2` (también envuelta en `data`) y el nuevo `PUT /api/v2/notes/{note_id}` ya están implementados.
@@ -564,8 +593,8 @@ curl -X POST http://127.0.0.1:8000/api/v2/notes \
     "content": "Esto es v2",
     "tags": ["trabajo", "importante"],
     "owner": "alice",
-    "created_at": "2024-01-01T10:30:00.123456+00:00",
-    "updated_at": "2024-01-01T10:30:00.123456+00:00"
+    "created_at": "2026-11-02T11:12:05.580221+00:00",
+    "updated_at": "2026-11-02T11:12:05.580221+00:00"
   },
   "message": "Note created successfully"
 }
@@ -598,8 +627,8 @@ API-Version: v2
       "content": "Esto es v2",
       "tags": ["trabajo", "importante"],
       "owner": "alice",
-      "created_at": "2024-01-01T10:30:00.123456+00:00",
-      "updated_at": "2024-01-01T10:30:00.123456+00:00"
+      "created_at": "2026-11-02T11:12:05.580221+00:00",
+      "updated_at": "2026-11-02T11:12:05.580221+00:00"
     }
   ],
   "count": 2,
@@ -628,8 +657,8 @@ curl -X PUT http://127.0.0.1:8000/api/v2/notes/2 \
     "content": "Esto es v2",
     "tags": ["trabajo", "urgente"],
     "owner": "alice",
-    "created_at": "2024-01-01T10:30:00.123456+00:00",
-    "updated_at": "2024-01-01T10:35:00.789012+00:00"
+    "created_at": "2026-11-02T11:12:05.580221+00:00",
+    "updated_at": "2026-11-02T11:12:07.609752+00:00"
   },
   "message": "Note updated successfully"
 }
@@ -671,7 +700,7 @@ curl http://127.0.0.1:8000/api/versions
       "deprecation_date": "2026-01-01",
       "sunset_date": "2027-06-30",
       "successor": "/api/v2",
-      "deprecation_notice": "API v1 está deprecada. Por favor migra a v2."
+      "deprecation_notice": "API v1 is deprecated. Please migrate to v2."
     },
     "v2": {
       "status": "current",
@@ -766,6 +795,37 @@ Porque `notes` ahora es un objeto `{data: [...]}`, ¡no un array!
 - Endpoints v1 devuelven 410 Gone
 - Todos los clientes deben usar v2
 
+### Comunicar la Deprecación
+
+**En las cabeceras de respuesta (automático):**
+```
+Deprecation: @1767225600
+Sunset: Wed, 30 Jun 2027 00:00:00 GMT
+Link: </api/v2>; rel="successor-version"
+```
+
+**En la documentación:**
+```markdown
+## ⚠️ Aviso de Deprecación
+
+La API v1 está deprecada y se retirará (sunset) el **30 de junio de 2027**.
+
+Por favor, migra a v2. Consulta la guía de migración: [enlace]
+```
+
+**Por email:**
+```
+Asunto: Acción requerida: migra a la API v2
+
+Estimado cliente,
+
+La API v1 se retirará el 30 de junio de 2027. Por favor, migra a v2
+antes de esa fecha para evitar interrupciones del servicio.
+
+Guía de migración: [enlace]
+¿Necesitas ayuda? Contacta con support@example.com
+```
+
 ## Mejores Prácticas
 
 ### 1. Versionar desde el Inicio
@@ -825,9 +885,27 @@ Los endpoints de autenticación usualmente son estables y no necesitan versionad
    - **Antes (v1)**: `GET /api/v1/notes` → `[...]`
    - **Después (v2)**: `GET /api/v2/notes` → `{data: [...], count: 2}`
    - **Solución**: Actualizar código de cliente para leer `response.data` en lugar de `response`
+
+### Cambios Compatibles
+
+- **Endpoint de actualización**: nuevo `PUT /api/v2/notes/{note_id}` (v1 no tenía endpoint de actualización; añadir un endpoint no rompe a nadie)
+- **Timestamps**: todos los recursos incluyen ahora `created_at` y `updated_at`
+  - **Impacto**: Ninguno (los campos adicionales son compatibles hacia atrás al leer)
+- Nuevo campo opcional `tags` en las notas (se puede omitir)
+- Parámetros de consulta de paginación `page` y `per_page` (opcionales). El valor por defecto `per_page=10` es la razón por la que la paginación salió junto con el envoltorio incompatible de v2 en lugar de añadirse a v1: un cliente v1 que nunca envía `page` recibiría en silencio solo las 10 primeras notas.
 ```
 
-### 6. Monitorear Uso de Versiones
+### 6. Usar Versionado Semántico (Opcional)
+
+Para APIs complejas, considera el versionado semántico:
+
+```
+v1.0.0 → v1.1.0 (campo opcional añadido - compatible hacia atrás)
+v1.1.0 → v1.2.0 (nuevo endpoint añadido - compatible hacia atrás)
+v1.2.0 → v2.0.0 (formato de respuesta cambiado - INCOMPATIBLE)
+```
+
+### 7. Monitorear Uso de Versiones
 
 Rastrea qué clientes usan qué versiones:
 
@@ -897,6 +975,48 @@ Solo versiona cuando sea absolutamente necesario.
 1 Dic: Sunset v1 (6 meses total)
 ```
 
+### Error 4: Tratar Cambios Compatibles como Incompatibles
+
+❌ **Malo:**
+```python
+# v1
+{"id": 1, "name": "Alice"}
+
+# v2 creada innecesariamente solo para añadir un campo opcional
+# v2
+{"id": 1, "name": "Alice", "email": "alice@example.com"}
+```
+
+¡Esto es compatible hacia atrás! Simplemente añade el campo a v1.
+
+✅ **Bueno:**
+```python
+# v1 (actualizada con el campo opcional)
+{"id": 1, "name": "Alice", "email": "alice@example.com"}
+```
+
+### Error 5: Versionado Inconsistente
+
+❌ **Malo:**
+```
+/api/v1/users (usa convenciones de v1)
+/api/v2/notes (usa convenciones de v2)
+/api/comments   (sin versión - ¿usa ??)
+```
+
+✅ **Bueno:**
+```
+/api/v1/users
+/api/v1/notes
+/api/v1/comments
+
+/api/v2/users
+/api/v2/notes
+/api/v2/comments
+```
+
+Todos los recursos siguen la misma estrategia de versionado.
+
 ## Lista de Verificación de Pruebas
 
 **Configuración:**
@@ -948,17 +1068,15 @@ curl https://api.stripe.com/v1/customers \
 
 ### API de GitHub
 
-**Enfoque:** Cambios de versión mayor (v3 REST → v4 GraphQL)
+**Enfoque:** Versiones con fecha elegidas con una cabecera (API REST)
 
 ```bash
-# v3 (REST)
-GET https://api.github.com/users/octocat
-
-# v4 (GraphQL)
-POST https://api.github.com/graphql
+# Fijar la petición a una versión con fecha de la API REST
+curl https://api.github.com/users/octocat \
+  -H "X-GitHub-Api-Version: 2022-11-28"
 ```
 
-**¿Por qué?** GraphQL es fundamentalmente diferente de REST, requiriendo un cambio de versión mayor.
+**¿Por qué?** Los cambios incompatibles se publican como una fecha nueva; una petición sin la cabecera recibe la versión soportada más antigua, así que los clientes existentes siguen funcionando hasta que deciden cambiar. Cada versión con fecha se mantiene al menos 24 meses después de publicarse la siguiente.
 
 ### API de Twitter
 
@@ -974,11 +1092,31 @@ GET https://api.twitter.com/2/tweets
 
 **¿Por qué?** Rediseño completo de API. Dio a desarrolladores ~2 años para migrar.
 
+### API de Twilio
+
+**Enfoque:** Versionado por ruta URL
+
+```bash
+# v1 (retirada)
+POST https://api.twilio.com/2008-08-01/Accounts/{AccountSid}/SMS/Messages
+
+# v2 (actual)
+POST https://api.twilio.com/2010-04-01/Accounts/{AccountSid}/Messages
+```
+
+**¿Por qué?** Versiones basadas en fechas, pero en la ruta URL. Las versiones antiguas acaban retirándose.
+
 ## Recursos Adicionales
 
 ### Documentación Oficial
-- **[RFC 8594 - Sunset HTTP Header](https://www.rfc-editor.org/rfc/rfc8594.html)** - Estándar para deprecación
+- **[RFC 9745 - Deprecation HTTP Header](https://www.rfc-editor.org/rfc/rfc9745.html)** - La cabecera `Deprecation` (desde cuándo está deprecada una versión)
+- **[RFC 8594 - Sunset HTTP Header](https://www.rfc-editor.org/rfc/rfc8594.html)** - La cabecera `Sunset` (cuándo deja de funcionar una versión)
 - **[Versionado Semántico](https://semver.org/)** - Estrategia de numeración de versiones
+- **[API Versioning Best Practices](https://www.troyhunt.com/your-api-versioning-is-wrong-which-is/)** - Artículo de Troy Hunt
+
+### Tutoriales
+- [Versionado de la API de Stripe](https://stripe.com/docs/api/versioning) - Ejemplo del mundo real
+- [Versionado de la API de GitHub](https://docs.github.com/en/rest/overview/api-versions) - Versiones con fecha en una cabecera
 
 ## Entregables
 

@@ -35,7 +35,7 @@ Al terminar este ejercicio serás capaz de:
 
 **Casos de Uso:**
 - **Webhooks de GitHub**: Recibir notificaciones de push de GitHub en tu app local
-- **Colaboración en equipo**: Compartir tu API durante el proyecto ProManage sin desplegarla
+- **Colaboración en equipo**: Compartir tu API durante tu proyecto final sin desplegarla
 - **Desarrollo CI/CD**: Construir flujos automatizados disparados por eventos de GitHub
 - **Pruebas de microservicios**: Probar la comunicación entre servicios en local
 
@@ -50,25 +50,22 @@ Antes de empezar este ejercicio deberías haber completado:
 ### Paso 1: Descargar ngrok
 
 **Windows:**
-1. Visita [ngrok.com/download](https://ngrok.com/download)
-2. Descarga el ZIP para Windows
-3. Extrae `ngrok.exe` en una carpeta (p. ej., `C:\ngrok\`)
-4. Añádelo al PATH (opcional pero recomendado):
-   - Abre "Variables de entorno" en la Configuración del sistema
-   - Edita la variable "Path"
-   - Añade `C:\ngrok\` (o la ubicación que hayas elegido)
-   - Reinicia la terminal
+```powershell
+winget install ngrok -s msstore
+# o, con Scoop:  scoop install ngrok
+```
+Alternativa sin gestor de paquetes: descarga el ZIP para Windows desde [ngrok.com/download](https://ngrok.com/download), extrae `ngrok.exe` en una carpeta (p. ej., `C:\ngrok\`), añade esa carpeta a tu `Path` ("Variables de entorno" en la Configuración del sistema) y reinicia la terminal.
 
 **Mac (con Homebrew):**
 ```bash
-brew install ngrok/ngrok/ngrok
+brew install ngrok
 ```
 
 **Linux:**
 ```bash
 # Descargar
 curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+echo "deb https://ngrok-agent.s3.amazonaws.com bookworm main" | sudo tee /etc/apt/sources.list.d/ngrok.list
 sudo apt update && sudo apt install ngrok
 ```
 
@@ -84,10 +81,10 @@ ngrok version
 2. Crea una cuenta gratuita (obligatoria, no hace falta tarjeta de crédito)
 3. Verifica tu dirección de email
 
-**El plan gratuito incluye:**
-- 1 proceso de ngrok en línea
-- 40 conexiones/minuto
-- Túneles HTTPS
+**El plan gratuito incluye** (consulta los límites actuales en [ngrok.com/pricing](https://ngrok.com/pricing)):
+- Hasta 3 endpoints (agentes) en línea y 1 dominio estático de desarrollo gratuito
+- 1 GB de transferencia y 20k peticiones HTTP al mes
+- Túneles HTTPS; una página intermedia en el navegador en los endpoints HTTP gratuitos (ver Problemas Comunes)
 - Inspección de peticiones
 
 ### Paso 3: Autenticar ngrok (Actualizado 2025)
@@ -105,9 +102,9 @@ ngrok version
 ngrok config add-authtoken 2bXjYZ1234abcd5678efgh_9IJKLMnopqrstuvwxyz
 ```
 
-Esto guarda tu token en el fichero de configuración de ngrok:
-- **Mac/Linux**: `~/.ngrok2/ngrok.yml`
-- **Windows**: `%USERPROFILE%\.ngrok2\ngrok.yml`
+Esto guarda tu token en el fichero de configuración de ngrok (`ngrok config check` muestra su ruta):
+- **Linux**: `~/.config/ngrok/ngrok.yml`, **macOS**: `~/Library/Application Support/ngrok/ngrok.yml`
+- **Windows**: `%LocalAppData%\ngrok\ngrok.yml`
 
 ## Inicio Rápido
 
@@ -190,7 +187,7 @@ El `app.py` incluido tiene una API básica con endpoints de health check y de us
 fastapi dev app.py
 ```
 
-Visita `http://localhost:8000/health`: debería devolver `{"status": "ok"}`
+Visita `http://localhost:8000/health`: debería devolver `{"status":"ok","service":"github-webhook-demo","version":"1.0","message":"API is running and accessible!"}`
 
 ### Tarea 1.2: Exponer con ngrok
 
@@ -231,12 +228,12 @@ Esta es la parte central del ejercicio. Configurarás un **webhook real de GitHu
 **Opción A - Crear un Repo de Prueba Nuevo:**
 1. Ve a [github.com/new](https://github.com/new)
 2. Llámalo `api-webhook-test` (o como quieras)
-3. Hazlo **Public** (necesario para webhooks gratuitos)
+3. Público o privado: necesitas acceso de administrador al repositorio para añadir un webhook
 4. Inicialízalo con un README
 5. Crea el repositorio
 
 **Opción B - Usar un Repo Existente:**
-- Sirve cualquier repo público tuyo
+- Sirve cualquier repo tuyo (público o privado)
 - Necesitas permisos de administrador para configurar webhooks
 
 ### Tarea 2.2: Generar el Secreto del Webhook y Definirlo como Variable de Entorno
@@ -313,7 +310,11 @@ X-GitHub-Delivery:   <id único>                  ✅ iguales     → continuar
 
 #### ¿Por qué `async def` y `await request.body()`?
 
-Hasta ahora todas las operaciones de ruta del curso eran un `def` normal. Leer el cuerpo en bruto es distinto: `request.body()` es una **corrutina**, una función que tiene que esperar a que los bytes lleguen por la red, así que se llama con `await`, y `await` solo se permite dentro de una función `async def`. Por eso `github_webhook` es la **única operación de ruta (route handler) que es `async def` en el curso**. (El middleware de registro y los manejadores de error del mismo archivo también son `async def`, porque el framework los llama así, pero no son rutas.) Las demás rutas siguen siendo `def`: FastAPI las ejecuta en un pool de hilos, y solo necesitas `async def` cuando el cuerpo de la función espera algo con `await`. ¿Por qué no declarar un modelo de cuerpo como en los ejercicios anteriores? Porque el modelo te da el JSON *ya parseado*, y el HMAC hay que calcularlo sobre los bytes exactos que envió GitHub.
+Casi todas las operaciones de ruta del curso son un `def` normal. Leer el cuerpo en bruto es distinto: `request.body()` es una **corrutina**, una función que tiene que esperar a que los bytes lleguen por la red, así que se llama con `await`, y `await` solo se permite dentro de una función `async def`. Aparte de las dos rutas de Authlib del ejercicio 13, `github_webhook` es la **única ruta que espera (`await`) el cuerpo en bruto de la petición**. (El middleware de registro y los manejadores de error del mismo archivo también son `async def`, porque el framework los llama así, pero no son rutas.) Las demás rutas siguen siendo `def`: FastAPI las ejecuta en un pool de hilos, y solo necesitas `async def` cuando el cuerpo de la función espera algo con `await`. ¿Por qué no declarar un modelo de cuerpo como en los ejercicios anteriores? Porque el modelo te da el JSON *ya parseado*, y el HMAC hay que calcularlo sobre los bytes exactos que envió GitHub.
+
+#### ¿Qué evento es?
+
+GitHub te dice el tipo de evento en la cabecera `X-GitHub-Event`, no en el cuerpo (`ping`, `push`, `issues`, `pull_request`...). El endpoint la lee justo después de verificar la firma: si falta la cabecera responde **400**, `ping` responde `{"status": "pong"}`, `push` se guarda, y cualquier otro evento se confirma con `{"status": "ignored", "event": "..."}` pero **no se guarda** (un 2xx le dice a GitHub que la entrega funcionó, así que no la reintenta).
 
 #### Deduplicar por ID de entrega
 
@@ -332,7 +333,7 @@ GitHub espera **10 segundos** tu respuesta; después marca la entrega como falli
 
 #### Tus TODOs en `app.py`
 
-Abre `app.py` y completa los **13 huecos** (`_____`). El orden de las comprobaciones en el endpoint es: secreto configurado → firma → deduplicación → parsear JSON → guardar → responder.
+Abre `app.py` y completa los **13 huecos** (`_____`). El orden de las comprobaciones en el endpoint es: secreto configurado → firma → tipo de evento → deduplicación → parsear JSON → guardar → responder.
 
 | # | Dónde (función / sección) | Qué escribir |
 |---|---------------------------|--------------|
@@ -388,7 +389,10 @@ async def github_webhook(request: Request) -> dict:
     if not verify_github_signature(body, signature, secret):
         return JSONResponse({"error": "Unauthorized", ...}, status_code=401)
 
-    # 3. Deduplicar
+    # 3. ¿Qué evento es? (ping / push / otro)
+    event = request.headers.get("X-GitHub-Event", "")
+    ...
+    # 4. Deduplicar
     delivery_id = request.headers.get("X-GitHub-Delivery")
     ...
     # TODO: If we already processed this delivery ID, ignore it
@@ -401,7 +405,7 @@ async def github_webhook(request: Request) -> dict:
     except ValueError:
         data = None
     ...
-    # (extraer repository, pusher, commits y ref, mostrarlos y guardar un registro mínimo)
+    # (ping -> pong; cualquier evento que no sea push -> ignorado; push: extraer repository, pusher, commits y ref, mostrarlos y guardar un registro mínimo)
     ...
     # TODO: Remember this delivery. Hint: processed_deliveries.add(delivery_id)
     processed_deliveries._____(delivery_id)
@@ -514,7 +518,7 @@ ngrok te da una URL **HTTPS**: úsala. Los payloads y las firmas de los webhooks
    - Haz clic en **Add webhook**
 
 4. **Verifica la Configuración**
-   - GitHub enviará inmediatamente un evento "ping" firmado
+   - GitHub enviará inmediatamente un evento "ping" firmado (`X-GitHub-Event: ping`); la app responde `{"status": "pong"}`
    - Mira tu terminal de la API: deberías ver `GitHub Webhook Ping Received!`
    - En GitHub, baja hasta "Recent Deliveries": debería aparecer un check verde ✅
 
@@ -523,7 +527,7 @@ ngrok te da una URL **HTTPS**: úsala. Los payloads y las firmas de los webhooks
 - ¿Copiaste la URL de ngrok correcta, incluyendo `/webhooks/github`?
 - **401 Unauthorized** → el Secret de GitHub y `GITHUB_WEBHOOK_SECRET` son distintos (cópialos otra vez, sin espacios de más), o definiste la variable en otra terminal.
 - **503** → `GITHUB_WEBHOOK_SECRET` no está definida en la terminal donde se ejecuta la API.
-- **400 Invalid payload** → el Content type no es `application/json`.
+- **400 Invalid payload** → el cuerpo no es un objeto JSON (el Content type debe ser `application/json`).
 
 ### Tarea 2.7: Disparar el Webhook con un Push Real
 
@@ -565,7 +569,7 @@ git push
 1. Abre `http://localhost:4040` en el navegador
 2. Verás la petición POST de GitHub
 3. Haz clic en ella para ver:
-   - Todas las cabeceras, incluidas `X-Hub-Signature-256`, `X-GitHub-Delivery` y `X-GitHub-Event`
+   - Todas las cabeceras, incluidas `X-Hub-Signature-256`, `X-GitHub-Delivery` y `X-GitHub-Event` (`push`)
    - El payload JSON completo (los bytes en bruto que se firmaron)
    - Tu respuesta (200 OK)
 4. Haz clic en **Replay**: ngrok reenvía exactamente la misma petición, con el mismo ID de entrega. Tu app responde `"duplicate, ignored"` y `/webhooks/events` no crece. Eso es la deduplicación funcionando.
@@ -585,7 +589,7 @@ Verás todos los eventos de GitHub que has recibido, cada uno con su `delivery_i
 
 ## Parte 3: Colaboración en Equipo (20 minutos)
 
-Ahora que entiendes los webhooks, practica compartiendo tu API con tus compañeros (¡esencial para el proyecto ProManage!).
+Ahora que entiendes los webhooks, practica compartiendo tu API con tus compañeros (¡útil para tu proyecto final!).
 
 ### Tarea 3.1: Compartir tu API
 
@@ -635,7 +639,7 @@ Ahora que entiendes los webhooks, practica compartiendo tu API con tus compañer
 
 **Esto demuestra comunicación entre microservicios**: un servicio notifica a otro sobre eventos, autenticado con un secreto compartido.
 
-**Nota**: ¡Este ejercicio te prepara para el Ejercicio 15 (ProManage), donde usarás ngrok para compartir APIs con tu equipo!
+**Nota**: Puedes reutilizar este flujo siempre que un compañero o un servicio externo necesite llegar a tu API antes de desplegarla (por ejemplo, en el reto final, Ejercicio 18).
 
 ## Parte 4: Resumen de Seguridad de Webhooks (15 minutos)
 
@@ -646,7 +650,7 @@ Las partes importantes ya las implementaste en la Parte 2. Esta sección las res
 | Regla | Por qué | Dónde en tu código |
 |-------|---------|--------------------|
 | **Verificar la firma HMAC sobre el cuerpo en bruto, en tiempo constante** | Cualquiera puede hacer POST a una URL pública; solo GitHub conoce el secreto | `verify_github_signature()` + `await request.body()` + `hmac.compare_digest` |
-| **Responder 2xx rápido, procesar después** | GitHub corta a los 10 s y reintenta | Guardado mínimo + `return ..., 200`; el trabajo real va a una cola |
+| **Responder 2xx rápido, procesar después** | GitHub corta a los 10 s y reintenta | Guardado mínimo + `return {...}` (el 200 se fija en el decorador); el trabajo real va a una cola |
 | **Deduplicar por ID de evento** | Reintentos y reentregas envían el mismo evento otra vez | `X-GitHub-Delivery` + `processed_deliveries` |
 | **Usar HTTPS** | Payloads y firmas no deben viajar en claro | URL `https://` de ngrok, SSL verification activada en GitHub |
 
@@ -681,10 +685,10 @@ El panel de ngrok es utilísimo:
    - Las URLs del plan gratuito no están protegidas por autenticación
    - Expón solo entornos de desarrollo/prueba
 
-2. **Las URLs son temporales**
-   - Las URLs del plan gratuito cambian cada vez que reinicias ngrok
-   - No escribas URLs de ngrok directamente en el código
-   - Usa variables de entorno para las URLs
+2. **Las URLs aleatorias son temporales**
+   - Una URL aleatoria de `ngrok http 8000` cambia cada vez que reinicias ngrok, y GitHub sigue apuntando a la antigua
+   - El plan gratuito incluye un dominio estático de desarrollo: `ngrok http 8000 --url <nombre>.ngrok-free.app` (comprueba el flag exacto y el dominio en tu panel) mantiene la misma URL entre reinicios
+   - No escribas URLs de ngrok directamente en el código; usa variables de entorno para las URLs
 
 3. **Valida siempre las firmas de los webhooks**
    - Verifica `X-Hub-Signature-256` en **cada** llamada, sobre el cuerpo en bruto, con `hmac.compare_digest`
@@ -743,7 +747,7 @@ async def github_webhook(request: Request) -> dict:
 - Revisa la configuración del firewall
 
 ### Problema 5: "ERR_NGROK_3200 - Tunnel Limit Reached"
-**Solución:** El plan gratuito permite 1 túnel. Cierra los otros procesos de ngrok con `Ctrl+C`
+**Solución:** El plan gratuito permite 3 agentes en línea. Cierra los procesos `ngrok` sobrantes con `Ctrl+C` (o detenlos desde el panel)
 
 ### Problema 6: Todos los webhooks devuelven 401
 **Solución:**
@@ -754,6 +758,9 @@ async def github_webhook(request: Request) -> dict:
 
 ### Problema 7: El webhook devuelve 503
 **Solución:** `GITHUB_WEBHOOK_SECRET` no está definida en la terminal de la API. Defínela (Tarea 2.2) y reinicia la app.
+
+### Problema 8: El navegador muestra "You are about to visit..." (ERR_NGROK_6024)
+**Solución:** En el plan gratuito ngrok muestra esta página intermedia en el navegador antes de un endpoint HTTP gratuito: pulsa "Visit Site". `curl` y GitHub no se ven afectados, y una petición que envía la cabecera `ngrok-skip-browser-warning: 1` se la salta.
 
 ## Lista de Comprobación
 
@@ -839,41 +846,9 @@ El cliente paga → Webhook de Stripe (Stripe-Signature) → Marcar el pedido co
 ```
 Mismas reglas: verificar la firma, deduplicar por ID de evento, responder 2xx rápido.
 
-**En el Proyecto ProManage (Ejercicio 15):**
-Podrías usar webhooks para avisar a los miembros del equipo cuando:
-- Se crea una tarea nueva
-- Cambia el estado del proyecto
-- Se actualizan las asignaciones
+## Úsalo en tu Proyecto Final
 
-## Preparación para el Proyecto en Equipo ProManage
-
-En el Ejercicio 15 (ProManage) trabajarás en equipos donde:
-- **Cada miembro desarrolla su propio microservicio**
-- **Los servicios necesitan comunicarse entre sí**
-- **ngrok te permite compartir tu API sin desplegarla**
-
-Escenario de ejemplo:
-- Estudiante A: Servicio de autenticación de usuarios (puerto 8000)
-- Estudiante B: Servicio de gestión de proyectos (puerto 8000)
-- Estudiante C: Servicio de gestión de tareas (puerto 8000)
-
-Cada estudiante ejecuta `fastapi dev app.py` en su propia máquina (puerto 8000), lo expone con su propio ngrok y comparte su propia URL con el equipo.
-
-```bash
-# Servicio de autenticación del Estudiante A
-ngrok http 8000
-# Compartir: https://student-a.ngrok-free.app
-
-# Servicio de proyectos del Estudiante B
-ngrok http 8000
-# Compartir: https://student-b.ngrok-free.app
-
-# El Estudiante C ya puede llamar a ambos servicios:
-curl https://student-a.ngrok-free.app/login -d '{"username":"test","password":"pass"}'
-curl https://student-b.ngrok-free.app/projects -H "Authorization: Bearer <token>"
-```
-
-**¡Este ejercicio te prepara exactamente para este flujo de trabajo!**
+Siempre que tus compañeros (o un servicio externo) necesiten llegar a una API que todavía vive en tu portátil, el flujo es el que acabas de practicar: cada persona ejecuta `fastapi dev app.py` en su propia máquina, la expone con su propio `ngrok http 8000` y comparte su propia URL. Los servicios pueden entonces llamarse entre sí, y avisarse unos a otros con webhooks firmados, exactamente como en la Parte 3.
 
 ## Recursos Adicionales
 
@@ -956,8 +931,8 @@ Tu trabajo se evaluará según:
 
 Después de completar este ejercicio:
 
-1. **Ejercicio 14**: Documentación con Swagger - Documenta tus APIs de forma profesional
-2. **Ejercicio 15**: Proyecto en Equipo ProManage - Usa ngrok para colaborar en equipo
+1. **Ejercicio 17**: MCP - Envuelve la API de Notas como servidor MCP
+2. **Ejercicio 18**: Reto Mastodon - Junta todo lo aprendido contra una API pública real
 3. **Más allá**: Aprende sobre despliegue en producción (Heroku, AWS, Docker) para aplicaciones reales
 
 **Nota**: ngrok es solo para desarrollo/pruebas. Las apps de producción deben desplegarse correctamente.
@@ -970,6 +945,6 @@ Después de completar este ejercicio:
 4. ¿Por qué hay que calcular el HMAC sobre el cuerpo en bruto y no sobre el JSON parseado?
 5. ¿Por qué `hmac.compare_digest` en lugar de `==`?
 6. ¿Qué pasaría con tus datos si no deduplicaras por `X-GitHub-Delivery` y GitHub reintentara una entrega?
-7. ¿Qué pasa si tu túnel de ngrok se desconecta durante el proyecto ProManage?
+7. ¿Qué pasa si tu túnel de ngrok se desconecta mientras GitHub o un compañero está llamando a tu API?
 
 ¡Buena suerte exponiendo tus APIs al mundo! 🚀

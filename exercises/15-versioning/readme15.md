@@ -36,7 +36,7 @@ Learn to manage API versions and handle breaking changes professionally:
 **Real-world examples:**
 - **Twitter API**: v1.1 → v2 (major redesign, ~2 year migration period)
 - **Stripe API**: Uses dated versions (2023-10-16, 2024-06-20)
-- **GitHub API**: v3 → v4 (REST → GraphQL)
+- **GitHub API**: dated versions chosen with a header (`X-GitHub-Api-Version: 2022-11-28`)
 - **Google Maps API**: v3 (stable), with deprecation warnings for old features
 
 ## Prerequisites
@@ -62,7 +62,7 @@ Before starting this exercise, complete:
 
 **Adding new endpoints:**
 - `POST /api/v1/notes` (existing)
-- `DELETE /api/v1/notes/<id>` (new)
+- `DELETE /api/v1/notes/{note_id}` (new)
 
 ✅ Old clients don't use the new endpoint - no problem!
 
@@ -269,8 +269,8 @@ You want to add:
       "content": "...",
       "tags": ["work", "important"],
       "owner": "alice",
-      "created_at": "2024-01-01T10:00:00Z",
-      "updated_at": "2024-01-01T10:00:00Z"
+      "created_at": "2026-11-02T11:12:05.580221+00:00",
+      "updated_at": "2026-11-02T11:12:05.580221+00:00"
     }
   ],
   "count": 1,
@@ -459,6 +459,7 @@ def create_note_v2(data: NoteCreateV2, user: Annotated[str, Depends(get_current_
     """Version 2: Create note with timestamps and tags"""
     global note_id_counter
 
+    now = datetime.now(timezone.utc).isoformat()  # computed once, so both timestamps are identical
     # TODO: Create note with v2 fields
     note = {
         'id': note_id_counter,
@@ -478,8 +479,8 @@ def create_note_v2(data: NoteCreateV2, user: Annotated[str, Depends(get_current_
 ```
 
 **Your tasks:**
-1. Add `created_at` timestamp using `datetime.now(timezone.utc).isoformat()`
-2. Add `updated_at` timestamp
+1. Add `created_at` timestamp: `now`, the `datetime.now(timezone.utc).isoformat()` string computed just above
+2. Add `updated_at` timestamp: the same `now` (calling `datetime.now()` twice would give two different values)
 3. Wrap the response: `{'data': note, 'message': 'Note created successfully'}`
 
 `get_note_v2` (also wrapped in `data`) and the new `PUT /api/v2/notes/{note_id}` are already implemented.
@@ -594,8 +595,8 @@ curl -X POST http://127.0.0.1:8000/api/v2/notes \
     "content": "This is v2",
     "tags": ["work", "important"],
     "owner": "alice",
-    "created_at": "2024-01-01T10:30:00.123456+00:00",
-    "updated_at": "2024-01-01T10:30:00.123456+00:00"
+    "created_at": "2026-11-02T11:12:05.580221+00:00",
+    "updated_at": "2026-11-02T11:12:05.580221+00:00"
   },
   "message": "Note created successfully"
 }
@@ -628,8 +629,8 @@ API-Version: v2
       "content": "This is v2",
       "tags": ["work", "important"],
       "owner": "alice",
-      "created_at": "2024-01-01T10:30:00.123456+00:00",
-      "updated_at": "2024-01-01T10:30:00.123456+00:00"
+      "created_at": "2026-11-02T11:12:05.580221+00:00",
+      "updated_at": "2026-11-02T11:12:05.580221+00:00"
     }
   ],
   "count": 2,
@@ -660,8 +661,8 @@ curl -X PUT http://127.0.0.1:8000/api/v2/notes/2 \
     "content": "This is v2",
     "tags": ["work", "urgent"],
     "owner": "alice",
-    "created_at": "2024-01-01T10:30:00.123456+00:00",
-    "updated_at": "2024-01-01T10:35:00.789012+00:00"
+    "created_at": "2026-11-02T11:12:05.580221+00:00",
+    "updated_at": "2026-11-02T11:12:07.609752+00:00"
   },
   "message": "Note updated successfully"
 }
@@ -894,17 +895,13 @@ Auth endpoints are usually stable and don't need versioning:
    - **After (v2)**: `GET /api/v2/notes` → `{data: [...], count: 2}`
    - **Fix**: Update client code to read `response.data` instead of `response`
 
-2. **Timestamps**: All resources now include `created_at` and `updated_at`
-   - **Impact**: None (additional fields are backward compatible when reading)
-
-3. **Update endpoint**: New `PUT /api/v2/notes/<id>` endpoint
-   - **Before**: No update endpoint in v1
-   - **After**: Use PUT to update notes
-
 ### Non-Breaking Changes
 
+- **Update endpoint**: new `PUT /api/v2/notes/{note_id}` (v1 had no update endpoint; adding an endpoint breaks nobody)
+- **Timestamps**: all resources now include `created_at` and `updated_at`
+  - **Impact**: None (additional fields are backward compatible when reading)
 - New optional `tags` field on notes (can be omitted)
-- Pagination query params `page` and `per_page` (optional)
+- Pagination query params `page` and `per_page` (optional). The default `per_page=10` is why pagination shipped together with the breaking v2 wrapper instead of being added to v1: a v1 client that never sends `page` would silently get only the first 10 notes.
 ```
 
 ### 6. Use Semantic Versioning (Optional)
@@ -1084,17 +1081,15 @@ curl https://api.stripe.com/v1/customers \
 
 ### GitHub API
 
-**Approach:** Major version changes (v3 REST → v4 GraphQL)
+**Approach:** Dated versions chosen with a header (REST API)
 
 ```bash
-# v3 (REST)
-GET https://api.github.com/users/octocat
-
-# v4 (GraphQL)
-POST https://api.github.com/graphql
+# Pin the request to a dated version of the REST API
+curl https://api.github.com/users/octocat \
+  -H "X-GitHub-Api-Version: 2022-11-28"
 ```
 
-**Why?** GraphQL is fundamentally different from REST, requiring a major version change. Both run in parallel.
+**Why?** Breaking changes are released as a new date; a request without the header gets the oldest supported version, so existing clients keep working until they opt in. Each dated version stays supported for at least 24 months after the next one is released.
 
 ### Twitter API
 
@@ -1127,13 +1122,14 @@ POST https://api.twilio.com/2010-04-01/Accounts/{AccountSid}/Messages
 ## Additional Resources
 
 ### Official Documentation
-- **[RFC 8594 - Sunset HTTP Header](https://www.rfc-editor.org/rfc/rfc8594.html)** - Standard for deprecation
+- **[RFC 9745 - Deprecation HTTP Header](https://www.rfc-editor.org/rfc/rfc9745.html)** - The `Deprecation` header (since when a version is deprecated)
+- **[RFC 8594 - Sunset HTTP Header](https://www.rfc-editor.org/rfc/rfc8594.html)** - The `Sunset` header (when a version stops working)
 - **[Semantic Versioning](https://semver.org/)** - Version numbering strategy
 - **[API Versioning Best Practices](https://www.troyhunt.com/your-api-versioning-is-wrong-which-is/)** - Troy Hunt's article
 
 ### Tutorials
 - [Stripe API Versioning](https://stripe.com/docs/api/versioning) - Real-world example
-- [GitHub API Versioning](https://docs.github.com/en/rest/overview/api-versions) - Major version changes
+- [GitHub API Versioning](https://docs.github.com/en/rest/overview/api-versions) - Dated versions in a header
 
 ## Deliverables
 

@@ -22,8 +22,8 @@ JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)  # from e
 JWT_ALG = "HS256"
 ACCESS_TOKEN_HOURS = 1
 
-# HTTPBearer reads "Authorization: Bearer <token>". auto_error=False: if the header
-# is missing we get None and answer 401 ourselves (by default FastAPI would answer 403).
+# HTTPBearer reads "Authorization: Bearer <token>". auto_error=False lets us return our own
+# 401 message and WWW-Authenticate header (FastAPI's default is a generic 401 Not authenticated).
 bearer = HTTPBearer(auto_error=False)
 
 # In-memory data storage
@@ -273,8 +273,11 @@ def get_notes_v2(
 
     BREAKING CHANGES from v1:
     - Response is now an object with 'data', 'count', and 'version' fields
+    - Only the first page is returned (10 notes by default) unless page/per_page are sent
+
+    Also new (non-breaking):
     - Each note includes 'created_at' timestamp
-    - Pagination support (query params: page, per_page)
+    - Pagination query params: page, per_page
     """
     # Filter notes by owner
     user_notes = [note for note in notes.values() if note['owner'] == user]
@@ -302,12 +305,15 @@ def create_note_v2(data: NoteCreateV2, user: Annotated[str, Depends(get_current_
     Version 2: Create a new note with enhanced fields
 
     BREAKING CHANGES from v1:
+    - Response wrapped in 'data' object
+
+    Also new (non-breaking):
     - Adds 'created_at' and 'updated_at' timestamps
     - Adds 'tags' field (optional array)
-    - Response wrapped in 'data' object
     """
     global note_id_counter
 
+    now = datetime.now(timezone.utc).isoformat()  # computed once, so both timestamps are identical
     note = {
         'id': note_id_counter,
         'title': data.title,
@@ -316,7 +322,7 @@ def create_note_v2(data: NoteCreateV2, user: Annotated[str, Depends(get_current_
         'owner': user,
         'created_at': _____,  # TODO: Add timestamp
         'updated_at': _____   # TODO: Add timestamp
-    }  # Hint: datetime.now(timezone.utc).isoformat()
+    }  # Hint: now (the ISO timestamp computed above)
 
     notes[note_id_counter] = note
     note_id_counter += 1
@@ -333,7 +339,9 @@ def get_note_v2(note_id: int, user: Annotated[str, Depends(get_current_user)]) -
 
     BREAKING CHANGES from v1:
     - Response wrapped in 'data' object
-    - Includes metadata fields
+
+    Also new (non-breaking):
+    - Includes the timestamps and tags of notes created with v2
     """
     return {'data': get_own_note(note_id, user)}
 

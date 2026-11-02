@@ -18,10 +18,12 @@ if not os.environ.get("GITHUB_WEBHOOK_SECRET"):
 
 # In-memory storage for demonstration
 users = {}
+# Grows forever: a real service would cap this list or expire old entries (and persist them)
 webhook_events = []
 
 # Delivery IDs already processed. GitHub retries failed deliveries (and you can press
 # "Redeliver"), and every retry carries the SAME X-GitHub-Delivery ID.
+# Grows forever too: a real service would expire IDs after a few days
 processed_deliveries = set()
 
 
@@ -51,6 +53,7 @@ def info(request: Request) -> dict:
     Useful for debugging ngrok forwarding.
     """
     return {
+        # Behind ngrok this is the tunnel agent (127.0.0.1); the real caller IP is in X-Forwarded-For
         "your_ip": request.client.host if request.client else None,
         "your_user_agent": request.headers.get("User-Agent"),
         "host": request.headers.get("Host"),
@@ -133,14 +136,16 @@ async def github_webhook(request: Request) -> dict:
     When you configure a webhook in GitHub repository settings, it sends POST
     requests to this endpoint with information about repository events.
 
-    This is the only route handler (path operation) that is `async def` in the course: reading the raw body is a coroutine,
-    so the function must be `async def` and the call needs `await`.
+    Besides the two Authlib routes of exercise 13, this is the only route that awaits the raw request body:
+    `request.body()` is a coroutine, so the function must be `async def` and the call needs `await`.
 
-    Security steps, in this order:
+    Steps, in this order:
     1. Refuse to work without a configured secret (never accept unsigned requests)
     2. Verify X-Hub-Signature-256 over the RAW body          -> 401 if missing/invalid
-    3. Deduplicate by X-GitHub-Delivery (retries happen)      -> 200 "duplicate, ignored"
-    4. Store a minimal record and answer 2xx quickly
+    3. Read the event type from X-GitHub-Event               -> 400 if missing
+    4. Deduplicate by X-GitHub-Delivery (retries happen)      -> 200 "duplicate, ignored"
+    5. "ping" -> 200 "pong"; anything but "push"              -> 200 "ignored" (not stored)
+    6. Store a minimal record of the push and answer 2xx quickly
 
     Official documentation: https://docs.github.com/en/webhooks/webhook-events-and-payloads
     Signature validation:   https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
@@ -165,7 +170,13 @@ async def github_webhook(request: Request) -> dict:
             "message": "Missing or invalid X-Hub-Signature-256 signature"
         }, status_code=401)
 
-    # 3. Deduplicate: GitHub may deliver the same event more than once
+    # 3. Which event is this? GitHub says so in a header, not in the body
+    event = request.headers.get("X-GitHub-Event", "")
+    if not event:
+        return JSONResponse({"error": "Bad Request", "message": "Missing X-GitHub-Event header"},
+                            status_code=400)
+
+    # 4. Deduplicate: GitHub may deliver the same event more than once
     delivery_id = request.headers.get("X-GitHub-Delivery")
     if not delivery_id:
         return JSONResponse({"error": "Bad Request", "message": "Missing X-GitHub-Delivery header"},
@@ -189,7 +200,7 @@ async def github_webhook(request: Request) -> dict:
 
     # Handle GitHub "ping" event (sent when webhook is first created)
     # This confirms your webhook endpoint is reachable
-    if "zen" in data and "hook_id" in data:
+    if event == "ping":
         processed_deliveries.add(delivery_id)
         print(f"\n{'='*60}")
         print("GitHub Webhook Ping Received!")
@@ -198,6 +209,12 @@ async def github_webhook(request: Request) -> dict:
         print("   OK: Webhook is configured correctly (and the signature is valid)!")
         print(f"{'='*60}\n")
         return {"status": "pong"}
+
+    # Any other event (issues, pull_request...) is acknowledged but not stored: a 2xx tells
+    # GitHub the delivery worked, so it does not retry it
+    if event != "push":
+        print(f"Event '{event}' ignored (only push events are stored)")
+        return {"status": "ignored", "event": event}
 
     # Extract repository info from real GitHub payload
     repository = data.get("repository", {})
@@ -231,7 +248,7 @@ async def github_webhook(request: Request) -> dict:
 
     print(f"{'='*60}\n")
 
-    # 4. Store a minimal record (fast). In a real system you would put the event on a
+    # 6. Store a minimal record (fast). In a real system you would put the event on a
     #    queue here and let a background worker do the slow work (run tests, deploy...).
     webhook_event = {
         "type": "github_push",
@@ -299,6 +316,7 @@ async def log_request(request: Request, call_next):
         print("Incoming Request:")
         print(f"   Method: {request.method}")
         print(f"   Path: {request.url.path}")
+        # Behind ngrok this is the tunnel agent (127.0.0.1); the real caller IP is in X-Forwarded-For
         print(f"   From: {request.client.host if request.client else 'unknown'}")
         print(f"   User-Agent: {request.headers.get('User-Agent', 'Unknown')[:50]}")
         print(f"{'='*60}\n")
