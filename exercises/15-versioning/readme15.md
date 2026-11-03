@@ -510,7 +510,7 @@ Open http://127.0.0.1:8000/docs: the routes are grouped by tag (`auth`, `v1 (dep
 
 ### Step 5.2: Register and Login
 
-> The commands in this section use `curl` with `bash` syntax (`\` line continuation, single-quoted JSON, `$TOKEN`). In **Windows PowerShell 5.1** `curl` is an alias of `Invoke-WebRequest`: use `curl.exe`, write each command on one line, escape the quotes inside the JSON (`-d '{\"username\":\"alice\",\"password\":\"password123\"}'`) and save the token with `$TOKEN = "..."`. In **CMD** use double quotes with `\"` inside (`-d "{\"username\":\"alice\",\"password\":\"password123\"}"`).
+> The commands in this section use `curl` with `bash` syntax (`\` line continuation, single-quoted JSON, `$TOKEN`). In **Windows PowerShell 5.1** `curl` is an alias of `Invoke-WebRequest`: use `curl.exe`, write each command on one line, escape the quotes inside the JSON (`-d '{\"username\":\"alice\",\"password\":\"password123\"}'`) and save the token with `$TOKEN = "..."`. That escaping breaks as soon as a JSON value has a space (`"My First Note"`): for those bodies use `Invoke-RestMethod`, e.g. `Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v2/notes -ContentType "application/json" -Headers @{ Authorization = "Bearer $TOKEN" } -Body (@{ title = "My Second Note"; content = "This is v2"; tags = @("work", "important") } | ConvertTo-Json)`. In **CMD** use double quotes with `\"` inside (`-d "{\"username\":\"alice\",\"password\":\"password123\"}"`), which also works with spaces, and `set TOKEN=...` / `%TOKEN%`.
 
 ```bash
 # Register a user

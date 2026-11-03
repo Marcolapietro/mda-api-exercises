@@ -53,7 +53,7 @@ def info(request: Request) -> dict:
     Useful for debugging ngrok forwarding.
     """
     return {
-        # Behind ngrok this is the tunnel agent (127.0.0.1); the real caller IP is in X-Forwarded-For
+        # Behind ngrok this is still the real caller: ngrok sends X-Forwarded-For and uvicorn trusts it from 127.0.0.1
         "your_ip": request.client.host if request.client else None,
         "your_user_agent": request.headers.get("User-Agent"),
         "host": request.headers.get("Host"),
@@ -139,8 +139,8 @@ async def github_webhook(request: Request) -> dict:
     When you configure a webhook in GitHub repository settings, it sends POST
     requests to this endpoint with information about repository events.
 
-    Besides the two Authlib routes of exercise 13, this is the only route that awaits the raw request body:
-    `request.body()` is a coroutine, so the function must be `async def` and the call needs `await`.
+    This is the only route of the course that awaits the raw request body (the two `async def` routes of
+    exercise 13 await Authlib instead): `request.body()` is a coroutine, so the function must be `async def` and the call needs `await`.
 
     Steps, in this order:
     1. Refuse to work without a configured secret (never accept unsigned requests)
@@ -351,7 +351,7 @@ async def log_request(request: Request, call_next):
         print("Incoming Request:")
         print(f"   Method: {request.method}")
         print(f"   Path: {request.url.path}")
-        # Behind ngrok this is the tunnel agent (127.0.0.1); the real caller IP is in X-Forwarded-For
+        # Behind ngrok this is still the real caller: ngrok sends X-Forwarded-For and uvicorn trusts it from 127.0.0.1
         print(f"   From: {request.client.host if request.client else 'unknown'}")
         print(f"   User-Agent: {request.headers.get('User-Agent', 'Unknown')[:50]}")
         print(f"{'='*60}\n")

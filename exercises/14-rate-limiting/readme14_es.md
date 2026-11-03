@@ -374,8 +374,8 @@ Deberías ver el servidor arrancar en `http://127.0.0.1:8000`. Los endpoints y s
 ```
 
 Límites predeterminados para cualquier otra ruta: 200/day y 50/hour. Swagger UI está en `http://127.0.0.1:8000/docs`. `/docs` y
-`/openapi.json` también son "otras rutas", así que consumen ese cupo predeterminado de 50/hour (Swagger UI pide
-`/openapi.json` en cada recarga): recarga `/docs` unas 50 veces en una hora y responderá 429.
+`/openapi.json` también son "otras rutas", así que se les aplican los límites predeterminados (slowapi lleva un contador
+predeterminado distinto por ruta, y Swagger UI pide `/openapi.json` en cada recarga): recarga `/docs` unas 50 veces en una hora y responderá 429.
 
 ### Tarea 3.2: Probar Límite de Tasa de Registro
 
@@ -672,10 +672,11 @@ done
 - No distingue entre usuarios autenticados de la misma IP
 - Puede bloquear usuarios legítimos en redes compartidas (oficinas, universidades)
 
-> **Detrás de un proxy:** si la app corre detrás de nginx, Railway, Render, ngrok... `get_remote_address` ve la IP del
-> proxy, así que *todos* los usuarios comparten un mismo cupo. Ejecuta uvicorn (o `fastapi run`) con
-> `--proxy-headers --forwarded-allow-ips=<ip del proxy>` para que `request.client.host` sea el cliente real, o escribe
-> una función clave que lea `X-Forwarded-For` solo cuando la petición venga de tu proxy de confianza. `get_ipaddr` de
+> **Detrás de un proxy:** si la app corre detrás de nginx, Railway, Render... `get_remote_address` ve la IP del
+> proxy, así que *todos* los usuarios comparten un mismo cupo. `fastapi dev`/`fastapi run` (uvicorn) ya leen
+> `X-Forwarded-For`, pero solo se fían de ella si viene de `127.0.0.1` (por eso ngrok, cuyo agente corre en tu propia
+> máquina, funciona sin más). Con un proxy en otra máquina, arranca la app con `--forwarded-allow-ips=<ip del proxy>`
+> para que `request.client.host` sea el cliente real, o escribe una función clave que lea `X-Forwarded-For` solo cuando la petición venga de tu proxy de confianza. `get_ipaddr` de
 > slowapi se fía de esa cabecera a ciegas, y cualquier cliente puede falsificarla.
 
 **Casos de uso:**
@@ -985,9 +986,9 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse
 
 **Síntoma:** Dos usuarios en la misma red (oficina, universidad) comparten el mismo límite de tasa.
 
-**Causa:** Usar `get_remote_address()` (basado en IP) en lugar de rastreo por usuario. Lo mismo le pasa a *todo el mundo* cuando la app corre detrás de un proxy inverso (nginx, Railway, Render, ngrok): la app solo ve la IP del proxy.
+**Causa:** Usar `get_remote_address()` (basado en IP) en lugar de rastreo por usuario. Lo mismo le pasa a *todo el mundo* cuando la app corre detrás de un proxy inverso en otra máquina (nginx, Railway, Render): la app solo ve la IP del proxy.
 
-**Solución:** Implementar limitación de tasa por usuario (ver Parte 4, Estrategia 2). Detrás de un proxy, ejecuta uvicorn con `--proxy-headers --forwarded-allow-ips=<ip del proxy>`, o lee `X-Forwarded-For` solo desde tu proxy de confianza (ver la nota de la Estrategia 1).
+**Solución:** Implementar limitación de tasa por usuario (ver Parte 4, Estrategia 2). Detrás de un proxy, arranca la app con `--forwarded-allow-ips=<ip del proxy>`, o lee `X-Forwarded-For` solo desde tu proxy de confianza (ver la nota de la Estrategia 1).
 
 ### Problema 4: Las Cabeceras de Límite de Tasa No Se Muestran
 

@@ -310,7 +310,7 @@ X-GitHub-Delivery:   <id único>                  ✅ iguales     → continuar
 
 #### ¿Por qué `async def` y `await request.body()`?
 
-Casi todas las operaciones de ruta del curso son un `def` normal. Leer el cuerpo en bruto es distinto: `request.body()` es una **corrutina**, una función que tiene que esperar a que los bytes lleguen por la red, así que se llama con `await`, y `await` solo se permite dentro de una función `async def`. Aparte de las dos rutas de Authlib del ejercicio 13, `github_webhook` es la **única ruta que espera (`await`) el cuerpo en bruto de la petición**. (El middleware de registro y los manejadores de error del mismo archivo también son `async def`, porque el framework los llama así, pero no son rutas.) Las demás rutas siguen siendo `def`: FastAPI las ejecuta en un pool de hilos, y solo necesitas `async def` cuando el cuerpo de la función espera algo con `await`. ¿Por qué no declarar un modelo de cuerpo como en los ejercicios anteriores? Porque el modelo te da el JSON *ya parseado*, y el HMAC hay que calcularlo sobre los bytes exactos que envió GitHub.
+Casi todas las operaciones de ruta del curso son un `def` normal. Leer el cuerpo en bruto es distinto: `request.body()` es una **corrutina**, una función que tiene que esperar a que los bytes lleguen por la red, así que se llama con `await`, y `await` solo se permite dentro de una función `async def`. `github_webhook` es la **única ruta del curso que espera (`await`) el cuerpo en bruto de la petición** (las dos rutas `async def` del ejercicio 13 esperan llamadas de Authlib). (El middleware de registro y los manejadores de error del mismo archivo también son `async def`, porque el framework los llama así, pero no son rutas.) Las demás rutas siguen siendo `def`: FastAPI las ejecuta en un pool de hilos, y solo necesitas `async def` cuando el cuerpo de la función espera algo con `await`. ¿Por qué no declarar un modelo de cuerpo como en los ejercicios anteriores? Porque el modelo te da el JSON *ya parseado*, y el HMAC hay que calcularlo sobre los bytes exactos que envió GitHub.
 
 #### ¿Qué evento es?
 
@@ -457,7 +457,7 @@ curl http://127.0.0.1:8000/webhooks/events
 # total_events: 2  (dos entregas válidas distintas; la repetida cuenta una sola vez)
 ```
 
-> **Windows PowerShell 5.1:** `curl` es un alias de `Invoke-WebRequest`. Usa `curl.exe` en todos los comandos `curl` de este README y escribe los comandos de varias líneas en una sola (la continuación con `\` es sintaxis de `bash`).
+> **Windows PowerShell 5.1:** `curl` es un alias de `Invoke-WebRequest`. Usa `curl.exe` en todos los comandos `curl` de este README y escribe los comandos de varias líneas en una sola (la continuación con `\` es sintaxis de `bash`). PowerShell 5.1 además elimina las comillas dobles internas de `-d '{...}'`, así que el JSON llega roto (`422`): para los ejemplos con JSON (como `POST /users` en la Tarea 3.2) usa `Invoke-RestMethod -Method Post -Uri https://url-ngrok-companero.ngrok-free.app/users -ContentType "application/json" -Body (@{ username = "yourname"; email = "you@example.com" } | ConvertTo-Json)`.
 
 Puedes ejecutar un solo caso con `--mode valid|duplicate|tampered|unsigned|wrong-prefix`, o apuntar a tu URL pública con `--url https://TU-URL-NGROK.ngrok-free.app/webhooks/github`.
 
@@ -728,7 +728,7 @@ async def github_webhook(request: Request) -> dict:
 
 ## Problemas Comunes y Soluciones
 
-### Problema 1: "ERR_NGROK_108 - You must sign up"
+### Problema 1: "ERR_NGROK_4018 - This ngrok session is not authenticated"
 **Solución:** Crea una cuenta gratuita en ngrok.com y añade el authtoken
 
 ### Problema 2: La URL de ngrok devuelve "Invalid Host header"
@@ -746,7 +746,7 @@ async def github_webhook(request: Request) -> dict:
 - Confirma que ngrok apunta al puerto correcto (8000)
 - Revisa la configuración del firewall
 
-### Problema 5: "ERR_NGROK_3200 - Tunnel Limit Reached"
+### Problema 5: "ERR_NGROK_108 - Your account is limited to N simultaneous ngrok agent sessions"
 **Solución:** El plan gratuito permite 3 agentes en línea. Cierra los procesos `ngrok` sobrantes con `Ctrl+C` (o detenlos desde el panel)
 
 ### Problema 6: Todos los webhooks devuelven 401

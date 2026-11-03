@@ -374,8 +374,8 @@ You should see the server start on `http://127.0.0.1:8000`. The endpoints and th
 ```
 
 Default limits for any other route: 200/day and 50/hour. Swagger UI is at `http://127.0.0.1:8000/docs`. `/docs` and
-`/openapi.json` are "other routes" too, so they consume that 50/hour default bucket (Swagger UI fetches `/openapi.json`
-on every reload): reload `/docs` about 50 times in an hour and it answers 429.
+`/openapi.json` are "other routes" too, so the default limits apply to them (slowapi keeps a separate default counter
+per route, and Swagger UI fetches `/openapi.json` on every reload): reload `/docs` about 50 times in an hour and it answers 429.
 
 ### Task 3.2: Test Registration Rate Limit
 
@@ -672,10 +672,12 @@ done
 - Doesn't distinguish between authenticated users from the same IP
 - Can block legitimate users in shared networks (offices, universities)
 
-> **Behind a proxy:** if the app runs behind nginx, Railway, Render, ngrok... `get_remote_address` sees the proxy's
-> IP, so *every* user shares one bucket. Run uvicorn (or `fastapi run`) with `--proxy-headers --forwarded-allow-ips=<proxy ip>`
-> so that `request.client.host` is the real client, or write a key function that reads `X-Forwarded-For` only when the request
-> comes from your trusted proxy. slowapi's `get_ipaddr` trusts that header blindly, and any client can forge it.
+> **Behind a proxy:** if the app runs behind nginx, Railway, Render... `get_remote_address` sees the proxy's
+> IP, so *every* user shares one bucket. `fastapi dev`/`fastapi run` (uvicorn) already read `X-Forwarded-For`, but only trust
+> it from `127.0.0.1` (that is why ngrok, whose agent runs on your own machine, works out of the box). For a proxy on another
+> machine, start the app with `--forwarded-allow-ips=<proxy ip>` so that `request.client.host` is the real client, or write a
+> key function that reads `X-Forwarded-For` only when the request comes from your trusted proxy. slowapi's `get_ipaddr`
+> trusts that header blindly, and any client can forge it.
 
 **Use cases:**
 - Public endpoints (registration, login)
@@ -983,9 +985,9 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse
 
 **Symptom:** Two users on the same network (office, university) share the same rate limit.
 
-**Cause:** Using `get_remote_address()` (IP-based) instead of per-user tracking. The same happens to *everyone* when the app runs behind a reverse proxy (nginx, Railway, Render, ngrok): the app only sees the proxy's IP.
+**Cause:** Using `get_remote_address()` (IP-based) instead of per-user tracking. The same happens to *everyone* when the app runs behind a reverse proxy on another machine (nginx, Railway, Render): the app only sees the proxy's IP.
 
-**Solution:** Implement per-user rate limiting (see Part 4, Strategy 2). Behind a proxy, run uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy ip>`, or read `X-Forwarded-For` only from your trusted proxy (see the note in Strategy 1).
+**Solution:** Implement per-user rate limiting (see Part 4, Strategy 2). Behind a proxy, start the app with `--forwarded-allow-ips=<proxy ip>`, or read `X-Forwarded-For` only from your trusted proxy (see the note in Strategy 1).
 
 ### Issue 4: Rate Limit Headers Not Showing
 

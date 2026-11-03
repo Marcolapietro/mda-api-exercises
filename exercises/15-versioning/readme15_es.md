@@ -508,7 +508,7 @@ Abre http://127.0.0.1:8000/docs: las rutas aparecen agrupadas por tag (`auth`, `
 
 ### Paso 5.2: Registrarse e Iniciar Sesión
 
-> Los comandos de esta sección usan `curl` con sintaxis de `bash` (continuación con `\`, JSON entre comillas simples, `$TOKEN`). En **Windows PowerShell 5.1** `curl` es un alias de `Invoke-WebRequest`: usa `curl.exe`, escribe cada comando en una sola línea, escapa las comillas dentro del JSON (`-d '{\"username\":\"alice\",\"password\":\"password123\"}'`) y guarda el token con `$TOKEN = "..."`. En **CMD** usa comillas dobles con `\"` dentro (`-d "{\"username\":\"alice\",\"password\":\"password123\"}"`).
+> Los comandos de esta sección usan `curl` con sintaxis de `bash` (continuación con `\`, JSON entre comillas simples, `$TOKEN`). En **Windows PowerShell 5.1** `curl` es un alias de `Invoke-WebRequest`: usa `curl.exe`, escribe cada comando en una sola línea, escapa las comillas dentro del JSON (`-d '{\"username\":\"alice\",\"password\":\"password123\"}'`) y guarda el token con `$TOKEN = "..."`. Ese escapado se rompe en cuanto un valor del JSON tiene un espacio (`"My First Note"`): para esos bodies usa `Invoke-RestMethod`, p. ej. `Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v2/notes -ContentType "application/json" -Headers @{ Authorization = "Bearer $TOKEN" } -Body (@{ title = "My Second Note"; content = "This is v2"; tags = @("work", "important") } | ConvertTo-Json)`. En **CMD** usa comillas dobles con `\"` dentro (`-d "{\"username\":\"alice\",\"password\":\"password123\"}"`), que también funciona con espacios, y `set TOKEN=...` / `%TOKEN%`.
 
 ```bash
 # Registrar un usuario

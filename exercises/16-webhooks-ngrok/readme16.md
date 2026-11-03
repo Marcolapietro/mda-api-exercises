@@ -310,7 +310,7 @@ X-GitHub-Delivery:   <unique id>                 ✅ equal      → continue
 
 #### Why `async def` and `await request.body()`?
 
-Nearly every path operation in the course is a plain `def`. Reading the raw request body is different: `request.body()` is a **coroutine**, a function that has to wait for the bytes to arrive from the network, so you call it with `await`, and `await` is only allowed inside an `async def` function. Besides the two Authlib routes of exercise 13, `github_webhook` is the **only route that awaits the raw request body**. (The logging middleware and the error handlers in the same file are `async def` too, because the framework calls them that way, but they are not routes.) Every other route stays `def`: FastAPI runs those in a thread pool, and you only need `async def` when the function body awaits something. Why not simply declare a body model, as in the earlier exercises? Because a model gives you the *parsed* JSON, and the HMAC must be computed over the exact bytes GitHub sent.
+Nearly every path operation in the course is a plain `def`. Reading the raw request body is different: `request.body()` is a **coroutine**, a function that has to wait for the bytes to arrive from the network, so you call it with `await`, and `await` is only allowed inside an `async def` function. `github_webhook` is the **only route of the course that awaits the raw request body** (the two `async def` routes of exercise 13 await Authlib calls instead). (The logging middleware and the error handlers in the same file are `async def` too, because the framework calls them that way, but they are not routes.) Every other route stays `def`: FastAPI runs those in a thread pool, and you only need `async def` when the function body awaits something. Why not simply declare a body model, as in the earlier exercises? Because a model gives you the *parsed* JSON, and the HMAC must be computed over the exact bytes GitHub sent.
 
 #### Which event is it?
 
@@ -457,7 +457,7 @@ curl http://127.0.0.1:8000/webhooks/events
 # total_events: 2  (two different valid deliveries, the repeated one counted once)
 ```
 
-> **Windows PowerShell 5.1:** `curl` is an alias of `Invoke-WebRequest`. Use `curl.exe` for every `curl` command in this README, and write multi-line commands on one line (the `\` continuation is `bash` syntax).
+> **Windows PowerShell 5.1:** `curl` is an alias of `Invoke-WebRequest`. Use `curl.exe` for every `curl` command in this README, and write multi-line commands on one line (the `\` continuation is `bash` syntax). PowerShell 5.1 also strips the inner double quotes of `-d '{...}'`, so the JSON arrives broken (`422`): for the JSON examples (such as `POST /users` in Task 3.2) use `Invoke-RestMethod -Method Post -Uri https://their-ngrok-url.ngrok-free.app/users -ContentType "application/json" -Body (@{ username = "yourname"; email = "you@example.com" } | ConvertTo-Json)`.
 
 You can run a single case with `--mode valid|duplicate|tampered|unsigned|wrong-prefix`, or point it at your public URL with `--url https://YOUR-NGROK-URL.ngrok-free.app/webhooks/github`.
 
@@ -728,7 +728,7 @@ async def github_webhook(request: Request) -> dict:
 
 ## Common Issues and Solutions
 
-### Issue 1: "ERR_NGROK_108 - You must sign up"
+### Issue 1: "ERR_NGROK_4018 - This ngrok session is not authenticated"
 **Solution:** Create free account at ngrok.com and add authtoken
 
 ### Issue 2: ngrok URL returns "Invalid Host header"
@@ -746,7 +746,7 @@ async def github_webhook(request: Request) -> dict:
 - Confirm ngrok is pointing to correct port (8000)
 - Check firewall settings
 
-### Issue 5: "ERR_NGROK_3200 - Tunnel Limit Reached"
+### Issue 5: "ERR_NGROK_108 - Your account is limited to N simultaneous ngrok agent sessions"
 **Solution:** The free plan allows 3 online agents. Close spare `ngrok` processes with `Ctrl+C` (or stop them from the dashboard)
 
 ### Issue 6: Every webhook returns 401
