@@ -106,7 +106,9 @@ python client.py
    delete_note is NOT exposed (NOTES_ALLOW_DELETE is off)
    ```
 
-   > Si `client.py` solo dice `Connection closed`, tu servidor ha fallado al arrancar. Ejecuta `python mcp_server.py` solo para ver el error de Python (si arranca bien, se queda esperando JSON-RPC por stdin: páralo con `Ctrl+C`). Si la API de Notas no está en marcha, cada llamada a una tool o a un resource imprime una línea `ERROR` (`Cannot reach the Notes API at http://127.0.0.1:8000: ...`): arráncala en la Terminal 1 y vuelve a ejecutar el cliente.
+   > Las líneas con hora e `INFO` (`HTTP Request: GET ...`) son el log del servidor por stderr: cada una es una llamada HTTP real a la API de Notas.
+   >
+   > Si `client.py` termina con un traceback largo y `MCPError: Connection closed`, tu servidor ha fallado al arrancar: el error real de Python (por ejemplo `NameError: name '_____' is not defined`) aparece al principio. También puedes ejecutar `python mcp_server.py` solo para verlo (si arranca bien, se queda esperando JSON-RPC por stdin: páralo con `Ctrl+C`). Si la API de Notas no está en marcha, cada llamada a una tool o a un resource imprime una línea `ERROR` (`Cannot reach the Notes API at http://127.0.0.1:8000: ...`): arráncala en la Terminal 1 y vuelve a ejecutar el cliente.
 
 4. **Prueba con el MCP Inspector** (necesita [Node.js](https://nodejs.org/)): una interfaz web donde listas las tools, las llamas a mano y ves cada mensaje JSON-RPC.
 
@@ -144,7 +146,7 @@ Ejecuta `python client.py` **en una terminal donde `NOTES_API_KEY` tenga el mism
 
 ### 2. Mínimo privilegio: borrar solo si se activa
 
-Pon `NOTES_ALLOW_DELETE=1` y vuelve a ejecutar `client.py`: ahora aparece `delete_note`, marcada con `destructive_hint=True` (los asistentes lo usan para pedir confirmación al usuario). Piénsalo: ¿qué tools expondrías a un asistente que usa toda tu empresa?
+Pon `NOTES_ALLOW_DELETE=1` (`export NOTES_ALLOW_DELETE=1` en Linux/macOS, `$env:NOTES_ALLOW_DELETE = "1"` en Windows PowerShell) y vuelve a ejecutar `client.py`: ahora aparece `delete_note`, marcada con `destructive_hint=True` (los asistentes lo usan para pedir confirmación al usuario). Piénsalo: ¿qué tools expondrías a un asistente que usa toda tu empresa?
 
 ### 3. Úsalo desde un asistente de IA real
 
@@ -170,9 +172,9 @@ Conecta el servidor a un asistente y pide en lenguaje natural: *"Crea una nota l
   claude mcp add notes -e NOTES_API_KEY=la-misma-key-que-la-api -- C:\ruta\a\17-mcp\venv\Scripts\python.exe C:\ruta\a\17-mcp\mcp_server.py
   ```
 
-  Escribe el mismo JSON `mcpServers` que Claude Desktop; también puedes poner ese JSON en un fichero `.mcp.json` en la raíz del proyecto. Compruébalo con `claude mcp list`.
+  Guarda la misma entrada `mcpServers` que Claude Desktop (en `~/.claude.json`, solo para esta carpeta); para compartirla con el proyecto, pon ese JSON en un fichero `.mcp.json` en la raíz del proyecto. Compruébalo con `claude mcp list`.
 
-- **Cursor:** el mismo JSON `mcpServers` que Claude Desktop, en `.cursor/mcp.json` (Settings → MCP).
+- **Cursor:** el mismo JSON `mcpServers` que Claude Desktop, en `.cursor/mcp.json` (este proyecto) o `~/.cursor/mcp.json` (todos los proyectos).
 
 - **VS Code (modo agente de Copilot):** crea `.vscode/mcp.json` en la carpeta que abras:
 
@@ -207,7 +209,7 @@ El bloque `env` (o `-e`) solo hace falta si arrancaste la API de Notas con `NOTE
 
 ### Por qué stdout es sagrado
 
-Con el transporte stdio, **stdout lleva los mensajes JSON-RPC**. Un `print("hola")` suelto corrompe el flujo y el cliente se desconecta. Escribe los logs en **stderr** (`print(..., file=sys.stderr)`), como hace el fichero de partida.
+Con el transporte stdio, **stdout lleva los mensajes JSON-RPC**. Un `print("hola")` suelto corrompe el flujo: el cliente recibe una línea que no es JSON-RPC (`client.py` registra `Failed to parse JSONRPC message from server`; otros clientes pueden desconectarse). Escribe los logs en **stderr** (`print(..., file=sys.stderr)`), como hace el fichero de partida.
 
 ### Las mismas reglas que cualquier cliente de una API
 

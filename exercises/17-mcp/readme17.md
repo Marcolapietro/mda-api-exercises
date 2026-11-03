@@ -106,7 +106,9 @@ python client.py
    delete_note is NOT exposed (NOTES_ALLOW_DELETE is off)
    ```
 
-   > If `client.py` only says `Connection closed`, your server crashed on start-up. Run `python mcp_server.py` on its own to see the Python error (if it starts fine, it just waits for JSON-RPC on stdin: stop it with `Ctrl+C`). If the Notes API is not running, every tool and resource call prints an `ERROR` line (`Cannot reach the Notes API at http://127.0.0.1:8000: ...`): start it in Terminal 1 and run the client again.
+   > The lines with a timestamp and `INFO` (`HTTP Request: GET ...`) are the server's log on stderr: each one is a real HTTP call to the Notes API.
+   >
+   > If `client.py` ends with a long traceback and `MCPError: Connection closed`, your server crashed on start-up: the real Python error (for example `NameError: name '_____' is not defined`) is printed at the top. You can also run `python mcp_server.py` on its own to see it (if it starts fine, it just waits for JSON-RPC on stdin: stop it with `Ctrl+C`). If the Notes API is not running, every tool and resource call prints an `ERROR` line (`Cannot reach the Notes API at http://127.0.0.1:8000: ...`): start it in Terminal 1 and run the client again.
 
 4. **Test with the MCP Inspector** (needs [Node.js](https://nodejs.org/)): a web UI where you list tools, call them by hand and see every JSON-RPC message.
 
@@ -144,7 +146,7 @@ Run `python client.py` **in a terminal where `NOTES_API_KEY` is set to the same 
 
 ### 2. Least privilege: opt-in delete
 
-Set `NOTES_ALLOW_DELETE=1` and run `client.py` again: `delete_note` now appears, marked with `destructive_hint=True` (assistants use it to ask the user for confirmation). Think about it: which tools would you expose to an assistant used by your whole company?
+Set `NOTES_ALLOW_DELETE=1` (`export NOTES_ALLOW_DELETE=1` on Linux/macOS, `$env:NOTES_ALLOW_DELETE = "1"` in Windows PowerShell) and run `client.py` again: `delete_note` now appears, marked with `destructive_hint=True` (assistants use it to ask the user for confirmation). Think about it: which tools would you expose to an assistant used by your whole company?
 
 ### 3. Use it from a real AI assistant
 
@@ -170,9 +172,9 @@ Connect the server to an assistant and ask in natural language: *"Create a note 
   claude mcp add notes -e NOTES_API_KEY=the-same-key-as-the-api -- C:\path\to\17-mcp\venv\Scripts\python.exe C:\path\to\17-mcp\mcp_server.py
   ```
 
-  It writes the same `mcpServers` JSON as Claude Desktop; you can also put that JSON in a `.mcp.json` file at the root of the project. Check it with `claude mcp list`.
+  It saves the same `mcpServers` entry as Claude Desktop (in `~/.claude.json`, only for this folder); to share it with the project, put that JSON in a `.mcp.json` file at the root of the project. Check it with `claude mcp list`.
 
-- **Cursor:** the same `mcpServers` JSON as Claude Desktop, in `.cursor/mcp.json` (Settings → MCP).
+- **Cursor:** the same `mcpServers` JSON as Claude Desktop, in `.cursor/mcp.json` (this project) or `~/.cursor/mcp.json` (all projects).
 
 - **VS Code (Copilot agent mode):** create `.vscode/mcp.json` in the folder you open:
 
@@ -207,7 +209,7 @@ The `env` block (or `-e`) is only needed if you started the Notes API with `NOTE
 
 ### Why stdout is sacred
 
-With the stdio transport, **stdout carries the JSON-RPC messages**. A stray `print("hello")` corrupts the stream and the client disconnects. Log to **stderr** instead (`print(..., file=sys.stderr)`), as the starter does.
+With the stdio transport, **stdout carries the JSON-RPC messages**. A stray `print("hello")` corrupts the stream: the client receives a line that is not JSON-RPC (`client.py` logs `Failed to parse JSONRPC message from server`; other clients may disconnect). Log to **stderr** instead (`print(..., file=sys.stderr)`), as the starter does.
 
 ### Same rules as any API client
 

@@ -41,6 +41,7 @@ Once you have an account and are logged in:
    - **Redirect URI**: Leave as `urn:ietf:wg:oauth:2.0:oob`
    - **Scopes**: 
      - ✅ Ensure **`write:statuses`** is checked (required to post).
+     - For the image upload enhancement, also check **`write:media`**.
      - You can leave other default scopes as they are.
 
 4. **Save the Application**
@@ -166,17 +167,17 @@ load_dotenv()
 TOKEN = os.getenv('MASTODON_ACCESS_TOKEN')
 INSTANCE = os.getenv('MASTODON_INSTANCE_URL')
 
-def post_status(text):
+def post_status(text, idempotency_key=None):
     url = f"{INSTANCE}/api/v1/statuses"
     headers = {
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json",
-        # Optional: if the request is retried with the same key, Mastodon does not create a duplicate
-        "Idempotency-Key": str(uuid.uuid4())
+        # Optional: when you retry the SAME post, pass the SAME key and Mastodon will not publish it twice (keys last 1 hour)
+        "Idempotency-Key": idempotency_key or str(uuid.uuid4())
     }
     data = {"status": text}
     
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=data, timeout=10)  # without a timeout, a network problem can hang forever
     response.raise_for_status()  # 401 (bad token), 422 (invalid status), 429 (rate limit) become exceptions
     return response.json()
 ```
@@ -202,4 +203,4 @@ Deadline and submission channel: announced in class.
 
 ---
 
-*Last updated: January 2026*
+*Last updated: November 2026*
