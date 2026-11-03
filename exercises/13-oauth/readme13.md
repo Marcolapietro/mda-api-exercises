@@ -975,40 +975,76 @@ async def login_github_full(request: Request):
 
 ### 4. Implement Account Linking
 
-Allow users to link multiple OAuth providers:
+Let a user who logged in with GitHub also link their Google account (do stretch goal 1 first, so `oauth.google` exists). Then a later Google login can find the same user.
+
+The tricky part: the user proves who they are with the JWT in the `Authorization` header, but OAuth runs in the **browser**. Neither the link the user opens nor Google's redirect back carries that header, so `Depends(get_current_user)` cannot protect the browser routes. Putting the JWT in the URL is no fix either, because URLs end up in browser history and server logs. Instead, link in three steps:
+
+1. **API call with the JWT:** `POST /link/google` creates a random one-time code that expires in a few minutes, remembers which user it belongs to, and returns a `link_url`.
+2. **Browser:** the user opens `link_url`. The app swaps the code for the user id, stores the id in the signed session cookie (the same cookie that holds the OAuth `state`) and redirects to Google.
+3. **Browser, back from Google:** the callback reads the user id from the session, then attaches the Google account to that user.
 
 ```python
-users = {
-    '12345678': {  # our user id
-        'primary_email': 'alice@example.com',
-        'oauth_providers': {
-            'github': {'id': 12345, 'username': 'alice'},
-            'google': {'id': 67890, 'email': 'alice@gmail.com'}
-        }
+LINK_MINUTES = 5
+pending_links: dict[str, dict[str, Any]] = {}     # one-time link code -> {"user_id", "expires"}
+linked_accounts: dict[tuple[str, str], str] = {}  # ("google", Google's "sub") -> our user id
+
+
+@app.post("/link/google")
+def start_link_google(request: Request, current_user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
+    # Step 1 (API call with your JWT): create a short-lived, one-time code for this user
+    code = secrets.token_urlsafe(32)
+    pending_links[code] = {
+        "user_id": current_user,
+        "expires": datetime.now(timezone.utc) + timedelta(minutes=LINK_MINUTES),
     }
-}
+    link_url = request.url_for("link_google_start").include_query_params(code=code)
+    return {"link_url": str(link_url), "next": "Open link_url in your browser"}
 
-@app.get("/link/github")
-async def link_github(request: Request, current_user: Annotated[str, Depends(get_current_user)]):
-    redirect_uri = str(request.url_for("link_callback"))
-    return await oauth.github.authorize_redirect(request, redirect_uri)
 
-@app.get("/link/callback")
-async def link_callback(request: Request, current_user: Annotated[str, Depends(get_current_user)]):
-    token = await oauth.github.authorize_access_token(request)
-    user_info = (await oauth.github.get("user", token=token)).json()
+@app.get("/link/google/start")
+async def link_google_start(request: Request, code: str):
+    # Step 2 (browser): swap the one-time code for the user id and keep it in the signed session
+    link = pending_links.pop(code, None)  # pop: the code works only once
+    if link is None or link["expires"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Invalid or expired link code. Call POST /link/google again.")
+    request.session["link_user_id"] = link["user_id"]
+    redirect_uri = str(request.url_for("link_google_callback"))
+    return await oauth.google.authorize_redirect(request, redirect_uri)
 
-    # Add GitHub to existing user
-    if 'oauth_providers' not in users[current_user]:
-        users[current_user]['oauth_providers'] = {}
 
-    users[current_user]['oauth_providers']['github'] = {
-        'id': user_info['id'],
-        'username': user_info['login']
+@app.get("/link/google/callback")
+async def link_google_callback(request: Request):
+    # Step 3 (browser, back from Google): the session, not a Bearer header, says who started the linking
+    user_id = request.session.pop("link_user_id", None)
+    if user_id is None or user_id not in users:
+        raise HTTPException(status_code=400, detail="No linking in progress. Start again with POST /link/google.")
+    token = await oauth.google.authorize_access_token(request)  # checks state and PKCE, as in /callback
+    google_sub = token["userinfo"]["sub"]  # Google's stable user id, like GitHub's numeric id
+
+    owner = linked_accounts.get(("google", google_sub))
+    if owner is not None and owner != user_id:
+        raise HTTPException(status_code=409, detail="This Google account is already linked to another user.")
+
+    linked_accounts[("google", google_sub)] = user_id
+    users[user_id].setdefault("providers", {})["google"] = {
+        "sub": google_sub,
+        "email": token["userinfo"].get("email"),
     }
-
-    return {"message": "GitHub account linked"}
+    return {"message": "Google account linked", "providers": users[user_id]["providers"]}
 ```
+
+To try it:
+
+- In the Google Cloud Console, add `http://127.0.0.1:8000/link/google/callback` to the **Authorized redirect URIs** of your OAuth client. Google requires an exact match, just as GitHub only accepts redirects under the callback URL you registered.
+- Log in with GitHub, call `POST /link/google` with your token (curl or the Swagger **Authorize** button), and open the `link_url` it returns **in the same browser** you use for the rest of the flow.
+- In the Google login callback from stretch goal 1, look up `linked_accounts.get(("google", sub))` first: if it finds a user, issue the JWT for that user instead of creating a new one.
+
+Why each piece matters:
+
+- **One-time, short-lived code:** a leaked `link_url` is useless after one use or a few minutes.
+- **Session instead of a query parameter:** nobody can edit the callback URL to attach their Google account to someone else's user id.
+- **`sub`, not email:** like GitHub's numeric id, Google's `sub` never changes. Emails can change, and two providers can report the same email for different people.
+- **409 on conflict:** one Google account must not belong to two users.
 
 ### 5. Fetch Additional User Data
 

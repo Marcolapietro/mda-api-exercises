@@ -977,40 +977,76 @@ async def login_github_full(request: Request):
 
 ### 4. Implementar Vinculación de Cuentas
 
-Permite que los usuarios vinculen varios proveedores OAuth:
+Permite que un usuario que entró con GitHub vincule también su cuenta de Google (haz antes el reto 1, para que exista `oauth.google`). Así, un login posterior con Google encuentra al mismo usuario.
+
+La parte difícil: el usuario demuestra quién es con el JWT en la cabecera `Authorization`, pero OAuth ocurre en el **navegador**. Ni el enlace que abre el usuario ni la redirección de vuelta desde Google llevan esa cabecera, así que `Depends(get_current_user)` no puede proteger las rutas del navegador. Poner el JWT en la URL tampoco sirve, porque las URLs acaban en el historial del navegador y en los logs del servidor. En su lugar, vincula en tres pasos:
+
+1. **Llamada a la API con el JWT:** `POST /link/google` crea un código aleatorio de un solo uso que caduca en pocos minutos, recuerda a qué usuario pertenece y devuelve un `link_url`.
+2. **Navegador:** el usuario abre `link_url`. La app cambia el código por el id del usuario, guarda el id en la cookie de sesión firmada (la misma cookie que guarda el `state` de OAuth) y redirige a Google.
+3. **Navegador, de vuelta desde Google:** el callback lee el id del usuario de la sesión y vincula la cuenta de Google a ese usuario.
 
 ```python
-users = {
-    '12345678': {  # nuestro id de usuario
-        'primary_email': 'alice@example.com',
-        'oauth_providers': {
-            'github': {'id': 12345, 'username': 'alice'},
-            'google': {'id': 67890, 'email': 'alice@gmail.com'}
-        }
+LINK_MINUTES = 5
+pending_links: dict[str, dict[str, Any]] = {}     # código de un solo uso -> {"user_id", "expires"}
+linked_accounts: dict[tuple[str, str], str] = {}  # ("google", "sub" de Google) -> nuestro id de usuario
+
+
+@app.post("/link/google")
+def start_link_google(request: Request, current_user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
+    # Paso 1 (llamada a la API con tu JWT): crea un código de un solo uso y corta duración para este usuario
+    code = secrets.token_urlsafe(32)
+    pending_links[code] = {
+        "user_id": current_user,
+        "expires": datetime.now(timezone.utc) + timedelta(minutes=LINK_MINUTES),
     }
-}
+    link_url = request.url_for("link_google_start").include_query_params(code=code)
+    return {"link_url": str(link_url), "next": "Open link_url in your browser"}
 
-@app.get("/link/github")
-async def link_github(request: Request, current_user: Annotated[str, Depends(get_current_user)]):
-    redirect_uri = str(request.url_for("link_callback"))
-    return await oauth.github.authorize_redirect(request, redirect_uri)
 
-@app.get("/link/callback")
-async def link_callback(request: Request, current_user: Annotated[str, Depends(get_current_user)]):
-    token = await oauth.github.authorize_access_token(request)
-    user_info = (await oauth.github.get("user", token=token)).json()
+@app.get("/link/google/start")
+async def link_google_start(request: Request, code: str):
+    # Paso 2 (navegador): cambia el código por el id del usuario y guárdalo en la sesión firmada
+    link = pending_links.pop(code, None)  # pop: el código solo vale una vez
+    if link is None or link["expires"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Invalid or expired link code. Call POST /link/google again.")
+    request.session["link_user_id"] = link["user_id"]
+    redirect_uri = str(request.url_for("link_google_callback"))
+    return await oauth.google.authorize_redirect(request, redirect_uri)
 
-    # Añadir GitHub al usuario existente
-    if 'oauth_providers' not in users[current_user]:
-        users[current_user]['oauth_providers'] = {}
 
-    users[current_user]['oauth_providers']['github'] = {
-        'id': user_info['id'],
-        'username': user_info['login']
+@app.get("/link/google/callback")
+async def link_google_callback(request: Request):
+    # Paso 3 (navegador, de vuelta desde Google): la sesión, no una cabecera Bearer, dice quién empezó la vinculación
+    user_id = request.session.pop("link_user_id", None)
+    if user_id is None or user_id not in users:
+        raise HTTPException(status_code=400, detail="No linking in progress. Start again with POST /link/google.")
+    token = await oauth.google.authorize_access_token(request)  # comprueba state y PKCE, como en /callback
+    google_sub = token["userinfo"]["sub"]  # id estable del usuario en Google, como el id numérico de GitHub
+
+    owner = linked_accounts.get(("google", google_sub))
+    if owner is not None and owner != user_id:
+        raise HTTPException(status_code=409, detail="This Google account is already linked to another user.")
+
+    linked_accounts[("google", google_sub)] = user_id
+    users[user_id].setdefault("providers", {})["google"] = {
+        "sub": google_sub,
+        "email": token["userinfo"].get("email"),
     }
-
-    return {"message": "GitHub account linked"}
+    return {"message": "Google account linked", "providers": users[user_id]["providers"]}
 ```
+
+Para probarlo:
+
+- En Google Cloud Console, añade `http://127.0.0.1:8000/link/google/callback` a los **Authorized redirect URIs** de tu cliente OAuth. Google exige que coincida exactamente, igual que GitHub solo acepta redirecciones bajo la callback URL que registraste.
+- Entra con GitHub, llama a `POST /link/google` con tu token (curl o el botón **Authorize** de Swagger) y abre el `link_url` que devuelve **en el mismo navegador** que usas para el resto del flujo.
+- En el callback de login con Google del reto 1, busca primero `linked_accounts.get(("google", sub))`: si encuentra un usuario, emite el JWT para ese usuario en vez de crear uno nuevo.
+
+Por qué importa cada pieza:
+
+- **Código de un solo uso y corta duración:** un `link_url` filtrado no sirve tras usarse una vez o pasados unos minutos.
+- **Sesión en vez de un parámetro en la URL:** nadie puede editar la URL del callback para vincular su cuenta de Google al id de usuario de otra persona.
+- **`sub`, no el email:** igual que el id numérico de GitHub, el `sub` de Google no cambia nunca. Los emails cambian, y dos proveedores pueden dar el mismo email para personas distintas.
+- **409 si hay conflicto:** una cuenta de Google no puede pertenecer a dos usuarios.
 
 ### 5. Obtener Datos Adicionales del Usuario
 
