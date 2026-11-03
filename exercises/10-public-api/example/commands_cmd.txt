@@ -1,7 +1,7 @@
 REM Exercise 10: Public API Consumption Testing Commands (Windows CMD)
 
 REM ============================================================================
-REM AUTHENTICATION TESTS (from Exercise 11)
+REM AUTHENTICATION TESTS (given here; explained in Exercise 11)
 REM ============================================================================
 
 REM 1. Register a new user

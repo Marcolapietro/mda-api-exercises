@@ -100,6 +100,12 @@ Passwords are stored as `bcrypt` hashes, never in plain text. `hash_password` an
    ```
    This should return `401 Unauthorized` with the header `WWW-Authenticate: Basic realm="Authentication Required"`: that is how the server tells the client which kind of authentication it expects.
 
+4. **Get List of Users (Wrong Password):**
+   ```bash
+   curl -i -u user1:wrongpass http://127.0.0.1:8000/users
+   ```
+   Also `401` with `WWW-Authenticate`, but this time the body is `{"detail":"Invalid credentials"}`: the header comes from your `get_current_user` (the header name blank), not from `HTTPBasic`.
+
 > **Windows:** in PowerShell 5.1 `curl` is an alias of `Invoke-WebRequest`, so use `curl.exe`, write the command on one line and escape the quotes inside the JSON (otherwise the server answers `422`): `curl.exe -X POST -H "Content-Type: application/json" -d '{\"username\":\"user1\",\"password\":\"password123\"}' http://127.0.0.1:8000/users`. In CMD single quotes don't work. Ready-made commands for both shells are in `example/commands_cmd.txt` and `example/commands_powershell.txt`.
 
 ## Points to Consider

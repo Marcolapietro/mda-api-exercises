@@ -17,7 +17,7 @@ Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
 # ============================================================================
-# AUTHENTICATION TESTS (from Exercise 11)
+# AUTHENTICATION TESTS (given here; explained in Exercise 11)
 # ============================================================================
 
 Write-Host "==> 1. Registering user..." -ForegroundColor Yellow

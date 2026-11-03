@@ -15,7 +15,7 @@ $headers = @{
     Authorization = "Basic $encodedCreds"
 }
 
-Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/users" -Headers $headers
+Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/users" -Headers $headers | ConvertTo-Json
 
 # 3. Wrong password (expected: 401 Unauthorized)
 $wrongPair = "user1:wrongpass"

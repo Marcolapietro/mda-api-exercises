@@ -101,7 +101,7 @@ def get_current_user(creds: Annotated[HTTPAuthorizationCredentials | None, Depen
 
 
 # ============================================================================
-# AUTHENTICATION ENDPOINTS (from Exercise 11)
+# AUTHENTICATION ENDPOINTS (given here; explained in Exercise 11)
 # ============================================================================
 
 @app.post("/register", status_code=201)
