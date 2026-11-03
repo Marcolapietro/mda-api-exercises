@@ -198,7 +198,7 @@ The API runs at `http://127.0.0.1:8000` (automatic documentation at `/docs`) and
 
 Exercise 04 introduced `-> Note` and `status_code=201`. Two more pieces appear here.
 
-**`204 No Content` means there is no body.** If a function simply returned `None`, FastAPI would send the JSON text `null` as the body, which a `204` must not have. So `DELETE` returns an empty response explicitly: `return Response(status_code=204)` (and the decorator says `status_code=204`, so `/docs` documents it).
+**`204 No Content` means there is no body.** Without `status_code=204`, a function that returns `None` answers `200` with the JSON text `null` as the body. With `status_code=204` in the decorator FastAPI drops that body, but still sends a misleading `content-type: application/json`. So `DELETE` returns an empty response explicitly: `return Response(status_code=204)` (and the decorator says `status_code=204`, so `/docs` documents it).
 
 **`Query` validates the query string.** `limit: Annotated[int, Query(ge=1, le=100)] = 20` reads like this: an integer, greater than or equal to 1, less than or equal to 100, and `20` if the client sends nothing. If the value is not an integer or is out of range, FastAPI answers `422` before your function runs. Exercise 06 goes deeper into `Query`.
 

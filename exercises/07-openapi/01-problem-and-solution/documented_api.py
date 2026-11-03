@@ -13,7 +13,9 @@ from pydantic import BaseModel, Field
 app = FastAPI(
     title='Books API',
     version='1.0.0',
-    description='A well-documented API for managing books. Compare this to the undocumented version!'
+    description='A well-documented API for managing books. Compare this to the undocumented version!',
+    # Base URL written into /openapi.json: Postman uses it for {{baseUrl}} when it imports the spec
+    servers=[{'url': 'http://127.0.0.1:8000', 'description': 'Local development server'}],
 )
 
 

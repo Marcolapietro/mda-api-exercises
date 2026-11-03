@@ -198,7 +198,7 @@ La API arranca en `http://127.0.0.1:8000` (documentación automática en `/docs`
 
 El ejercicio 04 presentó `-> Note` y `status_code=201`. Aquí aparecen dos piezas más.
 
-**`204 No Content` significa que no hay cuerpo.** Si la función devolviera `None` sin más, FastAPI enviaría el texto JSON `null` como cuerpo, y un `204` no debe tenerlo. Por eso `DELETE` devuelve explícitamente una respuesta vacía: `return Response(status_code=204)` (y el decorador dice `status_code=204`, para que `/docs` lo documente).
+**`204 No Content` significa que no hay cuerpo.** Sin `status_code=204`, una función que devuelve `None` responde `200` con el texto JSON `null` como cuerpo. Con `status_code=204` en el decorador FastAPI quita ese cuerpo, pero sigue enviando un `content-type: application/json` engañoso. Por eso `DELETE` devuelve explícitamente una respuesta vacía: `return Response(status_code=204)` (y el decorador dice `status_code=204`, para que `/docs` lo documente).
 
 **`Query` valida la query string.** `limit: Annotated[int, Query(ge=1, le=100)] = 20` se lee así: un entero, mayor o igual que 1, menor o igual que 100, y `20` si el cliente no envía nada. Si el valor no es un entero o está fuera de rango, FastAPI responde `422` antes de que se ejecute tu función. El ejercicio 06 profundiza en `Query`.
 
