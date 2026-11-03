@@ -10,7 +10,7 @@ pip install -r requirements.txt
 fastapi dev app.py
 ```
 
-Rellena los huecos (`_____`) de arriba abajo. Ningún hueco impide que la app arranque: el rol que escribas dentro de `require_role(...)` es solo texto hasta que llega una petición, así que la app arranca enseguida y los huecos (el código de estado `403`, el rol `"student"` de los usuarios nuevos, el método `pop` y los dos roles de `require_role("...")`) solo importan cuando una petición llega hasta ellos. La API se ejecuta en `http://127.0.0.1:8000`.
+Rellena los huecos (`_____`) de arriba abajo. Los dos roles de `require_role(_____)` al final del fichero se leen al cargar el fichero: en Python 3.12 y 3.13 la app no arranca hasta que los rellenas (`NameError: name '_____' is not defined`), y en Python 3.14 arranca pero `/admin/dashboard` y `/student/data` responden `403` a todo el mundo. Los demás huecos (el código de estado `403`, el rol `"student"` de los usuarios nuevos y el método `pop`) solo importan cuando una petición llega hasta ellos. Los roles son strings, así que escríbelos con comillas: `"admin"`, `"student"`. La API se ejecuta en `http://127.0.0.1:8000`.
 
 ## Objetivo
 - **Asignación de Roles y Permisos:** Implementar un sistema de control de acceso basado en roles para la API.
@@ -140,7 +140,7 @@ Comandos listos para usar: `example/commands_cmd.txt` y `example/commands_powers
 ### **Errores Comunes**
 - **Token Inválido:** Asegúrate de incluir el token JWT en el encabezado `Authorization` con el formato `Bearer <token>`.
 - **Acceso Denegado:** Verifica que el usuario tiene el rol correcto para acceder a la ruta.
-- **"Ya funciona" antes de rellenar los huecos:** con los huecos sin rellenar, todo usuario nuevo recibe el rol `"_____"` y los dos endpoints con `require_role("_____")` le dejan pasar (el rol coincide con el hueco), así que `/admin/dashboard` y `/student/data` responden `200` a cualquier usuario nuevo. Es lo esperado; rellena los huecos y vuelve a probar.
+- **`NameError: name '_____' is not defined` al arrancar la app** (Python 3.12/3.13), **o incluso el admin recibe `403`** (Python 3.14): rellena los dos huecos de `require_role(_____)` al final del fichero, con comillas. Sin ellas (`require_role(admin)`) obtienes `NameError: name 'admin' is not defined` en 3.12/3.13 y `403` para todos en 3.14. **`500` en `/register`:** el rol de los usuarios nuevos sigue siendo un hueco.
 
 ---
 

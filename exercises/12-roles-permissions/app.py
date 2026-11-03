@@ -2,10 +2,10 @@
 Roles and Permissions API (Starter)
 
 Run it with:  fastapi dev app.py
-Fill the blanks (_____) from top to bottom. No blank stops the app from starting (the
-role you write inside require_role(...) is just text until a request arrives), so the app
-starts right away. The blanks only matter when a request reaches them, so you will notice
-them while testing.
+Fill the blanks (_____) from top to bottom. The two require_role(_____) blanks at the end
+are read while the file loads: on Python 3.12 and 3.13 the app does not start until they are
+filled (NameError), on Python 3.14 it starts but both routes answer 403 to everyone. The
+other blanks only matter when a request reaches them.
 """
 
 import math
@@ -191,9 +191,9 @@ def register_user(data: UserCreate) -> dict[str, str]:
         raise HTTPException(status_code=409, detail="User already exists.")
 
     # TODO: Which role does EVERY new user get, whatever the request says?
-    # Hint: student
-    users[data.username] = {"username": data.username, "password": hash_password(data.password), "role": "_____"}
-    return {"message": "User registered successfully.", "role": "student"}
+    # Hint: "student" (with the quotes: it is a string)
+    users[data.username] = {"username": data.username, "password": hash_password(data.password), "role": _____}
+    return {"message": "User registered successfully.", "role": users[data.username]["role"]}
 
 
 @app.post("/login")
@@ -303,9 +303,9 @@ def delete_user(
 
 @app.get("/admin/dashboard")
 def admin_dashboard(
-    user: Annotated[dict[str, str], Depends(require_role("_____"))],  # TODO: Which role may open the admin dashboard?
+    user: Annotated[dict[str, str], Depends(require_role(_____))],  # TODO: Which role may open the admin dashboard?
 ) -> dict[str, str]:
-    # Hint: admin
+    # Hint: "admin" (with the quotes)
     """
     Returns the dashboard exclusive to administrators.
 
@@ -316,9 +316,9 @@ def admin_dashboard(
 
 @app.get("/student/data")
 def student_data(
-    user: Annotated[dict[str, str], Depends(require_role("_____"))],  # TODO: Which role may read the student data?
+    user: Annotated[dict[str, str], Depends(require_role(_____))],  # TODO: Which role may read the student data?
 ) -> dict[str, str]:
-    # Hint: student
+    # Hint: "student" (with the quotes)
     """
     Returns specific data for the authenticated student.
 

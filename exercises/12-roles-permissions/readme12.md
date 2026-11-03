@@ -10,7 +10,7 @@ pip install -r requirements.txt
 fastapi dev app.py
 ```
 
-Fill the blanks (`_____`) from top to bottom. No blank stops the app from starting: the role you write inside `require_role(...)` is just text until a request arrives, so the app starts right away and the blanks (the `403` status code, the `"student"` role of new users, the `pop` method and the two roles of `require_role("...")`) only matter when a request reaches them. The API runs at `http://127.0.0.1:8000`.
+Fill the blanks (`_____`) from top to bottom. The two roles of `require_role(_____)` at the end of the file are read while the file loads: on Python 3.12 and 3.13 the app does not start until they are filled (`NameError: name '_____' is not defined`), and on Python 3.14 it starts but `/admin/dashboard` and `/student/data` answer `403` to everyone. The other blanks (the `403` status code, the `"student"` role of new users and the `pop` method) only matter when a request reaches them. The roles are strings, so write them with quotes: `"admin"`, `"student"`. The API runs at `http://127.0.0.1:8000`.
 
 ## Objective
 - **Role and Permission Assignment:** Implement a role-based access control system for the API.
@@ -140,7 +140,7 @@ Ready-made commands: `example/commands_cmd.txt` and `example/commands_powershell
 ### **Common Errors**
 - **Invalid Token:** Make sure to include the JWT token in the `Authorization` header with the format `Bearer <token>`.
 - **Access Denied:** Verify that the user has the correct role to access the route.
-- **"It already works" before filling the blanks:** with the blanks unfilled every new user gets the role `"_____"` and both `require_role("_____")` endpoints let them in (the role matches the blank), so `/admin/dashboard` and `/student/data` answer `200` for every new user. That is expected; fill the blanks and test again.
+- **`NameError: name '_____' is not defined` when starting the app** (Python 3.12/3.13), **or even the admin gets `403`** (Python 3.14): fill the two `require_role(_____)` blanks at the end of the file, with quotes. Without them (`require_role(admin)`) you get `NameError: name 'admin' is not defined` on 3.12/3.13 and `403` for everyone on 3.14. **`500` on `/register`:** the role of new users is still a blank.
 
 ---
 

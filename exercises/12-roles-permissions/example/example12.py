@@ -179,7 +179,7 @@ def register_user(data: UserCreate) -> dict[str, str]:
         raise HTTPException(status_code=409, detail="User already exists.")
 
     users[data.username] = {"username": data.username, "password": hash_password(data.password), "role": "student"}
-    return {"message": "User registered successfully.", "role": "student"}
+    return {"message": "User registered successfully.", "role": users[data.username]["role"]}
 
 
 @app.post("/login")
