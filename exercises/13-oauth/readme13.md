@@ -660,6 +660,8 @@ curl http://127.0.0.1:8000/users \
 curl -X POST http://127.0.0.1:8000/logout
 ```
 
+In **Windows PowerShell**, set the variable with `$TOKEN = "eyJ..."` and call `curl.exe` on one line, e.g. `curl.exe http://127.0.0.1:8000/profile -H "Authorization: Bearer $TOKEN"`. In **CMD**, use `set TOKEN=eyJ...` and `%TOKEN%`.
+
 ---
 
 ## Understanding OAuth Flows
@@ -861,8 +863,8 @@ app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET"
 ```
 
 **Solution:**
-- GitHub only returns email if you requested `user:email` scope
-- User might have private email settings
+- `GET /user` only returns the email the user made **public** on their GitHub profile; otherwise it is `null`, whatever the scope
+- The `user:email` scope lets you read all of the user's addresses (private ones too) from `user/emails`
 - Fetch email separately: `await oauth.github.get("user/emails", token=token)`
 
 ```python
@@ -908,7 +910,7 @@ oauth.register(
     client_id=os.getenv("GOOGLE_CLIENT_ID"),
     client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={"scope": "openid email profile"}
+    client_kwargs={"scope": "openid email profile", "code_challenge_method": "S256"},
 )
 
 @app.get("/login/google")

@@ -62,7 +62,7 @@ Autentica a los usuarios y les proporciona un token JWT que será necesario para
 
 ### **Roles Disponibles**
 1. **Admin:**
-   - Acceso a todas las rutas, incluidas aquellas que gestionan usuarios.
+   - Acceso a las rutas de admin, incluidas aquellas que gestionan usuarios. No a `/student/data`: `require_role(...)` comprueba un rol exacto, así que un admin también recibe `403` ahí.
    - Puede realizar acciones como actualizar o eliminar otros usuarios.
 
 2. **Student:**

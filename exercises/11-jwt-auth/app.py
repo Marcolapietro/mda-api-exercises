@@ -241,7 +241,7 @@ def logout(token: Annotated[str, Depends(get_token)]) -> dict[str, str]:
 # ============================================================================
 
 @app.get("/profile")  # TODO: Protect it with the dependency that returns the user from an ACCESS token
-# Hint: Depends(get_current_user)
+# Hint: get_current_user, defined above. Depends() takes the function itself, without ()
 def profile(user: Annotated[str, Depends(_____)]) -> dict[str, str]:
     """
     Get current user's profile - Protected endpoint

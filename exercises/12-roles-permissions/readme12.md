@@ -62,7 +62,7 @@ Authenticates users and provides them with a JWT token that will be required to 
 
 ### **Available Roles**
 1. **Admin:**
-   - Access to all routes, including those that manage users.
+   - Access to the admin routes, including those that manage users. Not to `/student/data`: `require_role(...)` checks for one exact role, so an admin gets `403` there too.
    - Can perform actions such as updating or deleting other users.
 
 2. **Student:**
