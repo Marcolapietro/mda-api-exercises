@@ -114,7 +114,7 @@ def register(data: UserCreate) -> dict[str, str]:
 
 
 # TODO: Which HTTP method sends credentials in a body?
-# Hint: POST
+# Hint: post (lowercase: @app.post)
 @app._____("/login")
 def login(data: Credentials) -> dict[str, str]:
     """Authenticate user and return JWT token - Public endpoint"""

@@ -128,7 +128,7 @@ def get_note(note_id: int) -> Note:
 
 
 # TODO: Which method REPLACES a whole resource?
-# Hint: PUT. The body is NoteCreate, so title is required (content defaults to "")
+# Hint: put (lowercase: @app.put). The body is NoteCreate, so title is required (content defaults to "")
 @app._____("/notes/{note_id}")
 def replace_note(note_id: int, data: NoteCreate) -> Note:
     note = get_or_404(note_id)
@@ -139,7 +139,7 @@ def replace_note(note_id: int, data: NoteCreate) -> Note:
 
 
 # TODO: Which method changes only SOME fields of a resource?
-# Hint: PATCH. The body is NoteUpdate: every field is optional
+# Hint: patch (lowercase: @app.patch). The body is NoteUpdate: every field is optional
 @app._____("/notes/{note_id}")
 def update_note(note_id: int, data: NoteUpdate) -> Note:
     note = get_or_404(note_id)
@@ -153,7 +153,7 @@ def update_note(note_id: int, data: NoteUpdate) -> Note:
 
 
 # TODO: Which method removes a resource? And which status code says "done, nothing to send back"?
-# Hint: DELETE; the decorator's status_code is the same one the function returns below
+# Hint: delete (lowercase: @app.delete); the decorator's status_code is the same one the function returns below
 @app._____("/notes/{note_id}", status_code=_____)
 def delete_note(note_id: int) -> Response:
     get_or_404(note_id)

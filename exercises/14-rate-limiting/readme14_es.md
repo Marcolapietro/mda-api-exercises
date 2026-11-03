@@ -1066,7 +1066,7 @@ Cifras en el momento de escribir esto (consulta la documentación del proveedor,
 
 ### Próximos Pasos
 
-1. **Ejercicio 15+**: Aplica limitación de tasa a tu API de proyecto final
+1. **Tus propias APIs**: Aplica limitación de tasa a las APIs de los próximos ejercicios y del reto final (18)
 2. **Despliegue en producción**: Configura Redis para almacenamiento de límite de tasa
 3. **Monitoreo**: Configura alertas para violaciones de límite de tasa
 4. **Análisis**: Rastrea patrones de uso de API para optimizar límites

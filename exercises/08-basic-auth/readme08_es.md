@@ -24,14 +24,14 @@ Rellena los huecos (`_____`) de arriba abajo; la app arranca cuando el decorador
    - Inicializa un entorno virtual.
    - Instala las dependencias necesarias (`fastapi[standard]`, `bcrypt`).
 
-2. **Estructura de la API:**
-   - Crea una ruta para registrar nuevos usuarios (`POST /users`).
-   - Crea una ruta para obtener la lista de usuarios (`GET /users`), protegida con autenticación básica.
+2. **Estructura de la API (dada, complétala):**
+   - Una ruta para registrar nuevos usuarios (`POST /users`): tú escribes su método HTTP.
+   - Una ruta para obtener la lista de usuarios (`GET /users`), protegida con autenticación básica: tú conectas la dependencia que la protege.
 
-3. **Implementación de Autenticación Básica:**
-   - Utiliza `fastapi.security.HTTPBasic` para manejar la autenticación.
-   - Almacena las contraseñas de forma segura: hashéalas con `bcrypt`.
-   - Protege las rutas que requieren autenticación, verificando las credenciales proporcionadas.
+3. **Autenticación Básica (dada, entiéndela):**
+   - `fastapi.security.HTTPBasic` lee las credenciales de la petición.
+   - Las contraseñas se guardan como hashes `bcrypt`, nunca en texto plano.
+   - `get_current_user` verifica las credenciales y responde `401` con la cabecera adecuada (tú escribes el nombre de la cabecera).
 
 4. **Pruebas:**
    - Utiliza herramientas como Postman o `curl` para probar las rutas protegidas con y sin credenciales válidas.
@@ -40,7 +40,7 @@ Rellena los huecos (`_____`) de arriba abajo; la app arranca cuando el decorador
 
 Rellena los tres espacios `_____` de `app.py`:
 
-- el método HTTP de la ruta que registra un usuario (`POST`);
+- el método HTTP de la ruta que registra un usuario (en minúsculas, porque es el nombre de un método de `app`: `@app.post`);
 - la dependencia dentro de `Depends(...)` que protege `GET /users` (la función que comprueba las credenciales);
 - el nombre de la cabecera que le dice al cliente qué tipo de autenticación espera el servidor (va en la respuesta 401).
 
@@ -60,10 +60,10 @@ El hasheo de contraseñas (`hash_password`, `verify_password`) ya está escrito.
    - La aplicación FastAPI, el diccionario `users` en memoria y las funciones auxiliares de `bcrypt` ya están ahí.
    - También las dos rutas: `POST /users` registra un usuario y `GET /users` los lista.
 
-3. **Implementa la Autenticación Básica:**
-   - Usa `HTTPBasic` de `fastapi.security` y una dependencia `get_current_user` para comprobar las credenciales.
-   - Hashea las contraseñas con `bcrypt.hashpw`.
-   - Verifica las credenciales con `bcrypt.checkpw`.
+3. **Entiende la Autenticación Básica y rellena los huecos:**
+   - Busca dónde se crea `HTTPBasic` de `fastapi.security` y cómo lo usa `get_current_user` para comprobar las credenciales.
+   - Mira cómo `hash_password` hashea con `bcrypt.hashpw` y `verify_password` comprueba con `bcrypt.checkpw`.
+   - Rellena los tres huecos (ver Instrucciones arriba).
 
 4. **Prueba la API:**
    - Registra un usuario con `POST /users`.

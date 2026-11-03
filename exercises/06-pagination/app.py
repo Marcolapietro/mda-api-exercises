@@ -214,7 +214,7 @@ def cursor_page(request: Request, ordered: list[Note], cursor: str | None, limit
 # ---------------------------------------------------------------------------
 
 # TODO: Which method LISTS (reads) a collection?
-# Hint: GET
+# Hint: get (lowercase: @app.get)
 @app._____("/notes")
 # TODO: limit must be at least 1 and at most 100: other values are rejected (422), not clamped
 # Hint: ge means "greater than or equal to" (1), le means "less than or equal to" (100)

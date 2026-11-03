@@ -49,7 +49,7 @@ En este ejercicio, investigarás el concepto de API (Interfaz de Programación d
 4. **Seleccionar y Describir APIs Populares:**
    - Elige tres APIs que sean relevantes y ampliamente reconocidas, como:
      - **Google Maps API**
-     - **Twitter API**
+     - **GitHub REST API**
      - **Stripe API**
    - Investiga cada una para ver para que sirven.
    - Abre Postman y llama a una de tus tres APIs: leer su documentación para montar esa primera petición es parte del ejercicio.
@@ -67,7 +67,7 @@ En este ejercicio, investigarás el concepto de API (Interfaz de Programación d
 
 - **Documentación Oficial de APIs Populares:**
   - [Google Maps Platform Documentation](https://developers.google.com/maps/documentation)
-  - [Twitter Developer Documentation](https://developer.twitter.com/en/docs)
+  - [GitHub REST API Documentation](https://docs.github.com/en/rest)
   - [Stripe API Reference](https://stripe.com/docs/api)
 
 - **Tutoriales y Videos:**

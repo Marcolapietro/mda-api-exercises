@@ -15,7 +15,7 @@ This exercise introduces core HTTP + JSON API fundamentals using a small Notes A
 ## Endpoints
 
 - `GET /health`
-  - Returns basic service information
+  - Returns `{"status": "ok"}` so you can check that the service is up
   - Response: `200` with `{ "status": "ok" }`
 
 - `GET /notes`
@@ -141,7 +141,7 @@ Note: the `Allow` header is incomplete here (`GET` only) because FastAPI registe
 
 - Correct status codes (`200`, `201`, `404`, `405`, `422`)
 - `POST /notes` returns `201` with the created note and a `Location` header
-- Every error is `application/problem+json` with `type`, `title`, `status` and `detail`
+- Every error is `application/problem+json` with `type`, `title`, `status`, `detail` and `instance`
 - Invalid input (malformed JSON, missing or empty `title`, a body that is not JSON) returns `422`, never `500`
 - No authentication used
 

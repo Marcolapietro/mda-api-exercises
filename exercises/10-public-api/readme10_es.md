@@ -540,6 +540,14 @@ except ValueError:
 - Implementa caché (objetivo adicional)
 - Actualiza a nivel de pago si es necesario
 
+### Problema 5: El Token Deja de Valer (401) Tras Editar `app.py`
+
+`fastapi dev` reinicia la app cada vez que guardas un fichero. El reinicio vacía el diccionario `users` en memoria y, si no has definido `JWT_SECRET_KEY`, genera un secreto aleatorio nuevo, así que todos los tokens emitidos antes se rechazan con `401`.
+
+**Solución:**
+- Regístrate y haz login de nuevo tras cada cambio, y usa el token nuevo
+- O define `JWT_SECRET_KEY` antes de arrancar la app: los tokens sobreviven al reinicio (esta API solo comprueba el token, no el diccionario `users`), pero tendrás que registrarte otra vez antes de poder hacer login
+
 ---
 
 ## Criterios de Aceptación

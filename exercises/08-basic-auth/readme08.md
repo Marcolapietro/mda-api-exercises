@@ -24,14 +24,14 @@ Fill the blanks (`_____`) from top to bottom; the app starts once the `POST` dec
    - Initialize a virtual environment.
    - Install the necessary dependencies (`fastapi[standard]`, `bcrypt`).
 
-2. **API Structure:**
-   - Create a route to register new users (`POST /users`).
-   - Create a route to get the list of users (`GET /users`), protected with basic authentication.
+2. **API Structure (given, complete it):**
+   - A route to register new users (`POST /users`): you write its HTTP method.
+   - A route to get the list of users (`GET /users`), protected with basic authentication: you plug in the dependency that protects it.
 
-3. **Basic Authentication Implementation:**
-   - Use `fastapi.security.HTTPBasic` to handle authentication.
-   - Store passwords securely: hash them with `bcrypt`.
-   - Protect routes that require authentication by verifying the provided credentials.
+3. **Basic Authentication (given, understand it):**
+   - `fastapi.security.HTTPBasic` reads the credentials from the request.
+   - Passwords are stored as `bcrypt` hashes, never in plain text.
+   - `get_current_user` verifies the credentials and answers `401` with the right header (you write the header name).
 
 4. **Testing:**
    - Use tools like Postman or `curl` to test the protected routes with and without valid credentials.
@@ -40,7 +40,7 @@ Fill the blanks (`_____`) from top to bottom; the app starts once the `POST` dec
 
 Fill in the three `_____` spaces in `app.py`:
 
-- the HTTP method of the route that registers a user (`POST`);
+- the HTTP method of the route that registers a user (in lowercase, because it is the name of a method of `app`: `@app.post`);
 - the dependency inside `Depends(...)` that protects `GET /users` (the function that checks the credentials);
 - the name of the header that tells the client which kind of authentication the server expects (it goes in the 401 response).
 
@@ -60,10 +60,10 @@ The password hashing (`hash_password`, `verify_password`) is already written for
    - The FastAPI application, the in-memory `users` dictionary and the `bcrypt` helpers are already there.
    - So are the two routes: `POST /users` registers a user and `GET /users` lists them.
 
-3. **Implement Basic Authentication:**
-   - Use `HTTPBasic` from `fastapi.security` and a `get_current_user` dependency to check the credentials.
-   - Hash passwords with `bcrypt.hashpw`.
-   - Verify credentials with `bcrypt.checkpw`.
+3. **Understand Basic Authentication, then fill the blanks:**
+   - Find where `HTTPBasic` from `fastapi.security` is created and how `get_current_user` uses it to check the credentials.
+   - See how `hash_password` hashes with `bcrypt.hashpw` and `verify_password` checks with `bcrypt.checkpw`.
+   - Fill the three blanks (see Instructions above).
 
 4. **Test the API:**
    - Register a user via `POST /users`.

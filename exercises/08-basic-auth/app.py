@@ -67,7 +67,7 @@ def get_current_user(creds: Annotated[HTTPBasicCredentials, Depends(security)]) 
 
 
 # TODO: Which method CREATES a user?
-# Hint: POST
+# Hint: post (lowercase: @app.post)
 @app._____("/users", status_code=201)
 def register_user(data: UserCreate) -> dict[str, str]:
     if data.username in users:

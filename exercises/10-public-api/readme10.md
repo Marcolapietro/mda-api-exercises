@@ -539,6 +539,14 @@ except ValueError:
 - Implement caching (stretch goal)
 - Upgrade to paid tier if needed
 
+### Issue 5: Token Suddenly Invalid (401) After Editing `app.py`
+
+`fastapi dev` restarts the app every time you save a file. The restart empties the in-memory `users` dictionary and, unless `JWT_SECRET_KEY` is set, generates a new random secret, so every token issued before is now rejected with `401`.
+
+**Solution:**
+- Register and log in again after each change, then use the new token
+- Or set `JWT_SECRET_KEY` before starting the app: tokens then survive a reload (this API only checks the token, not the `users` dictionary), but you still have to register again before you can log in
+
 ---
 
 ## Acceptance Criteria

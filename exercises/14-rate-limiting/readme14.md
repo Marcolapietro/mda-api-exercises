@@ -1065,7 +1065,7 @@ Figures at the time of writing (check the provider's docs, these tiers change of
 
 ### Next Steps
 
-1. **Exercise 15+**: Apply rate limiting to your final project API
+1. **Your own APIs**: Apply rate limiting to the APIs of the next exercises and of the final challenge (18)
 2. **Production deployment**: Configure Redis for rate limit storage
 3. **Monitoring**: Set up alerts for rate limit violations
 4. **Analytics**: Track API usage patterns to optimize limits

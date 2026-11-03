@@ -20,11 +20,11 @@ Las APIs son fundamentales en el desarrollo moderno de software por varias razon
 - **Uso Común:** Aplicaciones de navegación, servicios de entrega, y sitios web que requieren visualización de ubicaciones geográficas.
 - **Documentación:** [Google Maps Platform Documentation](https://developers.google.com/maps/documentation)
 
-### 2. **Twitter API**
+### 2. **GitHub REST API**
 
-- **Descripción:** Proporciona acceso a los datos de Twitter, permitiendo publicar tweets, leer menciones, y acceder a información de usuarios y tendencias.
-- **Uso Común:** Aplicaciones de gestión de redes sociales, análisis de sentimientos, y herramientas de monitoreo de marca.
-- **Documentación:** [Twitter Developer Documentation](https://developer.twitter.com/en/docs)
+- **Descripción:** Da acceso a los datos de GitHub: repositorios, usuarios, issues, pull requests y releases. Muchos endpoints públicos funcionan sin autenticación (con un límite de peticiones por hora más bajo).
+- **Uso Común:** Integraciones de CI/CD, bots que gestionan issues y pull requests, paneles de métricas de proyectos y login con GitHub (OAuth).
+- **Documentación:** [GitHub REST API Documentation](https://docs.github.com/en/rest)
 
 ### 3. **Stripe API**
 
@@ -34,7 +34,7 @@ Las APIs son fundamentales en el desarrollo moderno de software por varias razon
 
 ## Prueba en Postman
 
-Las tres APIs anteriores necesitan una key, así que la petición de prueba se hace a la API REST de GitHub, que no la pide:
+Google Maps y Stripe necesitan una key; la API REST de GitHub no la pide para datos públicos, así que la petición de prueba se hace a ella:
 
 - **Petición:** `GET https://api.github.com/users/octocat`
 - **Código de estado:** `200 OK`

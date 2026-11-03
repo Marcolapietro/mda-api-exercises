@@ -182,7 +182,7 @@ def register(data: UserCreate) -> dict[str, str]:
 # ============================================================================
 
 # TODO: Which method CREATES something new (a new key on every call)?
-# Hint: POST
+# Hint: post (lowercase: @app.post)
 @app._____("/api-key/rotate")
 def rotate_api_key(user: Annotated[str, Depends(get_basic_user)]) -> dict[str, str]:
     """

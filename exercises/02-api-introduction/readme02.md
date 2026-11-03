@@ -48,7 +48,7 @@ In this exercise, you will research the concept of API (Application Programming 
 4. **Select and Describe Popular APIs:**
    - Choose three APIs that are relevant and widely recognized, such as:
      - **Google Maps API**
-     - **Twitter API**
+     - **GitHub REST API**
      - **Stripe API**
    - Research each one to see what they are used for.
    - Open Postman and call one of your three APIs: reading its documentation to build that first request is part of the exercise.
@@ -66,7 +66,7 @@ In this exercise, you will research the concept of API (Application Programming 
 
 - **Official Documentation of Popular APIs:**
   - [Google Maps Platform Documentation](https://developers.google.com/maps/documentation)
-  - [Twitter Developer Documentation](https://developer.twitter.com/en/docs)
+  - [GitHub REST API Documentation](https://docs.github.com/en/rest)
   - [Stripe API Reference](https://stripe.com/docs/api)
 
 - **Tutorials and Videos:**
