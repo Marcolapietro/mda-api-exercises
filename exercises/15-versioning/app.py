@@ -92,7 +92,7 @@ class NoteCreateV2(NoteCreate):
 
 
 class NoteUpdate(BaseModel):
-    """v2 PUT body: send only the fields you want to change"""
+    """v2 PATCH body: send only the fields you want to change"""
     title: str | None = None
     content: str | None = None
     tags: list[str] | None = None
@@ -346,10 +346,10 @@ def get_note_v2(note_id: int, user: Annotated[str, Depends(get_current_user)]) -
     return {'data': get_own_note(note_id, user)}
 
 
-@v2.put("/notes/{note_id}")
+@v2.patch("/notes/{note_id}")
 def update_note_v2(note_id: int, data: NoteUpdate, user: Annotated[str, Depends(get_current_user)]) -> dict:
     """
-    Version 2: Update a note (new endpoint, not in v1)
+    Version 2: Update some fields of a note (PATCH: partial update; new endpoint, not in v1)
     """
     note = get_own_note(note_id, user)
 

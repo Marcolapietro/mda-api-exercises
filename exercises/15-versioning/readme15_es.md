@@ -481,7 +481,7 @@ def create_note_v2(data: NoteCreateV2, user: Annotated[str, Depends(get_current_
 2. Agregar timestamp `updated_at`: el mismo `now` (llamar dos veces a `datetime.now()` daría dos valores distintos)
 3. Envolver la respuesta: `{'data': note, 'message': 'Note created successfully'}`
 
-`get_note_v2` (también envuelta en `data`) y el nuevo `PUT /api/v2/notes/{note_id}` ya están implementados.
+`get_note_v2` (también envuelta en `data`) y el nuevo `PATCH /api/v2/notes/{note_id}` ya están implementados.
 
 ### Tarea 4.3: Conectar los Routers a la App
 
@@ -640,9 +640,9 @@ API-Version: v2
 
 ### Paso 5.5: Probar Características Exclusivas de v2
 
-**Actualizar una nota (solo en v2):**
+**Actualizar una nota (solo en v2):** `PATCH` cambia solo los campos que envías (como en el ejercicio 05: `PUT` reemplazaría la nota entera).
 ```bash
-curl -X PUT http://127.0.0.1:8000/api/v2/notes/2 \
+curl -X PATCH http://127.0.0.1:8000/api/v2/notes/2 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"title":"Nota Actualizada","tags":["trabajo","urgente"]}'
@@ -668,7 +668,7 @@ curl -X PUT http://127.0.0.1:8000/api/v2/notes/2 \
 
 **Intentar actualizar con v1 (falla: la ruta no existe):**
 ```bash
-curl -i -X PUT http://127.0.0.1:8000/api/v1/notes/2 \
+curl -i -X PATCH http://127.0.0.1:8000/api/v1/notes/2 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"title":"Esto fallará"}'
@@ -888,7 +888,7 @@ Los endpoints de autenticación usualmente son estables y no necesitan versionad
 
 ### Cambios Compatibles
 
-- **Endpoint de actualización**: nuevo `PUT /api/v2/notes/{note_id}` (v1 no tenía endpoint de actualización; añadir un endpoint no rompe a nadie)
+- **Endpoint de actualización**: nuevo `PATCH /api/v2/notes/{note_id}` (v1 no tenía endpoint de actualización; añadir un endpoint no rompe a nadie)
 - **Timestamps**: todos los recursos incluyen ahora `created_at` y `updated_at`
   - **Impacto**: Ninguno (los campos adicionales son compatibles hacia atrás al leer)
 - Nuevo campo opcional `tags` en las notas (se puede omitir)
@@ -1038,7 +1038,7 @@ Todos los recursos siguen la misma estrategia de versionado.
 - [ ] Respuesta v2 incluye metadatos de count y page
 - [ ] Paginación funciona con parámetros page y per_page
 - [ ] Puede obtener nota única usando v2 (envuelta en objeto data)
-- [ ] Puede actualizar nota usando endpoint PUT v2
+- [ ] Puede actualizar nota usando endpoint PATCH v2
 - [ ] Respuesta incluye cabecera API-Version
 - [ ] Respuesta NO incluye cabeceras de deprecación
 

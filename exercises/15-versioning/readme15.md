@@ -483,7 +483,7 @@ def create_note_v2(data: NoteCreateV2, user: Annotated[str, Depends(get_current_
 2. Add `updated_at` timestamp: the same `now` (calling `datetime.now()` twice would give two different values)
 3. Wrap the response: `{'data': note, 'message': 'Note created successfully'}`
 
-`get_note_v2` (also wrapped in `data`) and the new `PUT /api/v2/notes/{note_id}` are already implemented.
+`get_note_v2` (also wrapped in `data`) and the new `PATCH /api/v2/notes/{note_id}` are already implemented.
 
 ### Task 4.3: Plug the Routers into the App
 
@@ -644,9 +644,9 @@ API-Version: v2
 
 ### Step 5.5: Test v2-Exclusive Features
 
-**Update a note (only in v2):**
+**Update a note (only in v2):** `PATCH` changes only the fields you send (as in exercise 05: `PUT` would replace the whole note).
 ```bash
-curl -X PUT http://127.0.0.1:8000/api/v2/notes/2 \
+curl -X PATCH http://127.0.0.1:8000/api/v2/notes/2 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"title":"Updated Note","tags":["work","urgent"]}'
@@ -672,7 +672,7 @@ Notice `updated_at` changed!
 
 **Try to update using v1 (will fail - endpoint doesn't exist):**
 ```bash
-curl -i -X PUT http://127.0.0.1:8000/api/v1/notes/2 \
+curl -i -X PATCH http://127.0.0.1:8000/api/v1/notes/2 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"title":"This will fail"}'
@@ -897,7 +897,7 @@ Auth endpoints are usually stable and don't need versioning:
 
 ### Non-Breaking Changes
 
-- **Update endpoint**: new `PUT /api/v2/notes/{note_id}` (v1 had no update endpoint; adding an endpoint breaks nobody)
+- **Update endpoint**: new `PATCH /api/v2/notes/{note_id}` (v1 had no update endpoint; adding an endpoint breaks nobody)
 - **Timestamps**: all resources now include `created_at` and `updated_at`
   - **Impact**: None (additional fields are backward compatible when reading)
 - New optional `tags` field on notes (can be omitted)
@@ -1049,7 +1049,7 @@ All resources follow the same versioning strategy.
 - [ ] v2 response includes count and page metadata
 - [ ] Pagination works with page and per_page params
 - [ ] Can get single note using v2 (wrapped in data object)
-- [ ] Can update note using v2 PUT endpoint
+- [ ] Can update note using v2 PATCH endpoint
 - [ ] Response includes API-Version header
 - [ ] Response does NOT include deprecation headers
 
