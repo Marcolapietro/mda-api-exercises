@@ -619,7 +619,10 @@ API-Version: v2
       "id": 1,
       "title": "Mi Primera Nota",
       "content": "Esto es v1",
-      "owner": "alice"
+      "tags": [],
+      "owner": "alice",
+      "created_at": null,
+      "updated_at": null
     },
     {
       "id": 2,
@@ -637,6 +640,8 @@ API-Version: v2
   "version": "v2"
 }
 ```
+
+**Nota:** la nota 1 se creó con v1, que no guarda tags ni timestamps. v2 la devuelve igualmente con la forma de v2: `to_v2()` rellena `tags: []` y timestamps `null` (nunca supimos cuándo se creó), así que un cliente de v2 recibe siempre los mismos campos. Es el coste habitual de una versión nueva: los datos antiguos se adaptan al contrato nuevo, no al revés.
 
 ### Paso 5.5: Probar Características Exclusivas de v2
 

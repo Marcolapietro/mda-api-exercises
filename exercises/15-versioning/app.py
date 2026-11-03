@@ -141,6 +141,23 @@ def get_own_note(note_id: int, user: str) -> dict:
     return notes[note_id]
 
 
+def to_v2(note: dict) -> dict:
+    """
+    The v2 shape of any note. Notes created with v1 have no tags or timestamps, so v2 fills in
+    the defaults (empty tags, null timestamps: we never knew when they were created) and every
+    v2 note has the same fields. v1 responses are left as they are.
+    """
+    return {
+        'id': note['id'],
+        'title': note['title'],
+        'content': note['content'],
+        'tags': note.get('tags', []),
+        'owner': note['owner'],
+        'created_at': note.get('created_at'),
+        'updated_at': note.get('updated_at'),
+    }
+
+
 def add_deprecation_headers(response: Response) -> None:
     """
     Router dependency: runs on every v1 request.
@@ -279,8 +296,8 @@ def get_notes_v2(
     - Each note includes 'created_at' timestamp
     - Pagination query params: page, per_page
     """
-    # Filter notes by owner
-    user_notes = [note for note in notes.values() if note['owner'] == user]
+    # Filter notes by owner (in the v2 shape)
+    user_notes = [to_v2(note) for note in notes.values() if note['owner'] == user]
 
     # TODO: Calculate pagination
     # Hint: start = (page - 1) * per_page
@@ -341,9 +358,9 @@ def get_note_v2(note_id: int, user: Annotated[str, Depends(get_current_user)]) -
     - Response wrapped in 'data' object
 
     Also new (non-breaking):
-    - Includes the timestamps and tags of notes created with v2
+    - Includes tags and timestamps (empty tags and null timestamps for notes created with v1)
     """
-    return {'data': get_own_note(note_id, user)}
+    return {'data': to_v2(get_own_note(note_id, user))}
 
 
 @v2.patch("/notes/{note_id}")
@@ -364,7 +381,7 @@ def update_note_v2(note_id: int, data: NoteUpdate, user: Annotated[str, Depends(
     # Update timestamp
     note['updated_at'] = datetime.now(timezone.utc).isoformat()
 
-    return {'data': note, 'message': 'Note updated successfully'}
+    return {'data': to_v2(note), 'message': 'Note updated successfully'}
 
 
 # Plug both routers into the app. Do it AFTER the routes above are declared:

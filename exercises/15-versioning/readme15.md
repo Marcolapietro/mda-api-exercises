@@ -621,7 +621,10 @@ API-Version: v2
       "id": 1,
       "title": "My First Note",
       "content": "This is v1",
-      "owner": "alice"
+      "tags": [],
+      "owner": "alice",
+      "created_at": null,
+      "updated_at": null
     },
     {
       "id": 2,
@@ -640,7 +643,7 @@ API-Version: v2
 }
 ```
 
-**Note:** v1 notes don't have timestamps or tags because they were created using v1 endpoints. v2 can read them, but they'll be missing those fields.
+**Note:** note 1 was created with v1, which stores no tags or timestamps. v2 still returns it in the v2 shape: `to_v2()` fills in `tags: []` and `null` timestamps (we never knew when it was created), so a v2 client always gets the same fields. This is the usual cost of a new version: old data must be adapted to the new contract, not the other way round.
 
 ### Step 5.5: Test v2-Exclusive Features
 
