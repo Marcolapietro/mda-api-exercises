@@ -258,19 +258,19 @@ def search(q: str = ""):
 **Objetivo:** Crear tu primera aplicación FastAPI con rutas simples y probarla usando Postman.
 
 ### 1) Construir la Aplicación
-Crea un archivo `app.py` con los siguientes endpoints:
+Completa el `app.py` de partida (rellena los huecos `_____`; `example/example03.py` es la solución de referencia, para después de intentarlo) para que tenga los siguientes endpoints:
 
 **Endpoints requeridos:**
 - `GET /` - Retornar un mensaje de bienvenida (texto o JSON)
 - `GET /about` - Retornar información sobre la app
-- `GET /api/hello` - Retornar un mensaje JSON: `{"message": "¡Hola, Mundo!"}`
+- `GET /api/hello` - Retornar un mensaje JSON: `{"message": "Hello, World!"}`
 - `GET /api/user/{username}` - Retornar JSON con el nombre de usuario
 - `POST /api/greet` - Aceptar JSON con un campo "name", retornar un saludo
 
 **Ejemplo para el endpoint POST:**
 ```python
 # Cuerpo de petición: {"name": "Alicia"}
-# Respuesta: {"greeting": "¡Hola, Alicia!"}
+# Respuesta: {"greeting": "Hello, Alicia!"}
 ```
 
 ### 2) Ejecutar la Aplicación

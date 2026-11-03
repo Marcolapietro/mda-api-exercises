@@ -3,7 +3,7 @@
 ## Quick Start
 
 - This exercise uses Postman only; no app to run.
-- Install Postman, import or create requests, and follow the steps below.
+- Install Postman, create the requests yourself, and follow the steps below.
 
 
 ## **Objective**
@@ -60,6 +60,7 @@
     "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
   }
   ```
+- Also look at the status code next to the response (`200 OK`) and at the **Headers** tab of the response (`Content-Type: application/json; charset=utf-8`).
 
 ---
 
@@ -95,7 +96,7 @@
       "userId": 1
     }
     ```
-  - Click **Send** and observe the response.
+  - Click **Send** and observe the response: `201 Created` and your post with `"id": 101`. JSONPlaceholder only simulates writes, so the post is not really saved (`GET /posts/101` returns `404`).
 
 ---
 

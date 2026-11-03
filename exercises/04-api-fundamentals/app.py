@@ -61,7 +61,7 @@ def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
 # RequestValidationError, and this handler turns it into the same problem format.
 @app.exception_handler(RequestValidationError)
 def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
-    # TODO: Validation failed -> which status code? (the same 422 as the title in the body)
+    # TODO: Validation failed -> which status code? (its reason phrase, "Unprocessable Content", is already the title)
     # Hint: 422 Unprocessable Content
     return problem(request, _____, "Unprocessable Content", "Request body or parameters are invalid.",
                    errors=jsonable_encoder(exc.errors()))

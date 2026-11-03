@@ -258,7 +258,7 @@ Happy learning!
 **Goal:** Create your first FastAPI application with simple routes and test it using Postman.
 
 ### 1) Build the Application
-Create an `app.py` file with the following endpoints:
+Complete the starter `app.py` (fill the `_____` blanks; `example/example03.py` is the reference solution, for after you try) so it has the following endpoints:
 
 **Required endpoints:**
 - `GET /` - Return a welcome message (text or JSON)

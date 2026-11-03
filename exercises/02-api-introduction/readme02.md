@@ -62,7 +62,7 @@ In this exercise, you will research the concept of API (Application Programming 
 
 - **Introductory Articles:**
   - [What is an API?](https://www.redhat.com/en/topics/api/what-are-application-programming-interfaces)
-  - [API Basics](https://www.ibm.com/cloud/learn/api)
+  - [API Basics](https://www.ibm.com/think/topics/api)
 
 - **Official Documentation of Popular APIs:**
   - [Google Maps Platform Documentation](https://developers.google.com/maps/documentation)

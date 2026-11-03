@@ -63,7 +63,7 @@ En este ejercicio, investigarás el concepto de API (Interfaz de Programación d
 
 - **Artículos Introductorios:**
   - [What is an API?](https://www.redhat.com/en/topics/api/what-are-application-programming-interfaces)
-  - [API Basics](https://www.ibm.com/cloud/learn/api)
+  - [API Basics](https://www.ibm.com/think/topics/api)
 
 - **Documentación Oficial de APIs Populares:**
   - [Google Maps Platform Documentation](https://developers.google.com/maps/documentation)

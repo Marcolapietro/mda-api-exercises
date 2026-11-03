@@ -32,6 +32,17 @@ Las APIs son fundamentales en el desarrollo moderno de software por varias razon
 - **Uso Común:** Plataformas de comercio electrónico, aplicaciones de suscripción, y cualquier servicio que requiera procesamiento de pagos.
 - **Documentación:** [Stripe API Reference](https://stripe.com/docs/api)
 
+## Prueba en Postman
+
+Las tres APIs anteriores necesitan una key, así que la petición de prueba se hace a la API REST de GitHub, que no la pide:
+
+- **Petición:** `GET https://api.github.com/users/octocat`
+- **Código de estado:** `200 OK`
+- **Fragmento de la respuesta:**
+  ```json
+  {"login": "octocat", "id": 583231, "type": "User", "name": "The Octocat", "public_repos": 8}
+  ```
+
 ## Frameworks de desarrollo de APIs
 - FastAPI, Flask, Django REST Framework - Python
 - Express - Node.js
