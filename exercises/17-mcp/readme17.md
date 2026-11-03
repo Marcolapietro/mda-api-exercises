@@ -150,33 +150,29 @@ Set `NOTES_ALLOW_DELETE=1` (`export NOTES_ALLOW_DELETE=1` on Linux/macOS, `$env:
 
 ### 3. Use it from a real AI assistant
 
-Connect the server to an assistant and ask in natural language: *"Create a note called 'Review JWT' with the content 'refresh tokens and iss/aud'"*, then *"What are my latest notes?"*. Use **absolute paths** and the Python of your venv.
+Connect the server to an assistant and ask in natural language: *"Create a note called 'Review JWT' with the content 'refresh tokens and iss/aud'"*, then *"What are my latest notes?"*. Use **absolute paths** and the Python of your venv. Every option below works the same way: the assistant starts `python mcp_server.py` itself and talks to it over stdio.
 
-- **Claude Desktop:** Settings → Developer → Edit Config (`claude_desktop_config.json`):
+**Free options (no paid subscription):**
 
-  ```json
-  {
-    "mcpServers": {
-      "notes": {
-        "command": "C:\\path\\to\\17-mcp\\venv\\Scripts\\python.exe",
-        "args": ["C:\\path\\to\\17-mcp\\mcp_server.py"],
-        "env": { "NOTES_API_KEY": "the-same-key-as-the-api" }
-      }
-    }
-  }
-  ```
+- **LM Studio** ([lmstudio.ai](https://lmstudio.ai/), free at home and at work, no account): runs the model on your own computer, so nothing leaves your machine. You need about 8 GB of RAM and a few GB of disk for the model.
+  1. Download a model that supports tool use (the model list marks them; a small Qwen3 model is a good start) and load it in the chat.
+  2. In the right sidebar open **Program → Install → Edit mcp.json** (the file is `%USERPROFILE%\.lmstudio\mcp.json`) and add:
 
-- **Claude Code:** one command, run in the folder you work in (`-e` passes the key to the server's environment):
+     ```json
+     {
+       "mcpServers": {
+         "notes": {
+           "command": "C:\\path\\to\\17-mcp\\venv\\Scripts\\python.exe",
+           "args": ["C:\\path\\to\\17-mcp\\mcp_server.py"],
+           "env": { "NOTES_API_KEY": "the-same-key-as-the-api" }
+         }
+       }
+     }
+     ```
 
-  ```bash
-  claude mcp add notes -e NOTES_API_KEY=the-same-key-as-the-api -- C:\path\to\17-mcp\venv\Scripts\python.exe C:\path\to\17-mcp\mcp_server.py
-  ```
+  3. Enable the `notes` server in the chat. LM Studio asks for confirmation before each tool call. Small local models sometimes pick the wrong tool or argument: rephrase the request, or try a bigger model if your computer allows it.
 
-  It saves the same `mcpServers` entry as Claude Desktop (in `~/.claude.json`, only for this folder); to share it with the project, put that JSON in a `.mcp.json` file at the root of the project. Check it with `claude mcp list`.
-
-- **Cursor:** the same `mcpServers` JSON as Claude Desktop, in `.cursor/mcp.json` (this project) or `~/.cursor/mcp.json` (all projects).
-
-- **VS Code (Copilot agent mode):** create `.vscode/mcp.json` in the folder you open:
+- **VS Code + GitHub Copilot (agent mode):** verified students get **Copilot Student** for free through [GitHub Education](https://education.github.com/pack). Apply before the class: verification can take a few days. Without it, **Copilot Free** works with a limited monthly allowance. Open the folder, run **MCP: Add Server** from the Command Palette, choose **Command (stdio)** and enter the venv Python followed by the path to `mcp_server.py`. Then switch the chat to **Agent** mode; the `notes` tools appear in the tools list. The entry looks like this (you can also write it by hand in `.vscode/mcp.json`):
 
   ```json
   {
@@ -189,6 +185,20 @@ Connect the server to an assistant and ask in natural language: *"Create a note 
     }
   }
   ```
+
+**Options that need an account or a paid plan** (check what your plan includes):
+
+- **Claude Desktop:** Settings → Developer → Edit Config (`claude_desktop_config.json`) and paste the same `mcpServers` JSON as in LM Studio.
+
+- **Claude Code** (needs a paid Claude plan or API credits): one command, run in the folder you work in (`-e` passes the key to the server's environment):
+
+  ```bash
+  claude mcp add notes -e NOTES_API_KEY=the-same-key-as-the-api -- C:\path\to\17-mcp\venv\Scripts\python.exe C:\path\to\17-mcp\mcp_server.py
+  ```
+
+  It saves the same `mcpServers` entry (in `~/.claude.json`, only for this folder); to share it with the project, put that JSON in a `.mcp.json` file at the root of the project. Check it with `claude mcp list`.
+
+- **Cursor:** the same `mcpServers` JSON, in `.cursor/mcp.json` (this project) or `~/.cursor/mcp.json` (all projects).
 
 The `env` block (or `-e`) is only needed if you started the Notes API with `NOTES_API_KEY` (stretch goal 1). The Notes API must keep running in its own terminal: the assistant only starts the MCP server.
 
