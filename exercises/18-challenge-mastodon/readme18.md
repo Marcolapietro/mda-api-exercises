@@ -184,6 +184,22 @@ def post_status(text, idempotency_key=None):
 
 ---
 
+## 📝 Assessment
+
+The challenge is graded out of **10 points**:
+
+| Criterion | Points | Full marks when... |
+|---|---|---|
+| **Publishes a status** (requirements 1 and 2) | 3 | It authenticates with your token, posts the status and shows the URL of the new post. |
+| **Error handling** (requirement 3) | 2 | It shows a clear message, never a raw traceback, for an invalid token (`401`), a status that is too long (`422`), a rate limit (`429`) and a network error or timeout. |
+| **Secrets** (requirement 4) | 2 | The token lives only in `.env`, `.env.example` has placeholders only, `.env` is in `.gitignore` and no token was ever committed (check the Git history too). |
+| **README and code** (requirement 5) | 1.5 | Someone else can install and run it by following your README alone; the code is organized and readable. |
+| **Enhancements** | 1.5 | At least two of the [optional enhancements](#-optional-enhancements), working. |
+
+**To pass you must meet requirements 1, 2 and 4:** a solution that cannot publish a status, or that exposes a token anywhere in the repository or its history, fails regardless of the other points.
+
+---
+
 ## 📦 Submission guidelines
 
 Include:
