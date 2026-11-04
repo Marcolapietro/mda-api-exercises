@@ -132,6 +132,12 @@ def integrity_error(exc: IntegrityError) -> HTTPException:
     return HTTPException(status_code=409, detail="The change breaks a database constraint.")
 
 
+def contains(text: str) -> str:
+    """LIKE pattern for 'contains text'. \\ % and _ are escaped so they match literally."""
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def iso(value: datetime) -> str:
     """MySQL TIMESTAMP (read in UTC) -> '2026-11-04T09:30:00Z'."""
     return value.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -285,10 +291,9 @@ def list_books(
         # NEVER build SQL with the user's text, like this:
         #     cur.execute(f"... WHERE b.title LIKE '%{q}%'")
         # A q such as  ' OR '1'='1  would become part of the SQL (SQL injection).
-        # With %s the text is sent as a value. We also escape \ % and _ so they are matched literally.
-        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        # With %s the text is sent as a value.
         where.append("b.title LIKE %s")
-        params.append(f"%{escaped}%")
+        params.append(contains(q))
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
 
     with db() as conn, conn.cursor() as cur:
@@ -304,3 +309,102 @@ def list_books(
     prev_link = link(max(0, min(offset, total) - limit)) if offset > 0 else None
     return BookList(data=books, page=PageInfo(limit=limit, offset=offset, total=total,
                                               next=next_link, prev=prev_link))
+
+
+# ---------- Authors ----------
+
+class NewAuthorBook(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    isbn: str | None = Field(None, pattern=r"^\d{13}$")
+    year: int | None = Field(None, ge=-3000, le=2100)
+
+
+class AuthorCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    country: str | None = Field(None, max_length=60)
+    birth_year: int | None = Field(None, ge=-3000, le=2100)
+    books: list[NewAuthorBook] = []
+
+
+class Author(BaseModel):
+    id: int
+    name: str
+    country: str | None
+    birth_year: int | None
+    book_count: int
+
+
+class AuthorList(BaseModel):
+    data: list[Author]
+
+
+AUTHOR_SELECT = """
+    SELECT a.id, a.name, a.country, a.birth_year,
+           (SELECT COUNT(*) FROM books b WHERE b.author_id = a.id) AS book_count
+    FROM authors a
+"""
+
+
+def get_author_or_404(cur, author_id: int) -> Author:
+    cur.execute(AUTHOR_SELECT + " WHERE a.id = %s", (author_id,))
+    row = cur.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Author {author_id} does not exist.")
+    return Author(**row)
+
+
+@app.get("/authors")
+def list_authors(q: Annotated[str | None, Query(max_length=100)] = None) -> AuthorList:
+    """All authors (a small table, no pagination). ?q= filters by part of the name."""
+    with db() as conn, conn.cursor() as cur:
+        if q:
+            cur.execute(AUTHOR_SELECT + " WHERE a.name LIKE %s ORDER BY a.id", (contains(q),))
+        else:
+            cur.execute(AUTHOR_SELECT + " ORDER BY a.id")
+        return AuthorList(data=[Author(**row) for row in cur.fetchall()])
+
+
+@app.get("/authors/{author_id}")
+def get_author(author_id: int) -> Author:
+    with db() as conn, conn.cursor() as cur:
+        return get_author_or_404(cur, author_id)
+
+
+@app.post("/authors", status_code=201)
+def create_author(data: AuthorCreate, request: Request, response: Response) -> Author:
+    """Create an author and, optionally, their books, in ONE transaction."""
+    with db() as conn, conn.cursor() as cur:
+        # All or nothing: commit only if every INSERT worked; rollback undoes them all.
+        # Without the transaction, a duplicate ISBN in the 2nd book would leave the author
+        # and the 1st book saved, and the client would get an error for a half-done request.
+        try:
+            cur.execute("INSERT INTO authors (name, country, birth_year) VALUES (%s, %s, %s)",
+                        (data.name, data.country, data.birth_year))
+            author_id = cur.lastrowid
+            for book in data.books:
+                cur.execute("INSERT INTO books (title, isbn, year, author_id) VALUES (%s, %s, %s, %s)",
+                            (book.title, book.isbn, book.year, author_id))
+            conn.commit()
+        except IntegrityError as exc:
+            conn.rollback()
+            raise integrity_error(exc)
+        author = get_author_or_404(cur, author_id)
+    response.headers["Location"] = str(request.url_for("get_author", author_id=author.id))
+    return author
+
+
+@app.delete("/authors/{author_id}", status_code=204)
+def delete_author(author_id: int) -> Response:
+    with db() as conn, conn.cursor() as cur:
+        try:
+            cur.execute("DELETE FROM authors WHERE id = %s", (author_id,))
+        except IntegrityError as exc:
+            # The foreign key of books protects the data: MySQL refuses (error 1451)
+            if exc.args[0] == 1451:
+                raise HTTPException(status_code=409,
+                                    detail=f"Author {author_id} still has books. Delete or move them first.")
+            raise integrity_error(exc)
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Author {author_id} does not exist.")
+        conn.commit()
+    return Response(status_code=204)
