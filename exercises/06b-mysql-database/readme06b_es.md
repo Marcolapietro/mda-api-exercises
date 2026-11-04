@@ -27,7 +27,8 @@ Necesitas **Docker Desktop** (o Rancher Desktop) arrancado y Python 3.12 o super
 ```bash
 cd exercises/06b-mysql-database
 
-# 1. La base de datos: copia la configuración y arranca MySQL (el primer arranque tarda unos 30 segundos)
+# 1. La base de datos: copia la configuración y arranca MySQL
+#    (la primera vez Docker descarga las imágenes, unos cientos de MB: ejecuta `docker compose pull` antes de clase)
 cp .env.example .env            # Windows CMD: copy .env.example .env
 docker compose up -d --wait
 
@@ -43,7 +44,7 @@ La API arranca en `http://127.0.0.1:8000` (documentación automática en `/docs`
 
 `docker compose up -d --wait` arranca dos contenedores: **MySQL** en el puerto `3306` y **Adminer** en `http://127.0.0.1:8080`, una página web para ver las tablas. Entra en Adminer con Sistema `MySQL`, Servidor `mysql`, Usuario `library`, Contraseña `library-pass`, Base de datos `library`. Tenlo abierto mientras pruebas: después de cada petición, mira qué ha cambiado en la tabla.
 
-Mientras quede un hueco en un decorador, `fastapi dev` se para con un `AttributeError` que señala `@app._____`. Los demás huecos están dentro de funciones o de cadenas SQL, así que solo fallan cuando les llega una petición (un `500` o una respuesta incorrecta).
+Mientras quede un hueco en un decorador, `fastapi dev` se para con un `AttributeError` que señala `@app._____`. Cuando lo arreglas, el `status_code=_____` de DELETE da un `NameError`, y un `le=_____` sin completar también impide el arranque: el error termina en `'le' must be coercible to an integer` (en Python 3.13 o anterior, un `NameError` que señala la línea de `limit`), porque FastAPI lee las reglas de `Query(...)` al registrar la ruta. Los demás huecos están dentro de funciones o de cadenas SQL, así que solo fallan cuando les llega una petición (un `500` o una respuesta incorrecta).
 
 ## La base de datos
 
@@ -303,8 +304,9 @@ Una **transacción** es un grupo de sentencias que se guarda **entero o nada**. 
 ## Problemas Frecuentes
 
 - **`503 Service Unavailable` "Cannot connect to MySQL"**: Docker no está arrancado, o MySQL todavía está arrancando. Ejecuta `docker compose up -d --wait` en esta carpeta (y `docker compose ps` para ver el estado). No hace falta reiniciar la API.
-- **`port is already allocated` en el 3306**: ya tienes un MySQL en tu ordenador. Pon `MYSQL_PORT=3307` en `.env` y vuelve a ejecutar `docker compose up -d --wait`; la API lee el mismo `.env`.
-- **`500 Internal Server Error`**: todavía queda un hueco o una cadena SQL está mal. El terminal donde corre `fastapi dev` muestra el error de MySQL (por ejemplo `You have an error in your SQL syntax`).
+- **`Ports are not available` o `port is already allocated` en el 3306**: ya tienes un MySQL en tu ordenador. Pon `MYSQL_PORT=3307` en `.env` y vuelve a ejecutar `docker compose up -d --wait`; la API lee el mismo `.env`. Lo mismo con Adminer en el 8080: cambia `ADMINER_PORT`.
+- **`503` "refused the connection: Access denied"**: el usuario o la contraseña del `.env` no coinciden con la base de datos. Si los cambiaste después del primer arranque, el volumen conserva los antiguos: `docker compose down -v` y vuelve a arrancar.
+- **`500 Internal Server Error`**: todavía queda un hueco o una cadena SQL está mal. Mira el terminal donde corre `fastapi dev`: `TypeError: not all arguments converted during string formatting` significa que falta un marcador `%s` (todavía hay un `_____` en el SQL); `You have an error in your SQL syntax` viene de MySQL.
 - **pip falla con un error de ruta larga en Windows**: copia el repositorio a una carpeta corta como `C:\edem` (ver el README principal).
 
 ## Resultados Esperados

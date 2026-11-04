@@ -99,6 +99,17 @@ class DatabaseUnavailable(Exception):
     """MySQL is not reachable (Docker stopped, container still starting, wrong .env...)."""
 
 
+def unavailable_reason(exc: OperationalError) -> str:
+    """A message that tells the student what to check."""
+    where = f"MySQL at {MYSQL['host']}:{MYSQL['port']}"
+    if exc.args[0] == 2003:  # nobody answers on that host and port
+        return f"Cannot connect to {where}. Is Docker running? Start it with: docker compose up -d"
+    # MySQL answered but said no (1045 wrong user or password, 1049 unknown database...)
+    return (f"{where} refused the connection: {exc.args[1]}. Check the .env of this folder "
+            "(copied from .env.example?). If you changed the credentials after the first start, "
+            "reset the database with: docker compose down -v")
+
+
 @contextmanager
 def db() -> Iterator[pymysql.connections.Connection]:
     """Open one connection for this request and always close it.
@@ -111,7 +122,7 @@ def db() -> Iterator[pymysql.connections.Connection]:
                                init_command="SET time_zone = '+00:00'", autocommit=False,
                                connect_timeout=3)
     except OperationalError as exc:
-        raise DatabaseUnavailable() from exc
+        raise DatabaseUnavailable(unavailable_reason(exc)) from exc
     try:
         yield conn
     except BaseException:
@@ -178,9 +189,8 @@ def get_book_or_404(cur, book_id: int) -> Book:
 try:
     with db():
         pass
-except DatabaseUnavailable:
-    print(f"WARNING: cannot connect to MySQL at {MYSQL['host']}:{MYSQL['port']}. "
-          "Start it with: docker compose up -d --wait")
+except DatabaseUnavailable as exc:
+    print(f"WARNING: {exc}")
 
 
 # ---------- Errors: RFC 9457 problem details ----------
@@ -207,9 +217,7 @@ def validation_error(request: Request, exc: RequestValidationError) -> JSONRespo
 
 @app.exception_handler(DatabaseUnavailable)
 def database_unavailable(request: Request, exc: DatabaseUnavailable) -> JSONResponse:
-    return problem(request, 503, "Service Unavailable",
-                   f"Cannot connect to MySQL at {MYSQL['host']}:{MYSQL['port']}. "
-                   "Is Docker running? Start it with: docker compose up -d")
+    return problem(request, 503, "Service Unavailable", str(exc))
 
 
 # ---------- Books ----------
