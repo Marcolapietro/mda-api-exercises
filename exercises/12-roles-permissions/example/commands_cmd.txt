@@ -1,7 +1,7 @@
 REM Exercise 12: Roles & Permissions (Windows CMD)
 
 REM 0. Start the app with a known admin password (or copy the one printed at start-up):
-REM    set ADMIN_PASSWORD=admin123
+REM    put ADMIN_PASSWORD=admin123 in .env (copy .env.example .env)
 REM    fastapi dev app.py
 
 REM 1. Register a student (new users are always students)

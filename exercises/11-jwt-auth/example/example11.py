@@ -2,13 +2,18 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Annotated
 
 import bcrypt
 import jwt
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
+
+# Load the .env of the exercise folder, one level up (next to .env.example); a variable set in the terminal wins
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 app = FastAPI(title="JWT Authentication API")
 

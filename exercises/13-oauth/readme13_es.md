@@ -312,7 +312,23 @@ La app lee las credenciales **solo de variables de entorno** (`GITHUB_CLIENT_ID`
 `GITHUB_CLIENT_SECRET`). **No** las pegues en `app.py`: todo lo que está en el código acaba en Git.
 Si falta alguna de las dos, la app se detiene al arrancar con un mensaje `Missing GITHUB_CLIENT_ID ...`.
 
-Defínelas **en la misma terminal** donde vas a ejecutar `fastapi dev app.py` (solo duran esa sesión de terminal):
+El sitio más cómodo para ellas es un fichero `.env` en la carpeta del ejercicio. Copia la plantilla y rellena la copia:
+
+```bash
+cp .env.example .env     # Linux / macOS
+copy .env.example .env   # Windows (CMD o PowerShell)
+```
+
+```
+GITHUB_CLIENT_ID=Ov23liabc123...
+GITHUB_CLIENT_SECRET=1a2b3c4d...
+```
+
+- Al arrancar, `load_dotenv()` (del paquete `python-dotenv`) copia las variables de `.env` al entorno, así que `os.environ` las encuentra.
+- `.env` está en `.gitignore`, así que el client secret nunca llega a GitHub. `.env.example` solo tiene valores vacíos y **sí** se sube.
+- `fastapi dev` se reinicia cuando guardas un fichero `.py`, no `.env`: después de editar `.env`, para la app (Ctrl+C) y vuelve a arrancarla.
+
+También puedes definirlas en la terminal donde ejecutas `fastapi dev app.py`: tienen prioridad sobre `.env` y solo duran esa sesión de terminal.
 
 ```bash
 # Linux / macOS (bash, zsh)
@@ -334,12 +350,7 @@ set GITHUB_CLIENT_SECRET=1a2b3c4d...
 
 Después arranca la app y abre **http://127.0.0.1:8000/login/github** en el navegador.
 
-El fichero `.env.example` de la raíz del repo lista todas las variables que usan los ejercicios
-(`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `SESSION_SECRET` y `JWT_SECRET_KEY`).
-Es solo una referencia: la app **no** lo carga automáticamente, así que igualmente tienes que definir
-las variables con los comandos de arriba.
-
-Otras dos variables son opcionales: `SESSION_SECRET` (firma la cookie de sesión que guarda el `state` de OAuth y el
+Otras dos variables son opcionales (las dos están en `.env.example`): `SESSION_SECRET` (firma la cookie de sesión que guarda el `state` de OAuth y el
 verifier PKCE) y `JWT_SECRET_KEY` (firma tus JWT). Si no están definidas, la app genera unas aleatorias al arrancar
 (los tokens dejan de funcionar al reiniciarla).
 

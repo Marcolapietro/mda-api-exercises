@@ -8,3 +8,6 @@ bcrypt==5.0.0
 
 # JWT encoding and decoding
 PyJWT==2.15.1
+
+# Reads the .env file of the exercise at startup
+python-dotenv==1.2.4

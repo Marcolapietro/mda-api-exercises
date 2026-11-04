@@ -7,8 +7,11 @@ cd exercises/15-versioning
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+copy .env.example .env  # Windows (cp on Linux/Mac)
 fastapi dev app.py
 ```
+
+Optional: put a fixed `JWT_SECRET_KEY` in `.env` (template: `.env.example`, generate a value with `python -c "import secrets; print(secrets.token_hex(32))"`) so your tokens survive reloads; without it a random secret is generated on every start. After editing `.env`, stop the app (Ctrl+C) and start it again.
 
 Fill the blanks (`_____`) from top to bottom. The app starts once three blanks are filled: the `status_code` of the v1 `POST` decorator and the two `app.include_router(...)` calls at the end of the routes. The other blanks do not stop the server from starting: the router prefixes give you `404` until they are right, and the rest fail only when a request reaches them (a `500` error or a missing header).
 

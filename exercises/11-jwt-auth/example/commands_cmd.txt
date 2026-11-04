@@ -1,10 +1,10 @@
 REM Exercise 11: JWT Authentication Testing Commands (Windows CMD)
 REM These commands demonstrate the JWT flow: access token (15 min) + refresh token
 
-REM 0. (Optional) Set the signing secret BEFORE running "fastapi dev app.py" in this window,
+REM 0. (Optional) Put a fixed signing secret in .env (copy .env.example .env) BEFORE "fastapi dev app.py",
 REM    otherwise a random one is used and tokens die when the server restarts
 REM python -c "import secrets; print(secrets.token_hex(32))"
-REM set JWT_SECRET_KEY=<paste the value>
+REM Paste the value after JWT_SECRET_KEY= in .env
 
 REM 1. Register a new user
 curl -X POST -H "Content-Type: application/json" -d "{\"username\":\"alice\",\"password\":\"secret123\"}" http://127.0.0.1:8000/register

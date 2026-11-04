@@ -11,3 +11,6 @@ Authlib==1.9.1
 
 # Signs the session cookie used by SessionMiddleware
 itsdangerous==2.2.0
+
+# Reads the .env file of the exercise at startup
+python-dotenv==1.2.4

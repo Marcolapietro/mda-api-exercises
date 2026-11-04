@@ -7,8 +7,11 @@ cd exercises/14-rate-limiting
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+copy .env.example .env  # Windows (cp on Linux/Mac)
 fastapi dev app.py
 ```
+
+Optional: put a fixed `JWT_SECRET_KEY` in `.env` (template: `.env.example`, generate a value with `python -c "import secrets; print(secrets.token_hex(32))"`) so your tokens survive reloads; without it a random secret is generated on every start. After editing `.env`, stop the app (Ctrl+C) and start it again.
 
 ## Objective
 

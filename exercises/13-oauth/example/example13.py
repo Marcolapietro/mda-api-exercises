@@ -2,14 +2,19 @@ import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Annotated, Any
 
 import jwt
 from authlib.integrations.starlette_client import OAuth
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.middleware.sessions import SessionMiddleware
+
+# Load the .env of the exercise folder, one level up (next to .env.example); a variable set in the terminal wins
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 app = FastAPI(title="OAuth Authentication API")
 
@@ -38,8 +43,8 @@ oauth = OAuth()
 # Credentials come ONLY from environment variables, never commit them to the repo
 for var in ("GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"):
     if not os.environ.get(var):
-        raise SystemExit(f"Missing {var}. Create a GitHub OAuth App and set it as an environment "
-                         f"variable (see readme13.md, 'Part 2: Configure Your App').")
+        raise SystemExit(f"Missing {var}. Create a GitHub OAuth App and put its credentials in the .env "
+                         f"file of this exercise (see readme13.md, 'Part 2: Configure Your App').")
 
 oauth.register(
     name="github",

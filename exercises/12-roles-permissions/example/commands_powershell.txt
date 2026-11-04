@@ -1,7 +1,7 @@
 # Exercise 12: Roles & Permissions (PowerShell)
 
 # 0. Start the app with a known admin password (or use the one printed at start-up):
-#    $env:ADMIN_PASSWORD="admin123"
+#    put ADMIN_PASSWORD=admin123 in .env (copy .env.example .env)
 #    fastapi dev app.py
 
 $baseUrl = "http://127.0.0.1:8000"

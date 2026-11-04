@@ -11,3 +11,6 @@ PyJWT==2.15.1
 
 # Rate limiting
 slowapi==0.1.10
+
+# Reads the .env file of the exercise at startup
+python-dotenv==1.2.4

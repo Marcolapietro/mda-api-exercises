@@ -311,7 +311,23 @@ The app reads the credentials **only from environment variables** (`GITHUB_CLIEN
 `GITHUB_CLIENT_SECRET`). Do **not** paste them into `app.py`: anything in the code ends up in Git.
 If either variable is missing, the app stops at startup with a `Missing GITHUB_CLIENT_ID ...` message.
 
-Set them **in the same terminal** where you will run `fastapi dev app.py` (they only last for that terminal session):
+The easiest place for them is a `.env` file in the exercise folder. Copy the template and fill in the copy:
+
+```bash
+cp .env.example .env     # Linux / macOS
+copy .env.example .env   # Windows (CMD or PowerShell)
+```
+
+```
+GITHUB_CLIENT_ID=Ov23liabc123...
+GITHUB_CLIENT_SECRET=1a2b3c4d...
+```
+
+- At startup, `load_dotenv()` (from the `python-dotenv` package) copies the variables of `.env` into the environment, so `os.environ` finds them.
+- `.env` is in `.gitignore`, so the client secret never reaches GitHub. `.env.example` has empty values only and **is** committed.
+- `fastapi dev` reloads when you save a `.py` file, not `.env`: after editing `.env`, stop the app (Ctrl+C) and start it again.
+
+You can also set them in the terminal where you run `fastapi dev app.py`: they win over `.env`, and only last for that terminal session.
 
 ```bash
 # Linux / macOS (bash, zsh)
@@ -333,12 +349,7 @@ set GITHUB_CLIENT_SECRET=1a2b3c4d...
 
 Then start the app and open **http://127.0.0.1:8000/login/github** in the browser.
 
-The `.env.example` file at the root of the repo lists every variable the exercises use
-(`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `SESSION_SECRET` and `JWT_SECRET_KEY`).
-It is only a reference: the app does **not** load it automatically, so you still need to set the
-variables with the commands above.
-
-Two more variables are optional: `SESSION_SECRET` (signs the session cookie that holds the OAuth `state` and the
+Two more variables are optional (both are in `.env.example`): `SESSION_SECRET` (signs the session cookie that holds the OAuth `state` and the
 PKCE verifier) and `JWT_SECRET_KEY` (signs your JWTs). If they are not set, the app generates random ones at
 startup (tokens stop working when you restart it).
 

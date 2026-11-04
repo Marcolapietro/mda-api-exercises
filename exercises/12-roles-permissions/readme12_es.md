@@ -49,13 +49,13 @@ Rellena los huecos (`_____`) de arriba abajo. Los dos roles de `require_role(___
 Los usuarios nuevos se registran **siempre** como `student`. El rol nunca se lee del cuerpo de la petición: aceptarlo permitiría que cualquiera se registrase como admin (una vulnerabilidad de *mass assignment*). Solo un admin puede cambiar el rol de un usuario, con `PUT /users/{username}`.
 
 ### **Cuenta de Administrador**
-Al arrancar, la app crea un usuario `admin`. Su contraseña se toma de la variable de entorno `ADMIN_PASSWORD`; si no está definida, se genera una aleatoria y se muestra en la consola (la terminal donde se ejecuta `fastapi dev`):
+Al arrancar, la app crea un usuario `admin`. Su contraseña se toma de la variable `ADMIN_PASSWORD` de `.env` (copia `.env.example` a `.env`); si está vacía, se genera una aleatoria y se muestra en la consola (la terminal donde se ejecuta `fastapi dev`):
 
 ```
 Admin user created -> username: admin  password: Xy3...
 ```
 
-La línea se muestra una sola vez, aunque `fastapi dev` carga tu archivo dos veces (una para encontrar la app y otra en el proceso de recarga): la primera carga guarda la contraseña generada en la variable de entorno `ADMIN_PASSWORD` y la segunda la reutiliza. Para elegir tu propia contraseña, define `ADMIN_PASSWORD` antes de arrancar el servidor.
+La línea se muestra una sola vez, aunque `fastapi dev` carga tu archivo dos veces (una para encontrar la app y otra en el proceso de recarga): la primera carga guarda la contraseña generada en la variable de entorno `ADMIN_PASSWORD` y la segunda la reutiliza. Para elegir tu propia contraseña, define `ADMIN_PASSWORD` en `.env` antes de arrancar el servidor (tras editar `.env`, para la app con Ctrl+C y vuelve a arrancarla). `.env` también puede llevar `JWT_SECRET_KEY`, para que los tokens sobrevivan a los reinicios; está en `.gitignore`, así que ninguno de los dos llega a GitHub.
 
 ### **Inicio de Sesión**
 Autentica a los usuarios y les proporciona un token JWT que será necesario para acceder a las rutas protegidas. El token incluye el rol del usuario como *claim*, pero ese *claim* es solo informativo. En cada petición se vuelve a buscar al usuario a partir del *claim* `sub` del token, así que los permisos nunca dependen de lo que diga el token: el rol se lee del almacén del servidor en cada petición.

@@ -49,13 +49,13 @@ Fill the blanks (`_____`) from top to bottom. The two roles of `require_role(___
 New users are **always** registered as `student`. The role is never read from the request body: accepting it would let anyone register as admin (a *mass assignment* vulnerability). Only an admin can change a user's role, with `PUT /users/{username}`.
 
 ### **Admin Account**
-At start-up the app creates one `admin` user. Its password is taken from the `ADMIN_PASSWORD` environment variable; if it is not set, a random password is generated and printed in the console (the terminal where `fastapi dev` runs):
+At start-up the app creates one `admin` user. Its password is taken from the `ADMIN_PASSWORD` variable of `.env` (copy `.env.example` to `.env`); if it is empty, a random password is generated and printed in the console (the terminal where `fastapi dev` runs):
 
 ```
 Admin user created -> username: admin  password: Xy3...
 ```
 
-The line is printed once, even though `fastapi dev` loads your file twice (once to find the app, once in the reload worker): the first load keeps the generated password in the `ADMIN_PASSWORD` environment variable and the second load reuses it. To choose your own password, set `ADMIN_PASSWORD` before starting the server.
+The line is printed once, even though `fastapi dev` loads your file twice (once to find the app, once in the reload worker): the first load keeps the generated password in the `ADMIN_PASSWORD` environment variable and the second load reuses it. To choose your own password, set `ADMIN_PASSWORD` in `.env` before starting the server (after editing `.env`, stop the app with Ctrl+C and start it again). `.env` can also hold `JWT_SECRET_KEY`, so tokens survive reloads; it is in `.gitignore`, so neither reaches GitHub.
 
 ### **Login**
 Authenticates users and provides them with a JWT token that will be required to access protected routes. The token includes the user's role as a claim, but that claim is only informative. On every request the user is looked up again from the token's `sub` claim, so permissions never depend on what the token says: the role is read from the server store on every request.

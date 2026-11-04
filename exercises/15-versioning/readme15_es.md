@@ -7,8 +7,11 @@ cd exercises/15-versioning
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+copy .env.example .env  # Windows (cp en Linux/Mac)
 fastapi dev app.py
 ```
+
+Opcional: pon un `JWT_SECRET_KEY` fijo en `.env` (plantilla: `.env.example`, genera un valor con `python -c "import secrets; print(secrets.token_hex(32))"`) para que tus tokens sobrevivan a los reinicios; sin él se genera un secreto aleatorio en cada arranque. Tras editar `.env`, para la app (Ctrl+C) y vuelve a arrancarla.
 
 Rellena los huecos (`_____`) de arriba abajo. La app arranca cuando están rellenos tres huecos: el `status_code` del decorador `POST` de v1 y las dos llamadas a `app.include_router(...)` al final de las rutas. Los demás huecos no impiden arrancar el servidor: los prefijos de los routers dan `404` hasta que son correctos, y el resto falla solo cuando una petición llega hasta ellos (un error `500` o una cabecera ausente).
 

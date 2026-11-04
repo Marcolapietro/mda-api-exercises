@@ -12,22 +12,22 @@ python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
+copy .env.example .env  # Windows (cp en Linux/Mac)
 fastapi dev app.py
 ```
 
-Rellena los huecos (`_____`) de arriba abajo; la app arranca cuando el decorador de `/refresh` y el `Depends(...)` de `/profile` están completos. Los demás huecos (los nombres de los claims, `HS256`, el nombre del header, `DUMMY_HASH`, las funciones que crean los tokens, el tipo de token y el conjunto `revoked`) solo se usan cuando una petición llega hasta ellos, así que los notarás al probar. La API corre en `http://127.0.0.1:8000`.
+Rellena los huecos (`_____`) de arriba abajo; la app arranca cuando el decorador de `/refresh` y el `Depends(...)` de `/profile` están completos: hasta entonces se para con `AttributeError: 'FastAPI' object has no attribute '_____'` (el decorador), o con `NameError: name '_____' is not defined` en Python 3.12/3.13 y `TypeError: ForwardRef('_____'...) is not a callable object` en Python 3.14 (el `Depends`). Los demás huecos (los nombres de los claims, `HS256`, el nombre del header, `DUMMY_HASH`, las funciones que crean los tokens, el tipo de token y el conjunto `revoked`) solo se usan cuando una petición llega hasta ellos, así que los notarás al probar. La API corre en `http://127.0.0.1:8000`.
 
-Opcional, pero recomendado: define el secreto de firma en una variable de entorno **antes** de `fastapi dev app.py`. Si no lo haces, el servidor genera uno aleatorio en cada arranque y tus tokens dejan de funcionar tras reiniciar.
+Opcional, pero recomendado: da al secreto de firma un valor fijo en `.env` **antes** de `fastapi dev app.py`. Si no lo haces, el servidor genera uno aleatorio en cada arranque y tus tokens dejan de funcionar tras reiniciar. Genera un valor y pégalo detrás de `JWT_SECRET_KEY=` en `.env`:
 
 ```bash
-# Windows PowerShell
-$env:JWT_SECRET_KEY = python -c "import secrets; print(secrets.token_hex(32))"
-# Windows CMD: genéralo una vez y pégalo
 python -c "import secrets; print(secrets.token_hex(32))"
-set JWT_SECRET_KEY=<pega el valor>
-# Linux/Mac
-export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
 ```
+
+- `app.py` carga `.env` al arrancar con `load_dotenv()` (del paquete `python-dotenv`), así que `os.environ.get("JWT_SECRET_KEY")` lo encuentra.
+- `.env` está en `.gitignore`, así que el secreto nunca llega a GitHub. `.env.example` solo tiene valores vacíos y **sí** se sube: indica a los demás qué variables tienen que definir.
+- `fastapi dev` se reinicia cuando guardas un fichero `.py`, no `.env`: después de editar `.env`, para la app (Ctrl+C) y vuelve a arrancarla.
+- Una variable definida en el terminal (`$env:JWT_SECRET_KEY=...`, `set`, `export`) sigue funcionando y tiene prioridad sobre `.env`.
 
 ---
 
@@ -718,10 +718,12 @@ Una vez completes la implementación básica:
    Añade un claim `"fresh": True` al access token creado en el login (y `False` a los creados por `/refresh`), y escribe una segunda dependencia que rechace los tokens que no sean fresh. Úsala en los endpoints sensibles, para que los tokens obtenidos vía `/refresh` no sirvan para ellos.
 
 4. **Añadir Actualización de Perfil de Usuario**
+   PATCH, no PUT: el cliente envía solo los campos que cambia (Ejercicio 05).
    ```python
-   @app.put("/profile")
+   @app.patch("/profile")
    def update_profile(user: Annotated[str, Depends(get_current_user)]):
-       # Actualizar datos del usuario
+       # Actualizar solo los campos enviados
+       ...
    ```
 
 5. **Añadir Endpoint de Cambio de Contraseña**
