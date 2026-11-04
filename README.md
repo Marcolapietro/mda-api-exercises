@@ -24,6 +24,8 @@ pip install -r requirements.txt
 fastapi dev app.py
 ```
 
+Exercise 06b also needs Docker Desktop (or Rancher Desktop): copy its `.env.example` to `.env` and run `docker compose up -d --wait` in its folder before `fastapi dev app.py` (see `readme06b.md`).
+
 Exercises 07 and 17 name their own files in their README (07: `documented_api.py` and `undocumented_api.py` in `01-problem-and-solution`; 17: `notes_api.py`), and exercises 01, 02 and 18 have no code.
 
 Then open http://127.0.0.1:8000/docs for the interactive documentation. Each exercise has its own `readme<NN>.md` with the instructions (some also have `readme<NN>_es.md` in Spanish) and a finished solution in `example/`.
@@ -38,6 +40,7 @@ Then open http://127.0.0.1:8000/docs for the interactive documentation. Each exe
 | [04-api-fundamentals](exercises/04-api-fundamentals/) | 29 | Notes API: GET/POST, status codes, JSON validation |
 | [05-crud-endpoints](exercises/05-crud-endpoints/) | 29 | Notes API: full CRUD, RFC 9457 errors |
 | [06-pagination](exercises/06-pagination/) | 31 | Notes API: offset and cursor pagination |
+| [06b-mysql-database](exercises/06b-mysql-database/) | 31 | Library API on a real MySQL database (Docker): raw SQL, 409 from constraints, a transaction |
 | [07-openapi](exercises/07-openapi/) | 37 | OpenAPI documentation |
 | [08-basic-auth](exercises/08-basic-auth/) | 46 | Basic Auth with HTTPBasic |
 | [09-api-key-auth](exercises/09-api-key-auth/) | 48 | API key generation and validation |
