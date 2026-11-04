@@ -1,0 +1,117 @@
+# Exercise 6b: Library API on MySQL (Windows PowerShell 5.1)
+# First start MySQL: docker compose up -d --wait, then the API: fastapi dev app.py (from exercises/06b-mysql-database)
+# These steps assume a fresh database (docker compose down -v, then docker compose up -d --wait).
+# Paste the blocks in order. Step 0 defines a helper used by the other steps.
+
+# 0. Base URL + helper that prints status code, key headers and body.
+#    Windows PowerShell 5.1 THROWS on 4xx/5xx, so the helper uses try/catch to show them too.
+$baseUrl = "http://127.0.0.1:8000"
+
+function Show-Http {
+    param(
+        [string]$Method,
+        [string]$Uri,
+        [string]$Body,
+        [string]$ContentType = "application/json"
+    )
+    Write-Host ("=" * 70)
+    Write-Host "$Method $Uri"
+    $params = @{ Method = $Method; Uri = $Uri; UseBasicParsing = $true }
+    if ($Body) { $params.Body = $Body; $params.ContentType = $ContentType }
+    try {
+        $r = Invoke-WebRequest @params
+        Write-Host ("Status: {0}" -f [int]$r.StatusCode)
+        foreach ($h in "Content-Type", "Location") {
+            if ($r.Headers[$h]) { Write-Host ("{0}: {1}" -f $h, $r.Headers[$h]) }
+        }
+        if ($r.Content) { Write-Host $r.Content } else { Write-Host "(empty body)" }
+    } catch {
+        $resp = $_.Exception.Response
+        if ($resp -eq $null) { throw }
+        Write-Host ("Status: {0}" -f [int]$resp.StatusCode)
+        Write-Host ("Content-Type: {0}" -f $resp.ContentType)
+        Write-Host $_.ErrorDetails.Message
+    }
+}
+
+
+# 1. List books -> 200. Invoke-RestMethod turns the JSON into objects.
+$list = Invoke-RestMethod -Method Get -Uri "$baseUrl/books?limit=5"
+$list.data | Format-Table id, title, year, @{ n = "author"; e = { $_.author.name } } | Out-String | Write-Host
+Write-Host ("page: " + ($list.page | ConvertTo-Json -Compress))
+
+# 2. Last page -> 200 with page.next = null
+Show-Http -Method Get -Uri "$baseUrl/books?offset=145&limit=5"
+
+# 3. Page too big -> 422 (limit is between 1 and 100)
+Show-Http -Method Get -Uri "$baseUrl/books?limit=500"
+
+# 4. Filters: Garcia Marquez's books whose title contains "soledad" -> 200
+Show-Http -Method Get -Uri "$baseUrl/books?author_id=2&q=soledad"
+
+# 5. Get one book -> 200, and one that does not exist -> 404
+Show-Http -Method Get -Uri "$baseUrl/books/1"
+Show-Http -Method Get -Uri "$baseUrl/books/999"
+
+# 6. Create a book -> 201 Created + Location header. We keep the Location for the next steps.
+$body = @{ title = "El maestro de esgrima"; isbn = "9788490000014"; year = 1988; author_id = 7 } | ConvertTo-Json
+$r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "$baseUrl/books" -ContentType "application/json" -Body $body
+Write-Host ("Status: {0}" -f [int]$r.StatusCode)
+Write-Host ("Location: {0}" -f $r.Headers["Location"])
+Write-Host $r.Content
+$bookUrl = $r.Headers["Location"]
+
+# 7. Duplicate ISBN (the one of Don Quijote) -> 409 Conflict
+$body = @{ title = "Copy"; isbn = "9788410079199"; author_id = 1 } | ConvertTo-Json
+Show-Http -Method Post -Uri "$baseUrl/books" -Body $body
+
+# 8. Unknown author -> 422 (foreign key)
+$body = @{ title = "Orphan"; author_id = 999 } | ConvertTo-Json
+Show-Http -Method Post -Uri "$baseUrl/books" -Body $body
+
+# 9. Replace with PUT -> 200
+$body = @{ title = "El maestro de esgrima (revised)"; isbn = "9788490000014"; year = 1988; author_id = 7 } | ConvertTo-Json
+Show-Http -Method Put -Uri $bookUrl -Body $body
+
+# 10. Change only the year with PATCH -> 200 (updated_at changes by itself)
+$body = @{ year = 2000 } | ConvertTo-Json
+Show-Http -Method Patch -Uri $bookUrl -Body $body
+
+# 11. Empty PATCH -> 422
+Show-Http -Method Patch -Uri $bookUrl -Body '{}'
+
+# 12. Delete -> 204 No Content (empty body), then get it again -> 404
+Show-Http -Method Delete -Uri $bookUrl
+Show-Http -Method Get -Uri $bookUrl
+
+# 13. Authors -> 200
+Show-Http -Method Get -Uri "$baseUrl/authors?q=garcia"
+Show-Http -Method Get -Uri "$baseUrl/authors/2"
+
+# 14. Delete an author who still has books -> 409, and one who has none (Gloria Fuertes) -> 204
+Show-Http -Method Delete -Uri "$baseUrl/authors/1"
+Show-Http -Method Delete -Uri "$baseUrl/authors/22"
+
+# 15. Transaction: the 2nd book repeats Don Quijote's ISBN -> 409, and NOTHING is saved
+#     -Depth 5: by default ConvertTo-Json cuts nested lists
+$body = @{ name = "Rosa Montero"; country = "Spain"; birth_year = 1951; books = @(
+    @{ title = "La loca de la casa"; isbn = "9788490000021"; year = 2003 },
+    @{ title = "Copy"; isbn = "9788410079199" }
+) } | ConvertTo-Json -Depth 5
+Show-Http -Method Post -Uri "$baseUrl/authors" -Body $body
+
+# 16. The author was not created either -> 200 with "data": []
+Show-Http -Method Get -Uri "$baseUrl/authors?q=montero"
+
+# 17. Now with two valid books -> 201 (the id is 24, not 23: a rollback does not give ids back)
+$body = @{ name = "Rosa Montero"; country = "Spain"; birth_year = 1951; books = @(
+    @{ title = "La loca de la casa"; isbn = "9788490000021"; year = 2003 },
+    @{ title = "Historia del rey transparente"; isbn = "9788490000038"; year = 2005 }
+) } | ConvertTo-Json -Depth 5
+Show-Http -Method Post -Uri "$baseUrl/authors" -Body $body
+
+# 18. Stop fastapi dev (Ctrl+C), start it again, and ask again -> Rosa Montero is still there
+Show-Http -Method Get -Uri "$baseUrl/authors?q=montero"
+
+# 19. SQL injection attempt -> 200 with an empty list (the text travels as a value, never as SQL)
+Show-Http -Method Get -Uri ("$baseUrl/books?q=" + [uri]::EscapeDataString("' OR '1'='1"))

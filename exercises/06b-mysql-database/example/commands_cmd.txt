@@ -1,0 +1,67 @@
+REM Exercise 6b: Library API on MySQL (Windows CMD)
+REM First start MySQL:  docker compose up -d --wait   (from exercises/06b-mysql-database)
+REM Then the API:       fastapi dev app.py
+REM These commands assume a fresh database (docker compose down -v, then docker compose up -d --wait).
+REM -i shows the status line and the headers (Location, Content-Type...)
+REM CMD needs double quotes around the JSON and \" for the quotes inside it.
+
+REM 1. List books -> 200 (page.total = 150, page.next = offset=2)
+curl -i "http://127.0.0.1:8000/books?limit=2"
+
+REM 2. Last page -> 200 with page.next = null
+curl -i "http://127.0.0.1:8000/books?offset=145&limit=5"
+
+REM 3. Page too big -> 422 (limit is between 1 and 100)
+curl -i "http://127.0.0.1:8000/books?limit=500"
+
+REM 4. Filters: Garcia Marquez's books whose title contains "soledad" -> 200
+curl -i "http://127.0.0.1:8000/books?author_id=2&q=soledad"
+
+REM 5. Get one book -> 200, and one that does not exist -> 404
+curl -i http://127.0.0.1:8000/books/1
+curl -i http://127.0.0.1:8000/books/999
+
+REM 6. Create a book -> 201 Created + Location: http://127.0.0.1:8000/books/151
+curl -i -X POST -H "Content-Type: application/json" -d "{\"title\":\"El maestro de esgrima\",\"isbn\":\"9788490000014\",\"year\":1988,\"author_id\":7}" http://127.0.0.1:8000/books
+
+REM 7. Duplicate ISBN (the one of Don Quijote) -> 409 Conflict
+curl -i -X POST -H "Content-Type: application/json" -d "{\"title\":\"Copy\",\"isbn\":\"9788410079199\",\"author_id\":1}" http://127.0.0.1:8000/books
+
+REM 8. Unknown author -> 422 (foreign key)
+curl -i -X POST -H "Content-Type: application/json" -d "{\"title\":\"Orphan\",\"author_id\":999}" http://127.0.0.1:8000/books
+
+REM 9. Replace with PUT -> 200
+curl -i -X PUT -H "Content-Type: application/json" -d "{\"title\":\"El maestro de esgrima (revised)\",\"isbn\":\"9788490000014\",\"year\":1988,\"author_id\":7}" http://127.0.0.1:8000/books/151
+
+REM 10. Change only the year with PATCH -> 200 (updated_at changes by itself)
+curl -i -X PATCH -H "Content-Type: application/json" -d "{\"year\":2000}" http://127.0.0.1:8000/books/151
+
+REM 11. Empty PATCH -> 422
+curl -i -X PATCH -H "Content-Type: application/json" -d "{}" http://127.0.0.1:8000/books/151
+
+REM 12. Delete -> 204 No Content, then get it again -> 404
+curl -i -X DELETE http://127.0.0.1:8000/books/151
+curl -i http://127.0.0.1:8000/books/151
+
+REM 13. Authors -> 200
+curl -i "http://127.0.0.1:8000/authors?q=garcia"
+curl -i http://127.0.0.1:8000/authors/2
+
+REM 14. Delete an author who still has books -> 409, and one who has none (Gloria Fuertes) -> 204
+curl -i -X DELETE http://127.0.0.1:8000/authors/1
+curl -i -X DELETE http://127.0.0.1:8000/authors/22
+
+REM 15. Transaction: the 2nd book repeats Don Quijote's ISBN -> 409, and NOTHING is saved
+curl -i -X POST -H "Content-Type: application/json" -d "{\"name\":\"Rosa Montero\",\"country\":\"Spain\",\"birth_year\":1951,\"books\":[{\"title\":\"La loca de la casa\",\"isbn\":\"9788490000021\",\"year\":2003},{\"title\":\"Copy\",\"isbn\":\"9788410079199\"}]}" http://127.0.0.1:8000/authors
+
+REM 16. The author was not created either -> 200 with "data": []
+curl -i "http://127.0.0.1:8000/authors?q=montero"
+
+REM 17. Now with two valid books -> 201 (the id is 24, not 23: a rollback does not give ids back)
+curl -i -X POST -H "Content-Type: application/json" -d "{\"name\":\"Rosa Montero\",\"country\":\"Spain\",\"birth_year\":1951,\"books\":[{\"title\":\"La loca de la casa\",\"isbn\":\"9788490000021\",\"year\":2003},{\"title\":\"Historia del rey transparente\",\"isbn\":\"9788490000038\",\"year\":2005}]}" http://127.0.0.1:8000/authors
+
+REM 18. Stop fastapi dev (Ctrl+C), start it again, and ask again -> Rosa Montero is still there
+curl -i "http://127.0.0.1:8000/authors?q=montero"
+
+REM 19. SQL injection attempt -> 200 with an empty list (the text travels as a value, never as SQL)
+curl -i "http://127.0.0.1:8000/books?q=%27%20OR%20%271%27=%271"
