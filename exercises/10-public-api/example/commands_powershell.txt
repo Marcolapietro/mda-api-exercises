@@ -76,15 +76,15 @@ Write-Host "WEATHER API TESTS (Public - No JWT Required)" -ForegroundColor Cyan
 Write-Host ("=" * 70) -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "==> 4. Getting weather for default city (Madrid)..." -ForegroundColor Yellow
+Write-Host "==> 4. Getting weather for Madrid..." -ForegroundColor Yellow
 try {
-    $weatherDefault = Invoke-RestMethod -Method Get -Uri "$baseUrl/weather"
+    $weatherDefault = Invoke-RestMethod -Method Get -Uri "$baseUrl/weather?city=Madrid"
     Write-Host "Weather data for Madrid:" -ForegroundColor Green
     $weatherDefault | ConvertTo-Json -Depth 5 | Write-Host
     Write-Host ""
 } catch {
     Write-Host "Weather error: $_" -ForegroundColor Red
-    Write-Host 'HINT: Make sure the OPENWEATHER_API_KEY environment variable is set ($env:OPENWEATHER_API_KEY = "your-key")' -ForegroundColor Yellow
+    Write-Host 'HINT: Put your key in .env (OPENWEATHER_API_KEY=your-key) and restart the app' -ForegroundColor Yellow
     Write-Host ""
 }
 
@@ -147,6 +147,15 @@ try {
     Write-Host "Unexpected success!" -ForegroundColor Red
 } catch {
     Show-HttpError $_ "Expected error (404 city not found; 503 means the API key is not set)"
+    Write-Host ""
+}
+
+Write-Host "==> 10. Testing without city (should fail with 422)..." -ForegroundColor Yellow
+try {
+    $weatherNoCity = Invoke-RestMethod -Method Get -Uri "$baseUrl/weather"
+    Write-Host "Unexpected success!" -ForegroundColor Red
+} catch {
+    Show-HttpError $_ "Expected error (422: city is required)"
     Write-Host ""
 }
 

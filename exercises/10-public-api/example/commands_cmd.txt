@@ -17,8 +17,8 @@ REM ============================================================================
 REM WEATHER API TESTS (PUBLIC - No Authentication Required)
 REM ============================================================================
 
-REM 4. Get weather for default city (Madrid)
-curl http://127.0.0.1:8000/weather
+REM 4. Get weather for Madrid
+curl http://127.0.0.1:8000/weather?city=Madrid
 
 REM 5. Get weather for a specific city
 curl http://127.0.0.1:8000/weather?city=Paris
@@ -38,6 +38,9 @@ curl http://127.0.0.1:8000/weather?city=Tokyo^&country=JP
 REM 10. Test with invalid city (should return 404)
 curl http://127.0.0.1:8000/weather?city=InvalidCityXYZ123
 
+REM 11. Test without city (should return 422: city is required)
+curl http://127.0.0.1:8000/weather
+
 REM ============================================================================
 REM NOTES
 REM ============================================================================
@@ -46,5 +49,5 @@ REM Note 1: Use ^ to escape & in Windows CMD
 REM Note 2: A literal space is not valid in a URL: use --data-urlencode (example 8) or %20.
 REM         (Avoid %20 inside .bat files: there %2 is replaced by the 2nd batch argument.)
 REM Note 3: Weather endpoint is PUBLIC - no JWT token required
-REM Note 4: Set your OpenWeatherMap API key first: set OPENWEATHER_API_KEY=your-key
+REM Note 4: Put your OpenWeatherMap key in .env first (copy .env.example .env), then restart the app
 REM         (without it /weather answers 503)

@@ -2,14 +2,19 @@ import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Annotated, Any
 
 import bcrypt
 import httpx
 import jwt
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
+
+# Load the .env of the exercise folder, one level up (next to .env.example); a variable set in the terminal wins
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 app = FastAPI(title="Weather API")
 
@@ -130,7 +135,7 @@ def profile(user: Annotated[str, Depends(get_current_user)]) -> dict[str, str]:
 
 @app.get("/weather")
 def weather(
-    city: Annotated[str, Query()] = "Madrid",
+    city: Annotated[str, Query(min_length=1)],  # required: missing or empty answers 422
     country: Annotated[str, Query()] = "",
 ) -> dict[str, Any]:
     """
@@ -141,7 +146,7 @@ def weather(
     2. OpenWeatherMap Current Weather API: Get weather by coordinates
 
     Query Parameters:
-        city (str): City name (default: 'Madrid')
+        city (str): City name (required)
         country (str): Optional ISO 3166 country code (e.g., 'ES', 'US')
 
     Note: this endpoint is PUBLIC (no JWT required) because the focus
@@ -151,7 +156,7 @@ def weather(
     if not OPENWEATHER_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="OpenWeatherMap API key not configured: set the OPENWEATHER_API_KEY environment variable "
+            detail="OpenWeatherMap API key not configured: set OPENWEATHER_API_KEY in the .env file "
                    "(free key at https://openweathermap.org/api)",
         )
 

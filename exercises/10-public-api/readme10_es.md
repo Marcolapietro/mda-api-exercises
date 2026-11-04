@@ -12,6 +12,7 @@ python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
+copy .env.example .env  # Windows (cp en Linux/Mac); después pon tu clave de OpenWeatherMap en .env
 fastapi dev app.py
 ```
 
@@ -41,7 +42,7 @@ Crearás una API FastAPI que:
 
 ### ¿Por Qué Dos Llamadas API?
 
-**Enfoque Moderno (2025):**
+**Enfoque Moderno:**
 ```
 Solicitud Usuario: "Obtener clima de París"
     ↓
@@ -90,7 +91,22 @@ OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY")
 
 Si la variable no está definida, `/weather` responde `503 Service Unavailable`: el problema está en el servidor, no en tu petición.
 
-Define la variable en el terminal donde ejecutas la app:
+El sitio más cómodo para ella es un fichero `.env` en la carpeta del ejercicio. Copia la plantilla y pon tu clave en la copia:
+```bash
+cp .env.example .env     # Linux / macOS
+copy .env.example .env   # Windows (CMD o PowerShell)
+```
+```
+OPENWEATHER_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+```
+
+Al arrancar, `load_dotenv()` (del paquete `python-dotenv`) copia las variables de `.env` al entorno, así que `os.environ.get` las encuentra.
+
+- `.env` está en `.gitignore`, así que tu clave nunca llega a GitHub. `.env.example` solo tiene valores vacíos y **sí** se sube: indica a los demás qué variables tienen que definir.
+- `fastapi dev` se reinicia cuando guardas un fichero `.py`, no `.env`: después de editar `.env`, para la app (Ctrl+C) y vuelve a arrancarla.
+- `.env` también puede llevar `JWT_SECRET_KEY`, para que los tokens sobrevivan a los reinicios (ver Problema 5).
+
+También puedes definir la variable en el terminal donde ejecutas la app; tiene prioridad sobre `.env`:
 ```bash
 # Linux / macOS
 export OPENWEATHER_API_KEY="a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
@@ -213,20 +229,20 @@ Necesitas completar **10 TODOs** (13 huecos `_____`; los dos diccionarios de par
 Los números de línea pueden desplazarse mientras escribes, así que busca `_____`:
 
 #### TODOs de Configuración y Autenticación (en el código JWT dado):
-1. `OPENWEATHER_API_KEY` (línea 43): El nombre de la variable de entorno: `OPENWEATHER_API_KEY`
-2. `@app._____("/login")` (línea 118): El método HTTP que envía credenciales en un cuerpo: `post`
-3. `login()` (línea 131): Crear el token de acceso JWT: `create_access_token(data.username)`
+1. `OPENWEATHER_API_KEY` (línea 48): El nombre de la variable de entorno: `OPENWEATHER_API_KEY`
+2. `@app._____("/login")` (línea 123): El método HTTP que envía credenciales en un cuerpo: `post`
+3. `login()` (línea 136): Crear el token de acceso JWT: `create_access_token(data.username)`
 
 #### TODOs de API de Geocodificación (en `weather()`, paso 1):
-4. `geo_params` (línea 187): Rellenar `"q"` con `query` y `"appid"` con `OPENWEATHER_API_KEY`
-5. `geo_response` (línea 192): Hacer la petición GET: `client.get(GEOCODING_API_URL, params=geo_params)`
-6. `geo_response.status_code` (línea 202): El código de estado que significa éxito: `200`
-7. `geo_data` (línea 210): Parsear la respuesta JSON: `geo_response.json()`
+4. `geo_params` (línea 192): Rellenar `"q"` con `query` y `"appid"` con `OPENWEATHER_API_KEY`
+5. `geo_response` (línea 197): Hacer la petición GET: `client.get(GEOCODING_API_URL, params=geo_params)`
+6. `geo_response.status_code` (línea 207): El código de estado que significa éxito: `200`
+7. `geo_data` (línea 215): Parsear la respuesta JSON: `geo_response.json()`
 
 #### TODOs de API del Clima (en `weather()`, paso 2):
-8. `weather_params` (líneas 243-245): Rellenar `"lat"`, `"lon"` y `"appid"`
-9. `weather_response` (línea 253): Hacer la petición GET: `client.get(WEATHER_API_URL, params=weather_params)`
-10. `weather_data` (línea 267): Parsear la respuesta JSON: `weather_response.json()`
+8. `weather_params` (líneas 248-250): Rellenar `"lat"`, `"lon"` y `"appid"`
+9. `weather_response` (línea 258): Hacer la petición GET: `client.get(WEATHER_API_URL, params=weather_params)`
+10. `weather_data` (línea 272): Parsear la respuesta JSON: `weather_response.json()`
 
 ### Conceptos Clave a Implementar
 
@@ -321,17 +337,17 @@ curl -i "http://127.0.0.1:8000/weather?city=Madrid"
 **Respuesta Esperada (503):**
 ```json
 {
-  "detail": "OpenWeatherMap API key not configured: set the OPENWEATHER_API_KEY environment variable (free key at https://openweathermap.org/api)"
+  "detail": "OpenWeatherMap API key not configured: set OPENWEATHER_API_KEY in the .env file (free key at https://openweathermap.org/api)"
 }
 ```
 
-### 2. Probar Con Clave API - Ciudad Predeterminada
+### 2. Probar Con Clave API - Madrid
 
 ```bash
-curl "http://127.0.0.1:8000/weather"
+curl "http://127.0.0.1:8000/weather?city=Madrid"
 ```
 
-**Respuesta Esperada (Madrid, predeterminada):**
+**Respuesta Esperada:**
 ```json
 {
   "location": {
@@ -415,6 +431,30 @@ curl "http://127.0.0.1:8000/weather?city=InvalidCityXYZ"
 }
 ```
 
+### 6. Probar Sin Ciudad (Debería Fallar)
+
+`city` es obligatorio: `Query(min_length=1)` sin valor por defecto. Si falta, o va vacío (`?city=`), FastAPI responde `422 Unprocessable Content` antes de ejecutar tu código, así que nunca se llama a OpenWeatherMap (ni siquiera cuando falta la clave).
+
+```bash
+curl "http://127.0.0.1:8000/weather"
+```
+
+**Respuesta Esperada (422):**
+```json
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["query", "city"],
+      "msg": "Field required",
+      "input": null
+    }
+  ]
+}
+```
+
+Con `?city=` el `type` del error es `string_too_short` en vez de `missing`.
+
 ---
 
 ## Entendiendo la Librería `httpx`
@@ -491,7 +531,7 @@ except ValueError:
 
 **Solución:**
 - Espera de 10 minutos a 2 horas para la activación
-- Verifica que copiaste la clave completa (sin espacios)
+- Verifica que copiaste la clave completa en `.env` (sin espacios ni comillas alrededor), y reinicia la app tras editar `.env`
 - Comprueba que estás usando la clave correcta de tu cuenta de OpenWeatherMap
 
 ### Problema 2: Ciudad No Encontrada
@@ -546,7 +586,7 @@ except ValueError:
 
 **Solución:**
 - Regístrate y haz login de nuevo tras cada cambio, y usa el token nuevo
-- O define `JWT_SECRET_KEY` antes de arrancar la app: los tokens sobreviven al reinicio (esta API solo comprueba el token, no el diccionario `users`), pero tendrás que registrarte otra vez antes de poder hacer login
+- O define `JWT_SECRET_KEY` en `.env` (genera uno con `python -c "import secrets; print(secrets.token_hex(32))"`): los tokens sobreviven al reinicio (esta API solo comprueba el token, no el diccionario `users`), pero tendrás que registrarte otra vez antes de poder hacer login
 
 ---
 
@@ -561,6 +601,7 @@ Tu implementación debería:
 - ✅ Manejar errores de red con gracia
 - ✅ Parsear respuestas JSON correctamente
 - ✅ Retornar datos de clima estructurados
+- ✅ Exigir el parámetro `city` (422 si falta o va vacío)
 - ✅ Soportar parámetro opcional de código de país
 - ✅ Usar HTTPS (no HTTP) para llamadas API
 - ✅ Usar coordenadas (no consultas por nombre de ciudad obsoletas)
@@ -622,8 +663,8 @@ weather_info['weather']['icon_url'] = f"https://openweathermap.org/img/wn/{icon_
 ```python
 @app.get("/weather")
 def weather(
+    city: Annotated[str, Query(min_length=1)],  # los parámetros obligatorios van primero
     units: Annotated[str, Query()] = "metric",  # metric, imperial, standard
-    city: Annotated[str, Query()] = "Madrid",
 ):
     # Usar en llamada API: "units": units
     ...
@@ -637,7 +678,7 @@ Hacer que el endpoint del clima requiera autenticación, con la misma dependenci
 @app.get("/weather")
 def weather(
     user: Annotated[str, Depends(get_current_user)],  # Añadir este parámetro
-    city: Annotated[str, Query()] = "Madrid",
+    city: Annotated[str, Query(min_length=1)],
 ):
     # Rastrear consultas de clima del usuario para analíticas
     ...
